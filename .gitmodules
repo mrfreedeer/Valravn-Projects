@@ -2,3 +2,6 @@
 	path = Guildhall-Engine/Engine
 	url = https://github.com/mrfreedeer/Guildhall-Engine.git
 	branch = main
+[submodule "Engine"]
+	path = Engine
+	url = https://github.com/mrfreedeer/Guildhall-Engine.git
