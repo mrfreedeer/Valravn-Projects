@@ -1,0 +1,216 @@
+#include "ShaderCommon.hlsl"
+
+
+#if ENGINE_ANTIALIASING
+Texture2DMS<float4> diffuseTexture : register(t0);
+#else
+Texture2D diffuseTexture : register(t0);
+#endif
+Texture2D noiseTexture : register(t1);
+StructuredBuffer<HairData> HairInfo : register(t2);
+SamplerState diffuseSampler : register(s0);
+
+vs_out VertexMain(vs_input input)
+{
+    vs_out vsOut;
+    float4 position = float4(input.localPosition, 1);
+    float4 normal = float4(input.normal, 0);
+    
+    float4 modelTransform = mul(ModelMatrix, position);
+    float4 modelToViewPos = mul(ViewMatrix, modelTransform);
+    
+    vsOut.position = mul(ProjectionMatrix, modelToViewPos);
+    vsOut.worldPosition = modelTransform;
+    vsOut.color = input.color;
+    vsOut.uv = input.uv;
+    vsOut.normal = input.normal;
+    vsOut.vId = input.vId;
+    
+    return vsOut;
+}
+
+// passthrough shader
+[domain("isoline")]
+[partitioning("fractional_odd")]
+[outputtopology("line")]
+[outputcontrolpoints(2)]
+[patchconstantfunc("HullConstant")]
+hull_out HullMain(InputPatch<vs_out, 2> inVertex, uint i : SV_OutputControlPointID)
+{
+    hull_out hullOut;
+    
+    hullOut.position = inVertex[i].position;
+    hullOut.normal = inVertex[i].normal;
+    hullOut.worldPosition = inVertex[i].worldPosition;
+    hullOut.color = inVertex[i].color;
+    hullOut.uv = inVertex[i].uv;
+    hullOut.vId = inVertex[i].vId;
+    
+    return hullOut;
+}
+hull_tess_out HullConstant(InputPatch<vs_out, 2> patch)
+{
+    hull_tess_out tessOut;
+    
+    tessOut.EdgesTessellation[0] = float(InterpolationFactorMultiStrand);
+    tessOut.EdgesTessellation[1] = TessellationFactor;
+    
+    return tessOut;
+}
+
+[domain("isoline")]
+domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainLocation, OutputPatch<hull_out, 2> patch, uint patchID : SV_PrimitiveID)
+{
+    domain_out ds_out = (domain_out) 0;
+
+    uint dimNoiseX = 0;
+    uint dimPerlY = 0;
+    uint SegmentCountNext = HairSegmentCount + 1;
+    
+    noiseTexture.GetDimensions(dimNoiseX, dimPerlY); // Y is unused
+   
+    uint dataIndex = (patchID) / HairSegmentCount;
+    
+    // For making HairSegments We need HairSegment + 1, e.g: for 12, we need 13 counting the end and beginning inclusive
+    dataIndex *= SegmentCountNext * 3;
+    
+    uint dimHairBuffer = 0;
+    uint stride = 0;
+    HairInfo.GetDimensions(dimHairBuffer, stride);
+    
+    uint totalByte = (dimHairBuffer * stride);
+    
+    /*
+    The index for getting the noise should be consistent between hair segments but different
+    betwween hairs. BarycentricCoords.y will be the same between hair segments. DataIndex is different per hair
+    */
+    uint baseInd = dataIndex + uint(BarycentricCoords.y * float(dimNoiseX));
+    uint noiseIndexX = baseInd % dimNoiseX;
+    uint noiseIndexY = baseInd / dimNoiseX;
+    
+    uint firstHair = ((patchID) % HairSegmentCount) + dataIndex;
+    uint secondHair = firstHair + SegmentCountNext;
+    uint thirdHair = secondHair + SegmentCountNext;
+    
+  
+    
+    float4 hairOne = HairInfo[firstHair].Position;
+    float4 hairTwo = HairInfo[secondHair].Position;
+    float4 hairThree = HairInfo[thirdHair].Position;
+    
+    float4 secHairOne = HairInfo[firstHair + 1].Position;
+    float4 secHairTwo = HairInfo[secondHair + 1].Position;
+    float4 secHairThree = HairInfo[thirdHair + 1].Position;
+
+    float3 InterpolationWeights = noiseTexture[float2(noiseIndexX, noiseIndexY)].rgb;
+    
+        
+    InterpolationWeights = smoothstep(0.0f.xxx, 1.0.xxx, InterpolationWeights);
+    
+    float total = InterpolationWeights.r + InterpolationWeights.g + InterpolationWeights.b;
+    InterpolationWeights /= total;
+    
+    float3 InterpCoords = InterpolationWeights.xyz;
+
+    float4 resultPositionOne = InterpCoords.x * hairOne +
+                            InterpCoords.y * hairTwo +
+                            InterpCoords.z * hairThree;
+    
+    float4 resultPositionTwo = InterpCoords.x * secHairOne +
+                            InterpCoords.y * secHairTwo +
+                            InterpCoords.z * secHairThree;
+    
+    
+    ds_out.worldPosition = lerp(resultPositionOne, resultPositionTwo, BarycentricCoords.x);
+    ds_out.color = patch[0].color;
+    ds_out.uv = patch[0].uv;
+    
+    return ds_out;
+}
+
+
+[maxvertexcount(4)]
+void GeometryMain(line domain_out dsOut[2], inout TriangleStream<gs_out> triangleStream)
+{
+    float3 tangent = dsOut[1].worldPosition.xyz - dsOut[0].worldPosition.xyz;
+    tangent = normalize(tangent);
+    float3 iBasis = normalize(EyePosition - dsOut[0].worldPosition.xyz);
+    //float3 jBasis = normalize(cross(float3(0.0f, 0.0f, 1.0f), iBasis));
+    
+    float3 jBasis = normalize(cross(EyePosition, tangent));
+    
+    float4 vertexes[4];
+    
+    vertexes[0] = dsOut[0].worldPosition - (float4(jBasis, 0.0f) * HairWidth * 0.5f);
+    vertexes[1] = dsOut[0].worldPosition + (float4(jBasis, 0.0f) * HairWidth * 0.5f);
+    vertexes[2] = dsOut[1].worldPosition - (float4(jBasis, 0.0f) * HairWidth * 0.5f);
+    vertexes[3] = dsOut[1].worldPosition + (float4(jBasis, 0.0f) * HairWidth * 0.5f);
+
+    
+    gs_out output = (gs_out) 0;
+    
+    
+    [unroll]
+    for (int i = 0; i < 4; i++)
+    {
+        output.color = dsOut[0].color;
+        output.worldPosition = vertexes[i];
+        
+        float4 viewPos = mul(ViewMatrix, vertexes[i]);
+        output.position = mul(ProjectionMatrix, viewPos);
+        output.uv = dsOut[0].uv;
+        output.tangent = tangent;
+        output.normal = dsOut[0].normal;
+        triangleStream.Append(output);
+    }
+    
+}
+
+float4 PixelMain(gs_out input) : SV_Target0
+{
+    float totalSpecular = 0.0f;
+    float totalDiffuse = 0.0f;
+    
+    float4 diffuseColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    
+#if ENGINE_ANTIALIASING
+    uint antialiasingLevel = ANTIALIASING_LEVEL;
+    for (uint sampleIndex = 0; sampleIndex < antialiasingLevel; sampleIndex++)
+    {
+       diffuseColor += diffuseTexture.Load(input.uv, sampleIndex);
+    }
+    
+    diffuseColor /= antialiasingLevel;
+    diffuseColor *= input.color * ModelColor;
+#else
+    diffuseColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * ModelColor;
+#endif
+    //if (diffuseColor.w == 0)
+    //    discard;
+    
+    [unroll]
+
+    for (int lightIndex = 0; lightIndex < MAX_LIGHTS; lightIndex++)
+    {
+        if (!Lights[lightIndex].Enabled)
+            continue;
+        switch (Lights[lightIndex].LightType)
+        {
+            case POINT_LIGHT:
+                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient);
+                totalSpecular += ComputeSpecularLighting(Lights[lightIndex].Position, input.worldPosition.xyz, EyePosition, input.tangent, SpecularExponent, SpecularCoefficient);
+                break;
+            case SPOT_LIGHT:
+                break;
+        }
+        
+    }
+    
+        
+    totalDiffuse = saturate(totalDiffuse);
+    totalSpecular = saturate(totalSpecular);
+    float4 resultingColor = (totalSpecular + totalDiffuse + AmbientIntensity.r) * ModelColor;
+    
+    return resultingColor;
+}
+
