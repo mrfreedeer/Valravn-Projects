@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<MapDefinitions>
+	<MapDefinition
+		name ="Welcome"
+		dimensions="20,30"
+		fillTileType="GRASS"
+		edgeTileType="STONE"
+		startFloorTileType="GRASS"
+		startSolidTileType="STONE"
+		endFloorTileType="BACKGROUND_STONE_BRICK"
+		endSolidTileType="CHAIN_METAL"
+		ariesCount="5"
+		leoCount="0"
+		scorpioCount="2"
+		capricornCount="0"
+		
+		mapImageName ="RockFace"
+		mapImageOffset ="6,7"
+	>
+		<WormTile
+		tileType ="STONE"
+		length ="6"
+		count ="30"
+		/>
+		<WormTile
+		tileType ="MOSSY_STONE_BRICK"
+		length ="6"
+		count ="2"
+		/>
+		<WormTile
+			tileType ="WATER"
+			length ="6"
+			count ="15"
+		/>
+	</MapDefinition>
+	<MapDefinition
+			name ="Middle"
+			dimensions="25,50"
+			fillTileType="BACKGROUND_STONE_BRICK"
+			edgeTileType="CHAIN_METAL"
+			startFloorTileType="BACKGROUND_STONE_BRICK"
+			startSolidTileType="CHAIN_METAL"
+			endFloorTileType="SAND"
+			endSolidTileType="BRICK"
+			ariesCount="8"
+			leoCount="3"
+			scorpioCount="0"
+	>
+		<WormTile
+		tileType ="STONE"
+		length ="7"
+		count ="40"
+		/>
+	</MapDefinition>
+	<MapDefinition
+		name ="End"
+		dimensions="40,20"
+		fillTileType="SAND"
+		edgeTileType="BRICK"
+		startFloorTileType="SAND"
+		startSolidTileType="BRICK"
+		endFloorTileType="GRASS"
+		endSolidTileType="GOLDEN_BRICKS"
+		ariesCount="3"
+		leoCount="3"
+		scorpioCount="2"
+		capricornCount="0"
+		
+	>
+		<WormTile
+		tileType ="STONE"
+		length ="7"
+		count ="20"
+		/>
+		<WormTile
+			tileType ="MOLTEN_LAVA"
+			length ="6"
+			count="10"
+		/>
+	</MapDefinition>
+	<MapDefinition
+		name ="Boss"
+		dimensions="40,50"
+		fillTileType="SAND"
+		edgeTileType="BRICK"
+		startFloorTileType="SAND"
+		startSolidTileType="BRICK"
+		endFloorTileType="GRASS"
+		endSolidTileType="GOLDEN_BRICKS"
+		ariesCount="0"
+		leoCount="0"
+		scorpioCount="6"
+		capricornCount="10"
+		
+	>
+		<WormTile
+		tileType ="STONE"
+		length ="7"
+		count ="25"
+		/>
+		<WormTile
+			tileType ="WATER"
+			length ="15"
+			count="45"
+		/>
+		<WormTile
+		tileType ="MOSSY_STONE_BRICK"
+		length ="10"
+		count ="10"
+		/>
+	</MapDefinition>
+
+</MapDefinitions>
