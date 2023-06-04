@@ -450,13 +450,22 @@ std::vector<DelaunayTriangle> TriangulatePointSet2D(std::vector<Vec2> const& poi
 
 std::vector<DelaunayEdge> GetVoronoiDiagram(std::vector<DelaunayTriangle> const& triangleMesh)
 {
+	// Resulting Voronoi Diagram is composed of all the edges on the diagram
 	std::vector<DelaunayEdge> voronoiDiagram;
 
+	// Loop through all the triangles and find the shared edges
 	for (int triangleIndex = 0; triangleIndex < triangleMesh.size(); triangleIndex++) {
 		DelaunayTriangle const& triangleA = triangleMesh[triangleIndex];
+
+		// Each triangle has to be checked with every other triangle
 		for (int otherTriangleIndex = triangleIndex + 1; otherTriangleIndex < triangleMesh.size(); otherTriangleIndex++) {
 			DelaunayTriangle const& triangleB = triangleMesh[otherTriangleIndex];
+
+			// Helper function for finding out if two triangles share an edge
 			if (triangleA.DoTrianglesShareEdge(triangleB)) {
+
+				// If two triangles share an edge, the resulting Voronoi edge is created by connecting
+				// the triangles' circumcenters
 				voronoiDiagram.emplace_back(triangleA.GetCircumcenter(), triangleB.GetCircumcenter());
 			}
 		}
