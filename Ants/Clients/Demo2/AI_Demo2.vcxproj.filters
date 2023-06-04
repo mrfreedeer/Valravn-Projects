@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="framework">
+      <UniqueIdentifier>{274c9703-da6e-4dd7-b333-073cb70bdc18}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ArenaPlayerImpl.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Colony.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\TileCoords.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ThreadSafeStructures.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Common.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Arena\Code\Game\ArenaPlayerInterface.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Colony.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\TileCoords.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ThreadSafeStructures.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Main.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\AvatarEngineBuildPreferences.hpp">
+      <Filter>framework</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Common.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

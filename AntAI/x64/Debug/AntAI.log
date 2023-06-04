@@ -1,0 +1,5 @@
+﻿  Colony.cpp
+D:\p4\Personal\SD\AntAI\Code\Colony.cpp(205,9): warning C4189: 'lowestFScore': local variable is initialized but not referenced
+  AntAI.vcxproj -> D:\p4\Personal\SD\AntAI\x64\Debug\C31_Ospina_Juan.dll
+  D:\p4\Personal\SD\AntAI\x64\Debug\C31_Ospina_Juan.dll -> D:\p4\Personal\SD\Ants\Arena\Run_Windows\Players\C31_Ospina_Juan.dll
+  1 File(s) copied
