@@ -101,6 +101,8 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
     static float3 GravityForce = float3(0.0f, 0.0f, Gravity);
     static float3 ResultingForces = ExternalForces + GravityForce;
     
+    HairInfo[hairStartInd].Position += float4(Displacement, 0.0f);
+    
     [unroll(30)]
     for (uint segmentIndex = 1; segmentIndex < HairSegmentCount + 1; segmentIndex++)
     {
@@ -211,7 +213,9 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
         
         float3 hairPosition = HairInfo[accessPos].Position.xyz;
         float3 updatedhairPosition = HandleCollision(hairPosition);
+        //float3 velToClearFromPlane = HandlePlaneCollision(updatedhairPosition);
         
+        //updatedVelocity += velToClearFromPlane;
         updatedVelocity += (updatedhairPosition - hairPosition) / DeltaTime;
         
         HairInfo[accessPos].Position = float4(updatedhairPosition, 1.0f);

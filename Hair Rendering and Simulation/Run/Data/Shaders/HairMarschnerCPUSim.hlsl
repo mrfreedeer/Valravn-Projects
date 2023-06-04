@@ -77,7 +77,7 @@ float4 PixelMain(g2p_t input) : SV_Target0
         {
             case POINT_LIGHT:
                 totalSingle += ComputeSingleScattering(Lights[lightIndex], input);
-                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient);
+                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient, /*UseAcos,*/ InvertLightDir);
                 totalSpecular += ComputeSpecularLighting(Lights[lightIndex].Position, input.worldPosition.xyz, EyePosition, input.tangent, SpecularExponent, SpecularCoefficient);
                 break;
             case SPOT_LIGHT:

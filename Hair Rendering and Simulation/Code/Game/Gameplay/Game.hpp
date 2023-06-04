@@ -24,7 +24,7 @@ class MeshBuilder;
 
 struct HairConstants;
 struct SSAOConstants;
-
+enum class SimulAlgorithm;
 struct ModelLoadingData {
 	bool m_reverseWindingOrder = false;
 	bool m_invertUV = false;
@@ -55,8 +55,13 @@ public:
 	Rgba8 const GetRandomColor() const;
 	Vec3 GetPlayerPosition() const;
 
+	Shader* GetSimulationShader(SimulAlgorithm simulAlgorithm, bool isHairCurly = false) const;
 	Shader* GetSimulationShader() const;
+	HairConstants*& GetHairConstants();
 	HairConstants* GetHairConstants() const;
+	HairConstants*& GetBackHairConstants();
+	HairConstants*& GetPrevHairConstants();
+	HairConstants*& GetBackPrevHairConstants();
 
 	bool UseModelVertsForInterp() const;
 
@@ -87,6 +92,7 @@ public:
 	mutable bool m_renderMultInterp = true;
 	Shader* m_copyShader = nullptr;
 
+	UnorderedAccessBuffer* GetPoissonSampleBuffer() const;
 private:
 	App* m_theApp = nullptr;
 
@@ -176,6 +182,7 @@ private:
 	GameState m_nextState = GameState::EngineLogo;
 
 	float m_timeAlive = 0.0f;
+
 	float m_simulationInitialSlowmo = g_gameConfigBlackboard.GetValue("HAIR_INITIAL_SLOWMO_DURATION", 1.0f);
 
 	float m_UISizeY = g_gameConfigBlackboard.GetValue("UI_SIZE_Y", 0.0f);
@@ -233,7 +240,6 @@ private:
 
 
 
-	int m_selectedEntity = 0;
 
 	Vec3 m_lastPlayerPos = Vec3::ZERO;
 	EulerAngles m_lastPlayerOrientation = EulerAngles::ZERO;
@@ -273,8 +279,8 @@ private:
 	Rgba8 m_brown = Rgba8(99,69,36);
 	Rgba8 m_black = Rgba8(5,5,5);
 
-	HairConstants* m_currentConstants = nullptr;
-	HairConstants* m_prevConstants = nullptr;
+	HairConstants* m_currentConstants[2] = {};
+	HairConstants* m_prevConstants[2] = {};
 	SSAOConstants* m_currentSSAO = nullptr;
 	SSAOConstants* m_prevSSAO = nullptr;
 
@@ -285,4 +291,8 @@ private:
 	MeshBuilder* m_meshBuilder = nullptr;
 	std::vector<std::filesystem::path> m_availableModels;
 	ModelLoadingData* m_modelImportOptions = nullptr;
+
+	Image* m_densityMap = nullptr;
+	Image* m_diffuseMap = nullptr;
+	bool m_renderSkyBox = true;
 };

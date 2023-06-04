@@ -83,19 +83,21 @@ float3 ComputeSingleScattering(Light light, gs_out worldInfo)
     static const float roughness = ConvertToRadians(LongitudinalWidth);
     
     float scaleShiftR = 0.0f;
-
     float roughnessR = 0.0f;
-     
+   
     float roughnessTT = 0.0f;
-
     float scaleShiftTT = 0.0f;
      
     float roughnessTRT = 0.0f;
-
     float scaleShiftTRT = 0.0f;
     
     float roughnessSqr = roughness * roughness;
     
+    float4 usedColor = worldInfo.color;
+    if (UseModelColor)
+    {
+        usedColor = ModelColor;
+    }
     
     if (UseUnrealParameters)
     {
@@ -158,8 +160,8 @@ float3 ComputeSingleScattering(Light light, gs_out worldInfo)
     
 
     float3 NR = ComputeAzimuthalR(lightDir, viewDir, deltaTheta, phi);
-    float3 NTT = ComputeAzimuthalTT(lightDir, viewDir, deltaTheta, phi, ModelColor);
-    float3 NTRT = ComputeAzimuthalTRT(lightDir, viewDir, deltaTheta, phi, ModelColor);
+    float3 NTT = ComputeAzimuthalTT(lightDir, viewDir, deltaTheta, phi, usedColor);
+    float3 NTRT = ComputeAzimuthalTRT(lightDir, viewDir, deltaTheta, phi, usedColor);
     
     //float3 NR = ComputeAzimuthal(0, lightDir, viewDir, deltaTheta, phi, ModelColor); // 0 bounces
     //float3 NTT = ComputeAzimuthal(1, lightDir, viewDir, deltaTheta, phi, ModelColor); // 1 bounce
@@ -171,7 +173,7 @@ float3 ComputeSingleScattering(Light light, gs_out worldInfo)
     
     float cosAvgPhi = abs(cos(avgPhi));
     
-    float3 singleScattering = (NR * MR * SpecularMarschner * cosAvgPhi) + 0.05 * (NTT * MTT) + 0.25f * (NTRT * MTRT); // These coefficients resulted in slightly better results
+    float3 singleScattering = (NR * MR * SpecularMarschner * cosAvgPhi) + (MarschnerTransmCoeff) * (NTT * MTT) + MarschnerTRTCoeff * (NTRT * MTRT); // These coefficients resulted in slightly better results
 
     singleScattering /= pow(cos(deltaTheta), 2);
     
@@ -189,20 +191,7 @@ float3 HandleCollision(float3 position)
             resultingPosition = PushPointOutOfSphere(resultingPosition, collisionObj.Position, collisionObj.Radius + CollisionTolerance);
         }
     }
-    
-    float3 PlaneNormal = LimitingPlane.xyz;
-    if (length(PlaneNormal) > 0.9f)
-    {
-            
-        float distToPlane = dot(PlaneNormal, resultingPosition);
-        if ((distToPlane - LimitingPlane.w) < 0.0f)
-        {
-            float overlapDist = -(distToPlane - LimitingPlane.w);
-            resultingPosition += (PlaneNormal * overlapDist);
-        }
-
-    }
-    
+       
     return resultingPosition;
 
 }

@@ -146,7 +146,7 @@ VertexToFragment_t VertexMain(vs_input_t input)
 
 float4 PixelMain(VertexToFragment_t input) : SV_Target0 // semeantic of what I'm returning
 {
-    float3 noise = NoiseTexture.Sample(SurfaceSampler, input.uv * 4.0f).rgb;
+    float3 noise = NoiseTexture.Sample(SurfaceSampler, input.uv).rgb;
     float3 random = normalize(noise);
   
     float depth = 0.0f;
@@ -198,14 +198,17 @@ float4 PixelMain(VertexToFragment_t input) : SV_Target0 // semeantic of what I'm
 //        sampleDepth = SampleDepthBufferUsingPosition(samplePosition.xy);
         
 //#else 
-        samplePosition = position + sign(dot(ray, normal)) * ray;
-        sampleDepth = DepthBuffer.Sample(SurfaceSampler, samplePosition.xy).r;;
+        float dotRayNormal = dot(ray, normal);
+        float3 projectionOntoPlane = ray - /*sign(dotRayNormal) * */ dotRayNormal * normal;
+        //samplePosition = position + sign(dot(ray, normal)) * ray;
+        samplePosition = position + projectionOntoPlane;
+        sampleDepth = DepthBuffer.Sample(SurfaceSampler, samplePosition.xy).r;
 //#endif
         float difference = depth - sampleDepth;
         float depthPastThreshold = step(SSAOFalloff, difference);
         float smoothStepRes = smoothstep(SSAOFalloff, MaxOcclusionPerSample, difference);
         
-        occlusion += depthPastThreshold * (1.0 - smoothStepRes);
+        occlusion += depthPastThreshold * (1.0f - smoothStepRes);
     }
   
     float resultingLighting = AmbientIntensity + 1.0f - (occlusion / SampleSize);

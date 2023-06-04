@@ -38,7 +38,11 @@ float GetAngleBetVectorsAroundPlane(const float3 vecA, const float3 vecB, const 
     float dotProd = dot(vecA, vecB);
     float angle = SafeAcos(dotProd);
     
-    if (length(disp) < EPSILON * EPSILON)
+    /*
+        EPSILON SQR IS TOO SMALL! SOME CORRECT ANGLES WHERE FAILING THE TEST
+        CAUSING BLACK PIXELS IN BETWEEN LIT PIXELS.
+    */
+    if (length(disp) < EPSILON /** EPSILON*/)
     {
         return angle;
     }
@@ -131,6 +135,7 @@ float3 ComputeAzimuthalTT(float3 lightDir, float3 viewDir, float deltaTheta, flo
     
     float oneMinusFSqr = (1.0f - fresnel) * (1.0f - fresnel);
     float3 absorption = oneMinusFSqr * transmission;
+    float otherCosPhi = cos(phi - 3.98f);
     float distribution = exp((-3.65 * cosPhi) - 3.98f);
  
     
@@ -163,7 +168,7 @@ float3 ComputeAzimuthalTRT(float3 lightDir, float3 viewDir, float deltaTheta, fl
     float oneMinusFSqr = (1.0f - fresnel) * (1.0f - fresnel);
     float3 absorption = oneMinusFSqr * fresnel * transmission * transmission;
     
-    return (0.25f * absorption * distribution); // test how it looks without 0.25f 
+    return (/*0.25f **/ absorption * distribution); // test how it looks without 0.25f 
 }
 
 
@@ -301,14 +306,21 @@ float1 RangeMap(float1 inValue, float1 inStart, float1 inEnd, float1 outStart, f
     return lerp(outStart, outEnd, fraction);
 }
 
-float ComputeDiffuseLighting(float3 lightPosition, float3 objectPosition, float3 tangent, float diffuseCoef)
+float ComputeDiffuseLighting(float3 lightPosition, float3 objectPosition, float3 tangent, float diffuseCoef, /*bool useAcos,*/ bool invertLightDir)
 {
     float3 vecToLight = lightPosition - objectPosition;
     
-    vecToLight = -normalize(vecToLight);
+    vecToLight = normalize(vecToLight);
     
+    [flatten]
+    if (invertLightDir)
+    {
+        vecToLight *= -1.0f;
+    }
     
-    float diffuse = sin(dot(tangent, vecToLight));
+    float diffuse = 0.0f;
+    diffuse = sqrt(1.0f - (dot(tangent, vecToLight) * dot(tangent, vecToLight)));
+    //diffuse = sin(dot(tangent, vecToLight));
     
     diffuse = saturate(diffuseCoef * diffuse);
     
@@ -317,6 +329,7 @@ float ComputeDiffuseLighting(float3 lightPosition, float3 objectPosition, float3
 
 float ComputeSpecularLighting(float3 lightPosition, float3 objectPosition, float3 eyePosition, float3 tangent, float specularExp, float specularCoeff)
 {
+    tangent = normalize(tangent);
     float3 vecToLight = lightPosition - objectPosition;
     vecToLight = normalize(vecToLight);
  
@@ -325,11 +338,18 @@ float ComputeSpecularLighting(float3 lightPosition, float3 objectPosition, float
     
     
     float dotProducts = dot(tangent, vecToLight) * dot(tangent, vecToEye);
-    float crossProducts = length(cross(tangent, vecToLight)) * length(cross(tangent, vecToEye));
+    //float crossProducts = length(cross(tangent, vecToLight)) * length(cross(tangent, vecToEye));
+    float dotTangentLight = dot(tangent, vecToLight);
+    float angleTangentLight = SafeAcos(dotTangentLight);
     
+    float dotTangentEye = dot(tangent, vecToEye);
+    float angleTangentEye = SafeAcos(dotTangentEye);
+    float crossProducts = sin(angleTangentLight) * sin(angleTangentEye);
+    //crossProducts = saturate(crossProducts);
     float exponent = pow(2, float(specularExp));
-    
-    float specular = specularCoeff * pow((dotProducts + crossProducts), exponent);
+    float sum = (dotProducts + crossProducts);
+    sum = saturate(sum);
+    float specular = specularCoeff * pow(sum, exponent); // POW RETURNS NAN ON NEGATIVES
     
     return specular;
 

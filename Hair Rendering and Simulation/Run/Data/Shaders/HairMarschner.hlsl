@@ -87,7 +87,7 @@ float4 PixelMain(g2p_t input) : SV_Target0
         {
             case POINT_LIGHT:
                 totalSingle += ComputeSingleScattering(Lights[lightIndex], input);
-                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient);
+                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient,/* UseAcos,*/ InvertLightDir);
                 totalSpecular += ComputeSpecularLighting(Lights[lightIndex].Position, input.worldPosition.xyz, EyePosition, input.tangent, SpecularExponent, SpecularCoefficient);
                 break;
             case SPOT_LIGHT:
@@ -97,7 +97,17 @@ float4 PixelMain(g2p_t input) : SV_Target0
     }
     
         
-    float4 resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * ModelColor) + (AmbientIntensity * ModelColor);
+    float4 resultingColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    
+    [flatten]
+    if (UseModelColor)
+    {
+        resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * ModelColor) + (AmbientIntensity * ModelColor);
+    }
+    else
+    {
+        resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * input.color * ModelColor) + (AmbientIntensity * input.color * ModelColor);
+    }
     
     return saturate(resultingColor);
 }

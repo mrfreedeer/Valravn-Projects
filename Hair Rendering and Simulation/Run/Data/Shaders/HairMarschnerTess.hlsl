@@ -33,9 +33,9 @@ hull_out HullMain(InputPatch<vs_out, 2> inVertex, uint i : SV_OutputControlPoint
     hullOut.position = inVertex[i].position;
     hullOut.normal = inVertex[i].normal;
     //hullOut.worldPosition = inVertex[i].worldPosition;
-    hullOut.previousWorldPosition = HairInfo[hairIndex].Position;
+    hullOut.previousWorldPosition = HairInfo[accessIndex - 1].Position;
     hullOut.worldPosition = HairInfo[accessIndex].Position;
-    hullOut.nextWorldPostion = HairInfo[hairIndex + 2].Position;
+    hullOut.nextWorldPostion = HairInfo[accessIndex + 1].Position;
     hullOut.color = inVertex[i].color;
     hullOut.uv = inVertex[i].uv;
     
@@ -146,9 +146,11 @@ void GeometryMain(line domain_out dsOut[2], inout TriangleStream<gs_out> triangl
     
     //dsOut[0].worldPosition = HairInfo[hairIndex].Position;
     //dsOut[1].worldPosition = HairInfo[hairIndex + 1].Position;
-
+    float3 tangent = dsOut[1].worldPosition.xyz - dsOut[0].worldPosition.xyz;
+    tangent = normalize(tangent);
+    
     float3 iBasis = normalize(EyePosition - dsOut[0].worldPosition.xyz);
-    float3 jBasis = normalize(cross(float3(0.0f, 0.0f, 1.0f), iBasis));
+    float3 jBasis = normalize(cross(iBasis, tangent));
     
     
     float4 vertexes[4];
@@ -161,9 +163,7 @@ void GeometryMain(line domain_out dsOut[2], inout TriangleStream<gs_out> triangl
     
     gs_out output = (gs_out) 0;
     
-    float3 tangent = dsOut[1].worldPosition.xyz - dsOut[0].worldPosition.xyz;
-    
-    tangent = normalize(tangent);
+   
     [unroll]
     for (int i = 0; i < 4; i++)
     {
@@ -218,7 +218,7 @@ float4 PixelMain(gs_out input) : SV_Target0
         {
             case POINT_LIGHT:
                 totalSingle += ComputeSingleScattering(Lights[lightIndex], input);
-                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient);
+                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient, /*UseAcos,*/ InvertLightDir);
                 break;
             case SPOT_LIGHT:
                 break;
@@ -226,8 +226,17 @@ float4 PixelMain(gs_out input) : SV_Target0
         
     }
     
-        
-    float4 resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * ModelColor) + (AmbientIntensity * ModelColor);
+    float4 resultingColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    
+    [flatten]
+    if (UseModelColor)
+    {
+        resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * ModelColor) + (AmbientIntensity * ModelColor);
+    }
+    else
+    {
+        resultingColor = float4(totalSingle, 1.0f) + (totalDiffuse * input.color * ModelColor) + (AmbientIntensity * input.color * ModelColor);
+    }
     
     return resultingColor;
 }

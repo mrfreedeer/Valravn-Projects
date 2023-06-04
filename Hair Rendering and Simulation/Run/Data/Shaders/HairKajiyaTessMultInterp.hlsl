@@ -80,7 +80,7 @@ domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainL
     
     uint totalByte = (dimHairBuffer * stride);
     
-    /*
+  /*
     The index for getting the noise should be consistent between hair segments but different
     betwween hairs. BarycentricCoords.y will be the same between hair segments. DataIndex is different per hair
     */
@@ -92,7 +92,6 @@ domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainL
     uint secondHair = firstHair + SegmentCountNext;
     uint thirdHair = secondHair + SegmentCountNext;
     
-  
     
     float4 hairOne = HairInfo[firstHair].Position;
     float4 hairTwo = HairInfo[secondHair].Position;
@@ -102,6 +101,31 @@ domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainL
     float4 secHairTwo = HairInfo[secondHair + 1].Position;
     float4 secHairThree = HairInfo[thirdHair + 1].Position;
 
+    float4 prevHairOne = hairOne;
+    float4 prevHairTwo = hairTwo;
+    float4 prevHairThree = hairThree;
+    
+    float4 nextHairOne = secHairOne;
+    float4 nextHairTwo = secHairTwo;
+    float4 nextHairThree = secHairThree;
+    
+    if ((patchID % (HairSegmentCount)) != 0)
+    {
+        prevHairOne = HairInfo[firstHair - 1].Position;
+        prevHairTwo = HairInfo[secondHair - 1].Position;
+        prevHairThree = HairInfo[thirdHair - 1].Position;
+        
+       
+    }
+    
+    if ((patchID % HairSegmentCount) != (HairSegmentCount - 1))
+    {
+        nextHairOne = HairInfo[firstHair + 2].Position;
+        nextHairTwo = HairInfo[secondHair + 2].Position;
+        nextHairThree = HairInfo[thirdHair + 2].Position;
+    }
+    
+    
     float3 InterpolationWeights = noiseTexture[float2(noiseIndexX, noiseIndexY)].rgb;
     
         
@@ -112,6 +136,10 @@ domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainL
     
     float3 InterpCoords = InterpolationWeights.xyz;
 
+    float4 resultPrev = InterpCoords.x * prevHairOne +
+                            InterpCoords.y * prevHairTwo +
+                            InterpCoords.z * prevHairThree;
+    
     float4 resultPositionOne = InterpCoords.x * hairOne +
                             InterpCoords.y * hairTwo +
                             InterpCoords.z * hairThree;
@@ -121,7 +149,30 @@ domain_out DomainMain(hull_tess_out input, float2 BarycentricCoords : SV_DomainL
                             InterpCoords.z * secHairThree;
     
     
-    ds_out.worldPosition = lerp(resultPositionOne, resultPositionTwo, BarycentricCoords.x);
+    float4 resultNext = InterpCoords.x * nextHairOne +
+                            InterpCoords.y * nextHairTwo +
+                            InterpCoords.z * nextHairThree;
+    
+    float3 prevPosition = resultPrev.xyz;
+    float3 SegmentStart = resultPositionOne.xyz;
+    float3 SegmentEnd = resultPositionTwo.xyz;
+    float3 nextPosition = resultNext.xyz;
+    
+    float aThird = 1.0f / 3.0f;
+    
+    float3 a = prevPosition;
+    float3 b = prevPosition + (SegmentEnd - SegmentStart) * aThird;
+    float3 c = SegmentEnd - (nextPosition - SegmentEnd) * aThird;
+    float3 d = SegmentEnd;
+    
+    //float t = BarycentricCoords.x * 0.5f;
+    //t += 0.25f;
+    
+    float t = BarycentricCoords.x;
+    float3 vWorldPos = EvaluateBezierCurve(t, a, b, c, d);
+    
+    //ds_out.worldPosition = lerp(resultPositionOne, resultPositionTwo, BarycentricCoords.x);
+    ds_out.worldPosition = float4(vWorldPos, 1.0f);
     ds_out.color = patch[0].color;
     ds_out.uv = patch[0].uv;
     
@@ -137,7 +188,7 @@ void GeometryMain(line domain_out dsOut[2], inout TriangleStream<gs_out> triangl
     float3 iBasis = normalize(EyePosition - dsOut[0].worldPosition.xyz);
     //float3 jBasis = normalize(cross(float3(0.0f, 0.0f, 1.0f), iBasis));
     
-    float3 jBasis = normalize(cross(EyePosition, tangent));
+    float3 jBasis = normalize(cross(iBasis, tangent));
     
     float4 vertexes[4];
     
@@ -197,7 +248,7 @@ float4 PixelMain(gs_out input) : SV_Target0
         switch (Lights[lightIndex].LightType)
         {
             case POINT_LIGHT:
-                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient);
+                totalDiffuse += ComputeDiffuseLighting(Lights[lightIndex].Position, input.worldPosition.xyz, input.tangent, DiffuseCoefficient, /*UseAcos,*/ InvertLightDir);
                 totalSpecular += ComputeSpecularLighting(Lights[lightIndex].Position, input.worldPosition.xyz, EyePosition, input.tangent, SpecularExponent, SpecularCoefficient);
                 break;
             case SPOT_LIGHT:
@@ -209,7 +260,20 @@ float4 PixelMain(gs_out input) : SV_Target0
         
     totalDiffuse = saturate(totalDiffuse);
     totalSpecular = saturate(totalSpecular);
-    float4 resultingColor = (totalSpecular + totalDiffuse + AmbientIntensity.r) * ModelColor;
+    
+    float4 resultingColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    
+    [flatten]
+    if (UseModelColor)
+    {
+        resultingColor = (totalSpecular + totalDiffuse + AmbientIntensity.r) * ModelColor;
+    }
+    else
+    {
+        resultingColor = (totalSpecular + totalDiffuse + AmbientIntensity.r) * input.color *ModelColor;
+
+    }
+
     
     return resultingColor;
 }

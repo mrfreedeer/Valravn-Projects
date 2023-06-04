@@ -157,9 +157,11 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
     ClearArray(virtualForces);
             
     // Get first pass forces
+    HairInfo[hairStartInd].Position += float4(Displacement, 0.0f);
+    HairInfoPrevFrame[hairStartInd] = HairInfo[hairStartInd];
+    
     CalculateRestitutionForces(hairStartInd, forces, virtualForces, false);
     
-    HairInfoPrevFrame[hairStartInd] = HairInfo[hairStartInd];
     
     
     [unroll(MAX_HAIR_SEGMENTS)]
@@ -177,7 +179,7 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
             HairInfoPrevFrame[velAccessIndex] = HairInfo[velAccessIndex];
             if (DeltaTime >= EPSILON)
             {
-                float3 velocityUpdate = (limitedPosition - HairInfo[velAccessIndex].Position) / (DeltaTime);
+                float3 velocityUpdate = (limitedPosition - HairInfo[velAccessIndex].Position).xyz / (DeltaTime);
                 halfVelocity += velocityUpdate * StrainLimitingCoefficient;
 
             }
@@ -206,7 +208,7 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
         if (DeltaTime >= EPSILON)
         {
             float4 virtualVelocityUpdate = (limitedVirtual - VirtualHairInfo[velAccessIndex].Position) / (DeltaTime);
-            halfVelocityVirtual += virtualVelocityUpdate * StrainLimitingCoefficient;
+            halfVelocityVirtual += (virtualVelocityUpdate * StrainLimitingCoefficient).xyz;
         }
         
         float4 updatedVirtualPos = float4(VirtualHairInfo[velAccessIndex].Position.xyz + DeltaTime * halfVelocityVirtual, 1.0f);

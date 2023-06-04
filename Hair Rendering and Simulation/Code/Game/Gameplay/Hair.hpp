@@ -40,13 +40,13 @@ struct HairConstants {
 	// -------------------------------------------
 	float LongitudinalWidth = 5.0f;
 	float ScaleShift = -10.0f;
-	bool UseUnrealParameters = true;
+	unsigned int  UseUnrealParameters = 1;
 	float SpecularMarchner = 0.5f;
 	// -------------------------------------------
 	float DeltaTime = 0.0f;
 	Vec3 ExternalForces = Vec3::ZERO;
 	// -------------------------------------------
-	Vec3 ForceOrigin = Vec3::ZERO;
+	Vec3 Displacement = Vec3::ZERO;
 	float Gravity = -9.8f;
 	// -------------------------------------------
 	float SegmentLength = 0.1f;
@@ -57,7 +57,7 @@ struct HairConstants {
 	float EdgeStiffness = 1800.0f;
 	float BendStiffness = 1800.0f;
 	float TorsionStiffness = 1800.0f;
-	bool IsHairCurly = true;
+	unsigned int  IsHairCurly = true;
 	// -------------------------------------------
 	float Mass = 3.0f;
 	unsigned int SimulationAlgorithm = 0;
@@ -67,12 +67,18 @@ struct HairConstants {
 	float FrictionCoefficient = 0.1f;
 	IntVec3 GridDimensions = IntVec3::ZERO;
 	// -------------------------------------------
-	float CollisionTolerance = 0.1f;
+	float CollisionTolerance = 0.05f;
 	unsigned int HairSegmentCount = 12;
 	float StrainLimitingCoefficient = 0.5f;
-	bool InterpolateUsingRadius = true;
+	unsigned int  InterpolateUsingRadius = 1;
 	// -------------------------------------------
-	Plane3D LimitingPlane;
+	//Plane3D LimitingPlane;
+	// -------------------------------------------
+	float MarschnerTransmCoeff = 0.015f;
+	float MarschnerTRTCoeff = 1.0f;
+	unsigned int UseModelColor = 1;
+	unsigned int InvertLightDir = 0;
+
 };
 
 struct HairGuide {
@@ -160,8 +166,11 @@ public:
 struct HairObjectInit {
 	Vec3 m_startingPosition = Vec3::ZERO;
 	Shader* m_shader = nullptr;
+	Shader* m_simulationShader = nullptr;
 	Shader* m_multInterpShader = nullptr;
 	Image* m_hairDensityMap = nullptr;
+	Image* m_hairDiffuseMap = nullptr;
+	HairConstants** m_usedConstantBuffer = nullptr;
 
 };
 

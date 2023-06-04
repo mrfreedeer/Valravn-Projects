@@ -48,19 +48,21 @@ float3 ComputeSingleScattering(Light light, g2p_t worldInfo)
     static const float roughness = ConvertToRadians(LongitudinalWidth);
     
     float scaleShiftR = 0.0f;
-
     float roughnessR = 0.0f;
      
     float roughnessTT = 0.0f;
-
     float scaleShiftTT = 0.0f;
      
     float roughnessTRT = 0.0f;
-
     float scaleShiftTRT = 0.0f;
     
     float roughnessSqr = roughness * roughness;
     
+    float4 usedColor = worldInfo.color;
+    if (UseModelColor)
+    {
+        usedColor = ModelColor;
+    }
     
     if (UseUnrealParameters)
     {
@@ -121,16 +123,16 @@ float3 ComputeSingleScattering(Light light, g2p_t worldInfo)
     // These are values suggested in Marschner's paper
     
 
-    float3 NR = ComputeAzimuthal(0, lightDir, viewDir, deltaTheta, phi, ModelColor); // 0 bounces
-    float3 NTT = ComputeAzimuthal(1, lightDir, viewDir, deltaTheta, phi, ModelColor); // 1 bounce
-    float3 NTRT = ComputeAzimuthal(2, lightDir, viewDir, deltaTheta, phi, ModelColor); // 2 bounces
+    float3 NR = ComputeAzimuthal(0, lightDir, viewDir, deltaTheta, phi, usedColor); // 0 bounces
+    float3 NTT = ComputeAzimuthal(1, lightDir, viewDir, deltaTheta, phi, usedColor); // 1 bounce
+    float3 NTRT = ComputeAzimuthal(2, lightDir, viewDir, deltaTheta, phi, usedColor); // 2 bounces
     
     float MR = ComputeLongitudinalScattering(scaleShiftR, roughnessR, lightTheta, viewTheta); // 0 bounces
     float MTT = ComputeLongitudinalScattering(scaleShiftTT, roughnessTT, lightTheta, viewTheta); // 1 bounce
     float MTRT = ComputeLongitudinalScattering(scaleShiftTRT, roughnessTRT, lightTheta, viewTheta); // 2 bounces
     
     float cosAvgPhi = abs(cos(avgPhi));
-    float3 singleScattering = (NR * MR * cosAvgPhi * SpecularMarschner) + 0.05 * (NTT * MTT) + 0.25f * (NTRT * MTRT); // These coefficients resulted in slightly better results
+    float3 singleScattering = (NR * MR * cosAvgPhi * SpecularMarschner) + MarschnerTransmCoeff * (NTT * MTT) + MarschnerTRTCoeff * (NTRT * MTRT); // These coefficients resulted in slightly better results
     float cosDeltaTheta = cos(deltaTheta);
     
     

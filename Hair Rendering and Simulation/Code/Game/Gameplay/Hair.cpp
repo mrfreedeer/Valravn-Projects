@@ -72,9 +72,9 @@ HairObject::HairObject(Game* pointerToGame, HairObjectInit const& initParams) :
 	float height = hairConstants->GridCellHeight;
 
 	IntVec3 totalCells = IntVec3::ZERO;
-	totalCells.x = static_cast<int>(static_cast<float>(GridSize.x) / width) + 1; 
-	totalCells.y = static_cast<int>(static_cast<float>(GridSize.y) / width) + 1; 
-	totalCells.z = static_cast<int>(static_cast<float>(GridSize.z) / height) + 1; 
+	totalCells.x = static_cast<int>(static_cast<float>(GridSize.x) / width) + 1;
+	totalCells.y = static_cast<int>(static_cast<float>(GridSize.y) / width) + 1;
+	totalCells.z = static_cast<int>(static_cast<float>(GridSize.z) / height) + 1;
 
 	int cellsToCreate = totalCells.x * totalCells.y * totalCells.z;
 
@@ -90,7 +90,7 @@ HairObject::~HairObject()
 	delete m_gridUAV;
 
 	if (m_initParams.m_hairDensityMap) {
-		delete m_initParams.m_hairDensityMap;
+		m_initParams.m_hairDensityMap = nullptr;
 	}
 }
 
@@ -102,6 +102,11 @@ void HairObject::Render() const
 	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->SetModelMatrix(modelMat);
 	g_theRenderer->CopyAndBindModelConstants();
+
+
+	if (m_initParams.m_usedConstantBuffer) {
+		g_theRenderer->CopyCPUToGPU(*m_initParams.m_usedConstantBuffer, sizeof(HairConstants), m_game->m_hairConstantBuffer);
+	}
 	g_theRenderer->BindConstantBuffer(4, m_game->m_hairConstantBuffer);
 	g_theRenderer->CopyAndBindLightConstants();
 
@@ -113,9 +118,28 @@ void HairObject::Render() const
 	g_theRenderer->DrawVertexBuffer(m_vertexBuffer, (int)m_hairVertexes.size(), 0, sizeof(Vertex_PNCU), TopologyMode::LINELIST);
 }
 
+// https://www.techiedelight.com/round-next-highest-power-2/
+unsigned NextPowerOf2(unsigned n)
+{
+	// decrement `n` (to handle the case when `n` itself is a power of 2)
+	n--;
+
+	// set all bits after the last set bit
+	n |= n >> 1;
+	n |= n >> 2;
+	n |= n >> 4;
+	n |= n >> 8;
+	n |= n >> 16;
+
+	// increment `n` and return
+	return ++n;
+}
+
 int HairObject::GetThreadsToDispatch(size_t amountOfHairPos) const
 {
-	return (((int)amountOfHairPos / 2) / 64) + 1;
+	int minThreads = (((int)amountOfHairPos / 2) / 64) + 1;
+	int powerOf2Threads = (int)NextPowerOf2((unsigned int) minThreads);
+	return powerOf2Threads;
 }
 
 void HairObject::SetShader(Shader* newShader)
@@ -205,9 +229,19 @@ void HairObject::Update(float deltaSeconds)
 	if (g_simulateHair) {
 		int threadsSimul = ((static_cast<int>(m_hairVertexes.size()) / HairGuide::HairSegmentCount) / 64) + 1;
 
-		g_theRenderer->BindShader(m_game->GetSimulationShader());
+		if (m_initParams.m_simulationShader) {
+			g_theRenderer->BindShader(m_initParams.m_simulationShader);
+		}
+		else {
+			g_theRenderer->BindShader(m_game->GetSimulationShader());
+		}
 		g_theRenderer->SetModelMatrix(GetModelMatrix());
 		g_theRenderer->CopyAndBindModelConstants();
+
+		if (m_initParams.m_usedConstantBuffer) {
+			g_theRenderer->CopyCPUToGPU(*m_initParams.m_usedConstantBuffer, sizeof(HairConstants), m_game->m_hairConstantBuffer);
+		}
+
 		g_theRenderer->BindConstantBuffer(4, m_game->m_hairConstantBuffer);
 		g_theRenderer->BindConstantBuffer(5, GetHairCollisionBuffer());
 		g_theRenderer->SetUAV(m_hairPositionUAV, 0);

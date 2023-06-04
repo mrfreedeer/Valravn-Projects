@@ -147,5 +147,8 @@
     <FxCompile Include="..\..\Run\Data\Shaders\HairKajiyaTessMultInterp.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Shaders\Skybox.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

@@ -72,7 +72,7 @@ cbuffer HairConstants : register(b4)
     float DeltaTime;
     float3 ExternalForces;
     // -------------------------------------------
-    float3 ForceOrigin;
+    float3 Displacement;
     float Gravity;
     // -------------------------------------------
     float SegmentLength;
@@ -83,7 +83,7 @@ cbuffer HairConstants : register(b4)
     float EdgeStiffness;
     float BendStiffness;
     float TorsionStiffness;
-    bool  IsHairCurly;
+    uint IsHairCurly;
     // -------------------------------------------
     float Mass;
     uint SimulationAlgorithm;
@@ -96,9 +96,15 @@ cbuffer HairConstants : register(b4)
     float CollisionTolerance;
     uint HairSegmentCount;
     float StrainLimitingCoefficient;
-    bool InterpolateUsingRadius;
+    uint InterpolateUsingRadius;
     // -------------------------------------------
-    float4 LimitingPlane;
+    //float4 LimitingPlane;
+    // -------------------------------------------
+    float MarschnerTransmCoeff;
+    float MarschnerTRTCoeff;
+    uint UseModelColor;
+    uint InvertLightDir;
+
 }
 
 

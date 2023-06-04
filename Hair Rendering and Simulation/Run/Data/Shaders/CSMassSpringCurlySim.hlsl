@@ -101,10 +101,12 @@ void ComputeMain(uint3 threadId : SV_DispatchThreadID)
     // Ensure array is zeros
     ClearArray(forces);
             
+    HairInfo[hairStartInd].Position += float4(Displacement, 0.0f);
+    HairInfoPrevFrame[hairStartInd] = HairInfo[hairStartInd];
+    
     // Get first pass forces
     CalculateRestitutionForces(hairStartInd, forces, false);
     
-    HairInfoPrevFrame[hairStartInd] = HairInfo[hairStartInd];
     [unroll(MAX_HAIR_SEGMENTS)]
     for (uint velocityIndex = 1; velocityIndex < HairSegmentCount + 1; velocityIndex++)
     {

@@ -23,6 +23,8 @@ enum class GAME_TEXTURE: int {
 	CompanionCube,
 	SimplexNoise,
 	PerlinNoise,
+	TronCubeMap,
+	//RainbowCubeMap,
 	NUM_TEXTURES
 };
 

@@ -40,7 +40,8 @@ HairSphere::~HairSphere()
 
 void HairSphere::CreateHair()
 {
-	Rgba8 color = Rgba8::WHITE;
+	//Rgba8 color = Rgba8::WHITE;
+	Rgba8 color = Rgba8(85, 54, 21);
 
 	float yawDegDelta = 360.0f / static_cast<float>(m_sliceCount);
 	float pitchDegDelta = 180.0f / static_cast<float>(m_stackCount);
@@ -118,15 +119,30 @@ void HairSphere::CreateHair()
 				avgDensity = 1.0f;
 			}
 
+			Rgba8 bottomLeftColor = color;
+			Rgba8 bottomRightColor = color;
+			Rgba8 topLeftColor = color;
+			Rgba8 topRightColor = color;
+
+			if (m_initParams.m_hairDiffuseMap) {
+				bottomLeftColor = m_initParams.m_hairDiffuseMap->GetTexelColor(leftU, bottomV);
+				bottomRightColor = m_initParams.m_hairDiffuseMap->GetTexelColor(rightU, bottomV);
+				topLeftColor = m_initParams.m_hairDiffuseMap->GetTexelColor(leftU, topV);
+				topRightColor = m_initParams.m_hairDiffuseMap->GetTexelColor(rightU, topV);
+			}
 
 
 			for (int hairIndex = 0; hairIndex < (HairObject::HairPerSection * avgDensity); hairIndex++) {
 				auto timeNow = std::chrono::high_resolution_clock::now();
-				auto timeInNanoSeconds = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow.time_since_epoch()).count();
-				float noisePos = static_cast<float>(timeInNanoSeconds + (timeInNanoSeconds * 0.5f * (float)hairIndex));
+				auto TimeInMS = std::chrono::duration_cast<std::chrono::milliseconds>(timeNow.time_since_epoch()).count();
+				float TimeInMSFloat = static_cast<float>(TimeInMS);
+				float noisePos = static_cast<float>(TimeInMSFloat + (TimeInMSFloat * 0.5f * (float)hairIndex));
 
-				float randTX = 0.5f + 0.5f * Compute1dPerlinNoise(noisePos, 0.55f, 7, 2.0f, 0.2f, true, 1);
-				float randTY = 0.5f + 0.5f * Compute1dPerlinNoise(noisePos, 0.55f, 8, 2.0f, 0.2f, true);
+				float randTX = 0.5f + 0.5f * Compute1dPerlinNoise(noisePos, 250254, 7, 0.35f, 6.0f, true, 1);
+				float randTY = 0.5f + 0.5f * Compute1dPerlinNoise(noisePos, 486454, 5, 0.475f, 3.0f, true, 25);
+
+				randTX *= randTX;
+				randTY *= randTY;
 
 				Vec3 dispX = rightBottomPos - leftBottomPos;
 				Vec3 dispY = rightTopPos - rightBottomPos;
@@ -136,9 +152,14 @@ void HairSphere::CreateHair()
 
 				Vec3 randPos = leftBottomPos + dispX + dispY;
 
+				Rgba8 colorLerpXBottom = Rgba8::InterpolateColors(bottomLeftColor, bottomRightColor, randTX);
+				Rgba8 colorLerpXTop = Rgba8::InterpolateColors(topLeftColor, topRightColor, randTX);
+
+				Rgba8 resultingColor = Rgba8::InterpolateColors(colorLerpXBottom, colorLerpXTop, randTY);
+
 				Vec3 normal = randPos.GetNormalized();
 
-				HairGuide newHair = HairGuide(randPos, color, normal, HairGuide::HairSegmentCount);
+				HairGuide newHair = HairGuide(randPos, resultingColor, normal, HairGuide::HairSegmentCount);
 				m_hairs.push_back(newHair);
 				newHair.AddVerts(m_hairVertexes);
 			}
@@ -310,6 +331,10 @@ void HairSphereTessellation::Update(float deltaSeconds)
 			g_theRenderer->BindShader(m_game->GetSimulationShader());
 			g_theRenderer->SetModelMatrix(GetModelMatrix());
 			g_theRenderer->CopyAndBindModelConstants();
+
+			if (m_initParams.m_usedConstantBuffer) {
+				g_theRenderer->CopyCPUToGPU(*m_initParams.m_usedConstantBuffer, sizeof(HairConstants), m_game->m_hairConstantBuffer);
+			}
 			g_theRenderer->BindConstantBuffer(4, m_game->m_hairConstantBuffer);
 			g_theRenderer->BindConstantBuffer(5, GetHairCollisionBuffer());
 			g_theRenderer->SetUAV(m_hairInterpUAV, 0);
@@ -333,6 +358,33 @@ void HairSphereTessellation::Render() const
 {
 	Mat44 modelMat = GetModelMatrix();
 	g_theRenderer->SetModelMatrix(modelMat);
+	g_theRenderer->BindConstantBuffer(4, m_game->m_hairConstantBuffer);
+
+	if (m_game->m_renderSphere) {
+		if (g_drawDebug) {
+			g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::WIREFRAME, WindingOrder::COUNTERCLOCKWISE);
+		}
+		else {
+			g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
+		}
+
+		Shader* defaultDiffuse = g_theRenderer->CreateOrGetShader("Data/Shaders/DefaultDiffuse");
+		g_theRenderer->BindShader(defaultDiffuse);
+
+		/*Texture* densityMapTexture = nullptr;
+		if (m_initParams.m_hairDensityMap) {
+			densityMapTexture = g_theRenderer->CreateOrGetTextureFromFile(m_initParams.m_hairDensityMap->GetImageFilePath().c_str());
+		}
+		g_theRenderer->BindTexture(densityMapTexture);*/
+		g_theRenderer->CopyAndBindModelConstants();
+
+		g_theRenderer->BindVertexBuffer(m_sphereBuffer, m_sphereBuffer->GetStride());
+		g_theRenderer->DrawVertexBuffer(m_sphereBuffer, (int)m_sphereVertexes.size(), 0, m_sphereBuffer->GetStride());
+	}
+
+	if (m_initParams.m_usedConstantBuffer) {
+		g_theRenderer->CopyCPUToGPU(*m_initParams.m_usedConstantBuffer, sizeof(HairConstants), m_game->m_hairConstantBuffer);
+	}
 	if (m_game->m_renderHair) {
 		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 		g_theRenderer->BindShader(m_initParams.m_shader);
@@ -344,14 +396,13 @@ void HairSphereTessellation::Render() const
 	}
 
 	if (m_game->m_renderMultInterp) {
-		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
+		//g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 		g_theRenderer->BindShader(m_initParams.m_multInterpShader);
 
 		g_theRenderer->BindTexture(nullptr);
 		g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::SimplexNoise], 1, SHADER_BIND_DOMAIN_SHADER);
 		g_theRenderer->CopyAndBindModelConstants();
-
-		g_theRenderer->BindConstantBuffer(4, m_game->m_hairConstantBuffer);
+	
 		g_theRenderer->BindConstantBuffer(5, GetHairCollisionBuffer());
 		g_theRenderer->CopyAndBindLightConstants();
 
@@ -369,27 +420,6 @@ void HairSphereTessellation::Render() const
 	}
 
 
-	if (m_game->m_renderSphere) {
-		if (g_drawDebug) {
-			g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::WIREFRAME, WindingOrder::COUNTERCLOCKWISE);
-		}
-		else {
-			g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-		}
-
-		Shader* defaultDiffuse = g_theRenderer->CreateOrGetShader("Data/Shaders/DefaultDiffuse");
-		g_theRenderer->BindShader(defaultDiffuse);
-
-		Texture* densityMapTexture = nullptr;
-		if (m_initParams.m_hairDensityMap) {
-			densityMapTexture = g_theRenderer->CreateOrGetTextureFromFile(m_initParams.m_hairDensityMap->GetImageFilePath().c_str());
-		}
-		g_theRenderer->BindTexture(densityMapTexture);
-		g_theRenderer->CopyAndBindModelConstants();
-
-		g_theRenderer->BindVertexBuffer(m_sphereBuffer, m_sphereBuffer->GetStride());
-		g_theRenderer->DrawVertexBuffer(m_sphereBuffer, (int)m_sphereVertexes.size(), 0, m_sphereBuffer->GetStride());
-	}
 }
 
 int HairSphereTessellation::GetMultiStrandBaseCount() const

@@ -17,21 +17,28 @@
 #include "ThirdParty/Squirrel/SmoothNoise.hpp"
 
 struct ImGuiSettingsInfo {
+	int m_currentWindow = 0; // 0 presets, 1 rendering, 2 simulation
 	Light m_sceneLights[8] = {};
 	int m_selectedLight = 0;
+	int m_selectedEntity = 0;
 	int m_amountOfLights = 0;
 	float m_distFromObject = 5.0f;
 	bool m_requiresShutdown = false;
 	bool m_restartRequested = false;
 	float m_hairColor[4];
+	float m_hairColorModelOnly[4];
 	float m_ambientLight = 0.25f;
 	int m_SSAOLevels = 1;
 	int m_hairCurliness = 10;
 	bool m_refreshModels = false;
 	int m_interpPositionsFrom = 1; // 0 Model 1 Other Hairs
-	int m_interpPositionsInADir = 0; // 0 Radius 1 Plane
+	int m_interpPositionsInADir = 1; // 0 Radius 1 Plane
 	int m_usedShader = 0; // 0 Marschner 1 Kajiya
 	float m_windForce = 0.5f;
+	bool m_useModelColorOnly = true;
+	bool m_useAcos = false;
+	bool m_invertDiffuseLightDir = false;
+	bool m_addSecondObject = false;
 #ifdef ENGINE_ANTIALIASING
 	bool m_isAntialiasingOn = true;
 	unsigned int m_aaLevel = 1;
@@ -100,11 +107,18 @@ Game::~Game()
 {
 	ShutdownHairCollision();
 	delete m_hairConstantBuffer;
-	delete m_currentConstants;
-	m_currentConstants = nullptr;
 
-	delete m_prevConstants;
-	m_prevConstants = nullptr;
+	for (int constantsIndex = 0; constantsIndex < 2; constantsIndex++) {
+		if (m_currentConstants[constantsIndex]) {
+			delete m_currentConstants[constantsIndex];
+			m_currentConstants[constantsIndex] = nullptr;
+		}
+
+		if (m_prevConstants[constantsIndex]) {
+			delete m_prevConstants[constantsIndex];
+			m_prevConstants[constantsIndex] = nullptr;
+		}
+	}
 
 	delete m_currentSSAO;
 	m_currentSSAO = nullptr;
@@ -112,12 +126,41 @@ Game::~Game()
 	delete m_prevSSAO;
 	m_prevSSAO = nullptr;
 
+}
 
+HairConstants*& Game::GetHairConstants()
+{
+	return m_currentConstants[imGuiSettings.m_selectedEntity];
 }
 
 HairConstants* Game::GetHairConstants() const
 {
-	return m_currentConstants;
+	return m_currentConstants[imGuiSettings.m_selectedEntity];
+}
+
+HairConstants*& Game::GetBackHairConstants()
+{
+	if (imGuiSettings.m_selectedEntity == 0) {
+		return m_currentConstants[1];
+	}
+	else {
+		return m_currentConstants[0];
+	}
+}
+
+HairConstants*& Game::GetPrevHairConstants()
+{
+	return m_prevConstants[imGuiSettings.m_selectedEntity];
+}
+
+HairConstants*& Game::GetBackPrevHairConstants()
+{
+	if (imGuiSettings.m_selectedEntity == 0) {
+		return m_prevConstants[1];
+	}
+	else {
+		return m_prevConstants[0];
+	}
 }
 
 bool Game::UseModelVertsForInterp() const
@@ -129,6 +172,9 @@ void Game::Startup()
 {
 	LoadAssets();
 	InitializeHairProperties();
+
+	m_densityMap = new Image("Data/Images/DensityMapTest.png");
+	m_diffuseMap = new Image("Data/Images/ColorMap.png");
 	if (m_deltaTimeSample) {
 		delete m_deltaTimeSample;
 		m_deltaTimeSample = nullptr;
@@ -170,6 +216,7 @@ void Game::Startup()
 	default:
 		break;
 	}
+	imGuiSettings.m_restartRequested = false;
 
 	DebugAddMessage("Hello", 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 }
@@ -253,12 +300,15 @@ void Game::StartupHairDiscLighting()
 
 	imGuiSettings.m_amountOfLights += 2;
 
-	m_prevConstants->SpecularCoefficient = m_hairObjectKajiya->m_specularCoefficient;
-	m_prevConstants->DiffuseCoefficient = m_hairObjectKajiya->m_diffuseCoefficient;
+	HairConstants* prevConstants = GetPrevHairConstants();
+	HairConstants* currentConstants = GetHairConstants();
 
-	m_currentConstants->DiffuseCoefficient = m_prevConstants->DiffuseCoefficient;
-	m_currentConstants->SpecularCoefficient = m_prevConstants->SpecularCoefficient;
-	m_currentConstants->SpecularExponent = m_prevConstants->SpecularExponent;
+	prevConstants->SpecularCoefficient = m_hairObjectKajiya->m_specularCoefficient;
+	prevConstants->DiffuseCoefficient = m_hairObjectKajiya->m_diffuseCoefficient;
+
+	currentConstants->DiffuseCoefficient = prevConstants->DiffuseCoefficient;
+	currentConstants->SpecularCoefficient = prevConstants->SpecularCoefficient;
+	currentConstants->SpecularExponent = prevConstants->SpecularExponent;
 
 	m_isUsingKajiya = true;
 	m_isUsingMarschner = true;
@@ -295,15 +345,34 @@ void Game::StartupHairSphereLighting()
 	m_player->m_position = m_lastPlayerPos;
 	//Prop* gridProp = new Prop(this, Vec3::ZERO, PropRenderType::GRID);
 
+	m_isCursorHidden = true;
+	m_isCursorClipped = true;
+	m_isCursorRelative = true;
+
+	DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
+	g_theInput->ResetMouseClientDelta();
+
+	m_allEntities.push_back(player);
+
+	if (!imGuiSettings.m_restartRequested) {
+		HairObject::HairPerSection = g_gameConfigBlackboard.GetValue("SPHERE_HAIR_PER_SECTION", 10);
+	}
+
 	HairObjectInit startingParams = {};
 	startingParams.m_startingPosition = Vec3(1.0f, 1.0f, 0.0f);
 	startingParams.m_shader = m_diffuseKajiya;
+	startingParams.m_hairDensityMap = m_densityMap;
+	startingParams.m_hairDiffuseMap = m_diffuseMap;
+	startingParams.m_usedConstantBuffer = &m_currentConstants[0];
+	startingParams.m_simulationShader = GetSimulationShader((SimulAlgorithm)m_currentConstants[0]->SimulationAlgorithm, m_currentConstants[0]->IsHairCurly);
 
 	m_hairObjectKajiya = new HairSphere(this, startingParams);
 
 
-	startingParams.m_startingPosition = Vec3(1.0f, 15.0f, 0.0f);
+	startingParams.m_startingPosition = Vec3(1.0f, 8.0f, 0.0f);
 	startingParams.m_shader = m_diffuseMarschner;
+	startingParams.m_usedConstantBuffer = &m_currentConstants[1];
+	startingParams.m_simulationShader = GetSimulationShader((SimulAlgorithm)m_currentConstants[1]->SimulationAlgorithm, m_currentConstants[1]->IsHairCurly);
 	m_hairObjectMarschner = new HairSphere(this, startingParams);
 
 	AddHairCollisionSphere(m_hairObjectKajiya->m_position, HairObject::Radius);
@@ -312,19 +381,11 @@ void Game::StartupHairSphereLighting()
 	DebugAddWorldBillboardText("Kajiya", m_hairObjectKajiya->m_position + Vec3(0.0f, 0.0f, 1.0f), 1.0f, Vec2(0.5f, 0.5f), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::ALWAYS);
 	DebugAddWorldBillboardText("Marschner", m_hairObjectMarschner->m_position + Vec3(0.0f, 0.0f, 1.0f), 1.0f, Vec2(0.5f, 0.5f), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::ALWAYS);
 
-	m_allEntities.push_back(player);
 	//m_allEntities.push_back(gridProp);
 	m_allEntities.push_back(m_hairObjectMarschner);
 	m_allEntities.push_back(m_hairObjectKajiya);
-
-	m_isCursorHidden = true;
-	m_isCursorClipped = true;
-	m_isCursorRelative = true;
-
-	g_theInput->ResetMouseClientDelta();
-
-	DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
-
+	m_allHairObjects.push_back(m_hairObjectMarschner);
+	m_allHairObjects.push_back(m_hairObjectKajiya);
 
 	Light& firstLight = imGuiSettings.m_sceneLights[0];
 	firstLight.Enabled = true;
@@ -338,13 +399,26 @@ void Game::StartupHairSphereLighting()
 
 	imGuiSettings.m_amountOfLights += 2;
 
-	m_prevConstants->SpecularCoefficient = m_hairObjectKajiya->m_specularCoefficient;
-	m_prevConstants->DiffuseCoefficient = m_hairObjectKajiya->m_diffuseCoefficient;
+	HairConstants* prevConstants = GetPrevHairConstants();
+	HairConstants* currentConstants = GetHairConstants();
 
-	m_currentConstants->DiffuseCoefficient = m_prevConstants->DiffuseCoefficient;
-	m_currentConstants->SpecularCoefficient = m_prevConstants->SpecularCoefficient;
-	m_currentConstants->SpecularExponent = m_hairObjectKajiya->m_specularExponent;
+	prevConstants->SpecularCoefficient = m_hairObjectKajiya->m_specularCoefficient;
+	prevConstants->DiffuseCoefficient = m_hairObjectKajiya->m_diffuseCoefficient;
 
+	currentConstants->DiffuseCoefficient = prevConstants->DiffuseCoefficient;
+	currentConstants->SpecularCoefficient = prevConstants->SpecularCoefficient;
+	currentConstants->SpecularExponent = m_hairObjectKajiya->m_specularExponent;
+
+	if (!imGuiSettings.m_restartRequested) {
+		HairConstants*& backPrevConstants = GetBackPrevHairConstants();
+		HairConstants*& backCurrentConstants = GetBackHairConstants();
+
+		delete backPrevConstants;
+		backPrevConstants = new HairConstants(*prevConstants);
+
+		delete backCurrentConstants;
+		backCurrentConstants = new HairConstants(*currentConstants);
+	}
 
 	m_isUsingKajiya = true;
 	m_isUsingMarschner = true;
@@ -368,36 +442,63 @@ void Game::StartupHairTessellation()
 
 	m_allEntities.push_back(player);
 
+	HairConstants* prevConstants = GetPrevHairConstants();
+	HairConstants* currentConstants = GetHairConstants();
 
-	m_prevConstants->SpecularCoefficient = 0.5f;
-	m_prevConstants->DiffuseCoefficient = 0.5f;
+	prevConstants->SpecularCoefficient = 0.5f;
+	prevConstants->DiffuseCoefficient = 0.5f;
 
-	m_currentConstants->DiffuseCoefficient = m_prevConstants->DiffuseCoefficient;
-	m_currentConstants->SpecularCoefficient = m_prevConstants->SpecularCoefficient;
-	m_currentConstants->SpecularExponent = 4;
+	currentConstants->DiffuseCoefficient = prevConstants->DiffuseCoefficient;
+	currentConstants->SpecularCoefficient = prevConstants->SpecularCoefficient;
+	currentConstants->SpecularExponent = 4;
 
+	if (!imGuiSettings.m_restartRequested) {
+		HairObject::HairPerSection = g_gameConfigBlackboard.GetValue("SPHERE_HAIR_PER_SECTION", 10);
+	}
 
-	//m_hairObjectKajiya = new HairDiscTessellation(this, Vec3(-5.0, -5.0f, 0.0f), m_diffuseTessKajiya);
 
 	Image* densityTest = new Image("Data/Images/DensityMapTest.png");
+	Image* colorMap = new Image("Data/Images/ColorMap.png");
 
 	HairObjectInit startingParams = {};
 	startingParams.m_startingPosition = Vec3(6.0, 1.0f, 0.0f);
 	startingParams.m_shader = m_diffuseTessMarschner;
 	startingParams.m_multInterpShader = m_diffuseMultTessMarschner;
-
 	startingParams.m_hairDensityMap = densityTest;
-
-	Plane3D limitingPlane = {};
-	limitingPlane.m_planeNormal = Vec3(1.0f, 0.0f, 0.0f);
-	limitingPlane.m_distToPlane = startingParams.m_startingPosition.GetLength() - 0.4f;
-	m_currentConstants->LimitingPlane = limitingPlane;
-
+	startingParams.m_hairDiffuseMap = colorMap;
+	startingParams.m_usedConstantBuffer = &m_currentConstants[0];
+	startingParams.m_simulationShader = GetSimulationShader((SimulAlgorithm)m_currentConstants[0]->SimulationAlgorithm, m_currentConstants[0]->IsHairCurly);
 	m_hairObjectMarschner = new HairSphereTessellation(this, startingParams);
+
+
+	/*Plane3D limitingPlane = {};
+	limitingPlane.m_planeNormal = Vec3(1.0f, 0.0f, 0.0f);
+	limitingPlane.m_distToPlane = startingParams.m_startingPosition.GetLength() - 0.55f;
+	m_currentConstants->LimitingPlane = limitingPlane;*/
+
 	AddHairCollisionSphere(m_hairObjectMarschner->m_position, HairObject::Radius);
-	//m_allEntities.push_back(m_hairObjectKajiya);
 	m_allEntities.push_back(m_hairObjectMarschner);
 	m_allHairObjects.push_back(m_hairObjectMarschner);
+
+	if (imGuiSettings.m_addSecondObject) {
+		startingParams.m_startingPosition = Vec3(1.0, 1.0f, 0.0f);
+		startingParams.m_shader = m_diffuseTessKajiya;
+		startingParams.m_multInterpShader = m_diffuseMultTessKajiya;
+		startingParams.m_hairDensityMap = densityTest;
+		startingParams.m_hairDiffuseMap = colorMap;
+		startingParams.m_usedConstantBuffer = &m_currentConstants[1];
+		startingParams.m_simulationShader = GetSimulationShader((SimulAlgorithm)m_currentConstants[1]->SimulationAlgorithm, m_currentConstants[1]->IsHairCurly);
+
+		m_hairObjectKajiya = new HairSphereTessellation(this, startingParams);
+		AddHairCollisionSphere(m_hairObjectKajiya->m_position, HairObject::Radius);
+		m_allEntities.push_back(m_hairObjectKajiya);
+		m_allHairObjects.push_back(m_hairObjectKajiya);
+		m_isUsingKajiya = true;
+
+	}
+
+	//m_allEntities.push_back(m_hairObjectKajiya);
+
 
 	m_prevSegmentLength = HairGuide::HairSegmentLength;
 
@@ -413,8 +514,8 @@ void Game::StartupHairTessellation()
 
 	imGuiSettings.m_amountOfLights += 2;
 
-	//m_isUsingKajiya = true;
 	m_isUsingMarschner = true;
+
 }
 
 void Game::StartupHairSimulation()
@@ -436,14 +537,15 @@ void Game::StartupHairSimulation()
 
 	m_allEntities.push_back(player);
 
+	HairConstants* prevConstants = GetPrevHairConstants();
+	HairConstants* currentConstants = GetHairConstants();
 
+	prevConstants->SpecularCoefficient = 0.5f;
+	prevConstants->DiffuseCoefficient = 0.5f;
 
-	m_prevConstants->SpecularCoefficient = 0.5f;
-	m_prevConstants->DiffuseCoefficient = 0.5f;
-
-	m_currentConstants->DiffuseCoefficient = m_prevConstants->DiffuseCoefficient;
-	m_currentConstants->SpecularCoefficient = m_prevConstants->SpecularCoefficient;
-	m_currentConstants->SpecularExponent = 4;
+	currentConstants->DiffuseCoefficient = prevConstants->DiffuseCoefficient;
+	currentConstants->SpecularCoefficient = prevConstants->SpecularCoefficient;
+	currentConstants->SpecularExponent = 4;
 
 	m_prevSegmentLength = HairGuide::HairSegmentLength;
 
@@ -453,16 +555,16 @@ void Game::StartupHairSimulation()
 	Vec3 hairPos = m_player->m_position + Vec3(4.0f, 2.0f, 0.0f);
 
 	HairSimulationInit initialParams = {};
-	initialParams.mass = m_currentConstants->Mass;
+	initialParams.mass = currentConstants->Mass;
 	initialParams.normal = Vec3(1.0f, 0.0f, 1.0f);
 	initialParams.position = hairPos;
-	initialParams.edgeStiffness = m_currentConstants->EdgeStiffness;
-	initialParams.bendStiffness = m_currentConstants->BendStiffness;
-	initialParams.torsionStiffness = m_currentConstants->TorsionStiffness;
-	initialParams.damping = m_currentConstants->DampingCoefficient;
+	initialParams.edgeStiffness = currentConstants->EdgeStiffness;
+	initialParams.bendStiffness = currentConstants->BendStiffness;
+	initialParams.torsionStiffness = currentConstants->TorsionStiffness;
+	initialParams.damping = currentConstants->DampingCoefficient;
 	initialParams.segmentCount = HairGuide::HairSegmentCount;
-	initialParams.usedAlgorithm = (SimulAlgorithm)m_currentConstants->SimulationAlgorithm;
-	initialParams.isCurlyHair = m_currentConstants->IsHairCurly;
+	initialParams.usedAlgorithm = (SimulAlgorithm)currentConstants->SimulationAlgorithm;
+	initialParams.isCurlyHair = currentConstants->IsHairCurly;
 
 	m_CPUSimulObject = new HairSimulGuide(initialParams); // If stiffness is too high, simulation kind of explodes. This is a good empirical value
 	DebugAddWorldBillboardText("Simulated CPU", m_CPUSimulObject->m_positions[0] + Vec3(0.0, 0.0f, 1.0f), 0.20f, Vec2(0.5f, 0.5f), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
@@ -475,7 +577,7 @@ void Game::StartupHairSimulation()
 	imGuiSettings.m_amountOfLights++;
 
 	float _throwawayEdgeLegth = 0.0f;
-	m_CPUSimulObject->GetSpringLengths(_throwawayEdgeLegth, m_currentConstants->BendInitialLength, m_currentConstants->TorsionInitialLength);
+	m_CPUSimulObject->GetSpringLengths(_throwawayEdgeLegth, currentConstants->BendInitialLength, currentConstants->TorsionInitialLength);
 
 
 }
@@ -517,40 +619,47 @@ void Game::InitializeHairProperties()
 
 	m_SSAO = g_theRenderer->CreateOrGetShader("Data/Shaders/SSAO.hlsl");
 	m_SampleDownsizer = g_theRenderer->CreateOrGetShader("Data/Shaders/DownsampleDepthBuffer.hlsl");
-	m_brown.GetAsFloats(imGuiSettings.m_hairColor);
+	m_brown.GetAsFloats(imGuiSettings.m_hairColorModelOnly);
+	Rgba8::WHITE.GetAsFloats(imGuiSettings.m_hairColor);
 
 	g_theRenderer->SetAmbientIntensity(Rgba8(0.4f));
 
 	m_lastPlayerPos = Vec3(-15.0f, 7.0f, 0.0f);
 
-	m_currentConstants = new HairConstants();
-	m_currentConstants->ScaleShift = -10.0f;
-	m_currentConstants->LongitudinalWidth = 10.0f;
-	m_currentConstants->UseUnrealParameters = true;
-	m_currentConstants->SpecularMarchner = 0.5f;
-	m_currentConstants->InterpolationFactor = 1;
-	m_currentConstants->TessellationFactor = 1.0f;
-	m_currentConstants->InterpolationRadius = 1.0f;
-	m_currentConstants->EdgeStiffness = 1200.0f;
-	m_currentConstants->BendStiffness = 1200.0f;
-	m_currentConstants->TorsionStiffness = 1200.0f;
-	m_currentConstants->DampingCoefficient = g_gameConfigBlackboard.GetValue("HAIR_DAMPING_COEFFICIENT", 0.925f);
-	m_currentConstants->IsHairCurly = g_gameConfigBlackboard.GetValue("IS_HAIR_CURLY", true);
-	m_currentConstants->SegmentLength = HairGuide::HairSegmentLength;
-	m_currentConstants->Mass = 3.0f;
-	m_currentConstants->SimulationAlgorithm = static_cast<unsigned int>(SimulAlgorithm::DFTL);
-	m_currentConstants->FrictionCoefficient = g_gameConfigBlackboard.GetValue("HAIR_FRICTION", 0.1f);
-	m_currentConstants->GridCellWidth = g_gameConfigBlackboard.GetValue("GRID_CELL_WIDTH", 1.0f);
-	m_currentConstants->GridCellHeight = g_gameConfigBlackboard.GetValue("GRID_CELL_HEIGHT", 1.0f);
-	m_currentConstants->GridDimensions = g_gameConfigBlackboard.GetValue("GRID_DIMENSIONS", IntVec3(100, 100, 100));
-	m_currentConstants->CollisionTolerance = g_gameConfigBlackboard.GetValue("COLLISION_TOLERANCE", 0.1f);
-	m_currentConstants->InterpolationFactor = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION", 1);
-	m_currentConstants->InterpolationFactorMultiStrand = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION_MULTISTRAND", 2);
-	m_currentConstants->InterpolationRadius = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION_RADIUS", 0.1f);
-	m_currentConstants->TessellationFactor = g_gameConfigBlackboard.GetValue("HAIR_TESELLATION", 1.0f);
-	m_currentConstants->StrainLimitingCoefficient = g_gameConfigBlackboard.GetValue("HAIR_STRAIN_LIMITING_COEFFICIENT", 0.5f);
+	m_currentConstants[0] = new HairConstants();
+	m_currentConstants[0]->ScaleShift = -10.0f;
+	m_currentConstants[0]->LongitudinalWidth = 10.0f;
+	m_currentConstants[0]->UseUnrealParameters = true;
+	m_currentConstants[0]->SpecularMarchner = 0.5f;
+	m_currentConstants[0]->InterpolationFactor = 1;
+	m_currentConstants[0]->TessellationFactor = 1.0f;
+	m_currentConstants[0]->InterpolationRadius = 1.0f;
+	m_currentConstants[0]->EdgeStiffness = 1200.0f;
+	m_currentConstants[0]->BendStiffness = 1200.0f;
+	m_currentConstants[0]->TorsionStiffness = 1200.0f;
+	m_currentConstants[0]->DampingCoefficient = g_gameConfigBlackboard.GetValue("HAIR_DAMPING_COEFFICIENT", 0.925f);
+	m_currentConstants[0]->IsHairCurly = g_gameConfigBlackboard.GetValue("IS_HAIR_CURLY", true);
+	m_currentConstants[0]->SegmentLength = HairGuide::HairSegmentLength;
+	m_currentConstants[0]->Mass = 3.0f;
+	m_currentConstants[0]->SimulationAlgorithm = static_cast<unsigned int>(SimulAlgorithm::DFTL);
+	m_currentConstants[0]->FrictionCoefficient = g_gameConfigBlackboard.GetValue("HAIR_FRICTION", 0.1f);
+	m_currentConstants[0]->GridCellWidth = g_gameConfigBlackboard.GetValue("GRID_CELL_WIDTH", 1.0f);
+	m_currentConstants[0]->GridCellHeight = g_gameConfigBlackboard.GetValue("GRID_CELL_HEIGHT", 1.0f);
+	m_currentConstants[0]->GridDimensions = g_gameConfigBlackboard.GetValue("GRID_DIMENSIONS", IntVec3(100, 100, 100));
+	m_currentConstants[0]->CollisionTolerance = g_gameConfigBlackboard.GetValue("COLLISION_TOLERANCE", 0.05f);
+	m_currentConstants[0]->InterpolationFactor = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION", 1);
+	m_currentConstants[0]->InterpolationFactorMultiStrand = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION_MULTISTRAND", 2);
+	m_currentConstants[0]->InterpolationRadius = g_gameConfigBlackboard.GetValue("HAIR_INTERPOLATION_RADIUS", 0.1f);
+	m_currentConstants[0]->TessellationFactor = g_gameConfigBlackboard.GetValue("HAIR_TESELLATION", 1.0f);
+	m_currentConstants[0]->StrainLimitingCoefficient = g_gameConfigBlackboard.GetValue("HAIR_STRAIN_LIMITING_COEFFICIENT", 0.5f);
 
-	m_prevConstants = new HairConstants(*m_currentConstants);
+	m_currentConstants[1] = new HairConstants(*m_currentConstants[0]);
+
+	imGuiSettings.m_isAntialiasingOn = g_gameConfigBlackboard.GetValue("IS_ANTIALIASING_ON", true);
+	imGuiSettings.m_aaLevel = g_gameConfigBlackboard.GetValue("ANTIALIASING_LEVEL", 4);
+
+	m_prevConstants[0] = new HairConstants(*m_currentConstants[0]);
+	m_prevConstants[1] = new HairConstants(*m_currentConstants[1]);
 
 	m_currentSSAO = new SSAOConstants();
 	imGuiSettings.m_SSAOLevels = g_gameConfigBlackboard.GetValue("SSAO_LEVEL", 5);
@@ -560,6 +669,12 @@ void Game::InitializeHairProperties()
 
 	StartupHairCollision();
 	FetchAvailableModels();
+
+	m_lastPlayerPos = Vec3(11.0, 1.0f, 0.0f);
+	m_lastPlayerOrientation = EulerAngles(180.0f, 0.0, 0.0f);
+
+	g_theEventSystem->FireEvent("Debugrendertoggle");
+
 	/*TextureCreateInfo shadowMapCreateInfo;
 	Window* window = Window::GetWindowContext();
 
@@ -662,21 +777,38 @@ void Game::UpdateGameState()
 
 void Game::UpdateHairConstants()
 {
-	delete m_prevConstants;
-	m_prevConstants = m_currentConstants;
+	HairConstants*& prevConstants = GetPrevHairConstants();
+	HairConstants*& currentConstants = GetHairConstants();
+	HairConstants*& backHairConstants = GetBackHairConstants();
+	HairConstants*& backPrevHairConstants = GetBackPrevHairConstants();
 
-	m_currentConstants = new HairConstants(*m_prevConstants);
-	m_currentConstants->EyePosition = GetPlayerPosition();
-	m_currentConstants->HairWidth = HairGuide::HairWidth;
-	m_currentConstants->SegmentLength = HairGuide::HairSegmentLength;
-	m_currentConstants->StartTime = static_cast<float>(m_startTime);
-	m_currentConstants->HairSegmentCount = HairGuide::HairSegmentCount;
-	m_currentConstants->InterpolateUsingRadius = !((bool)imGuiSettings.m_interpPositionsInADir); // Radius is 0, Plane is 1, so !
+	delete prevConstants;
+	prevConstants = currentConstants;
+
+	currentConstants = new HairConstants(*prevConstants);
+	currentConstants->EyePosition = GetPlayerPosition();
+	currentConstants->HairWidth = HairGuide::HairWidth;
+	currentConstants->SegmentLength = HairGuide::HairSegmentLength;
+	currentConstants->StartTime = static_cast<float>(m_startTime);
+	currentConstants->HairSegmentCount = HairGuide::HairSegmentCount;
+	currentConstants->InterpolateUsingRadius = !((bool)imGuiSettings.m_interpPositionsInADir); // Radius is 0, Plane is 1, so !
+	currentConstants->UseModelColor = (unsigned int)imGuiSettings.m_useModelColorOnly;
+	//currentConstants->UseAcos = (unsigned int)imGuiSettings.m_useAcos;
+	currentConstants->InvertLightDir = (unsigned int)imGuiSettings.m_invertDiffuseLightDir;
+
+	// Update for both:
+
+	backPrevHairConstants->SegmentLength = HairGuide::HairSegmentLength;
+	backPrevHairConstants->EyePosition = GetPlayerPosition();
+	backPrevHairConstants->HairWidth = HairGuide::HairWidth;
+
+	backHairConstants->SegmentLength = HairGuide::HairSegmentLength;
+	backHairConstants->EyePosition = GetPlayerPosition();
+	backHairConstants->HairWidth = HairGuide::HairWidth;
 
 	g_theRenderer->SetAmbientIntensity(imGuiSettings.m_ambientLight);
-	g_theRenderer->CopyCPUToGPU(m_currentConstants, sizeof(HairConstants), m_hairConstantBuffer);
+	g_theRenderer->CopyCPUToGPU(currentConstants, sizeof(HairConstants), m_hairConstantBuffer);
 
-	m_currentConstants->ExternalForces = Vec3::ZERO;
 
 
 	delete m_prevSSAO;
@@ -729,14 +861,15 @@ void Game::UpdateHairSimulation(float deltaSeconds)
 {
 	UpdateEntities(deltaSeconds);
 	UpdateInputHairSimulation(deltaSeconds);
+	HairConstants* currentConstants = GetHairConstants();
 
 	m_CPUSimulObject->AddForce(Vec3(0.0f, 0.0f, -9.8f));
 	m_CPUSimulObject->Update(deltaSeconds);
-	m_CPUSimulObject->m_hairSimulationInitParams.usedAlgorithm = (SimulAlgorithm)m_currentConstants->SimulationAlgorithm;
-	m_CPUSimulObject->SetSpringLengths(HairGuide::HairSegmentLength, m_currentConstants->BendInitialLength, m_currentConstants->TorsionInitialLength);
-	m_CPUSimulObject->SetSpringStiffness(m_currentConstants->EdgeStiffness, m_currentConstants->BendStiffness, m_currentConstants->TorsionStiffness);
-	m_CPUSimulObject->m_hairSimulationInitParams.isCurlyHair = m_currentConstants->IsHairCurly;
-	m_CPUSimulObject->m_gravity = m_currentConstants->Gravity;
+	m_CPUSimulObject->m_hairSimulationInitParams.usedAlgorithm = (SimulAlgorithm)currentConstants->SimulationAlgorithm;
+	m_CPUSimulObject->SetSpringLengths(HairGuide::HairSegmentLength, currentConstants->BendInitialLength, currentConstants->TorsionInitialLength);
+	m_CPUSimulObject->SetSpringStiffness(currentConstants->EdgeStiffness, currentConstants->BendStiffness, currentConstants->TorsionStiffness);
+	m_CPUSimulObject->m_hairSimulationInitParams.isCurlyHair = currentConstants->IsHairCurly;
+	m_CPUSimulObject->m_gravity = currentConstants->Gravity;
 
 
 
@@ -750,6 +883,7 @@ void Game::UpdateInputHairSimulation(float deltaSeconds)
 {
 	UNUSED(deltaSeconds);
 	XboxController controller = g_theInput->GetController(0);
+	HairConstants* currentConstants = GetHairConstants();
 
 	if (g_theInput->WasKeyJustPressed(KEYCODE_ESC) || controller.WasButtonJustPressed(XboxButtonID::Back)) {
 		m_nextState = GameState::AttractScreen;
@@ -764,7 +898,7 @@ void Game::UpdateInputHairSimulation(float deltaSeconds)
 		Vec3 force = dispToObject.GetNormalized() * forceMultiplier;
 		m_CPUSimulObject->AddForce(force);
 
-		m_currentConstants->ExternalForces += force;
+		currentConstants->ExternalForces += force;
 	}
 	if (g_theInput->IsKeyDown('G')) {
 		Vec3 dispToObject = m_CPUSimulObject->m_positions[0] - m_player->m_position;
@@ -775,7 +909,7 @@ void Game::UpdateInputHairSimulation(float deltaSeconds)
 		Vec3 force = Vec3(0.0f, 0.0f, 1.0f) * forceMultiplier;
 		m_CPUSimulObject->AddForce(force);
 
-		m_currentConstants->ExternalForces += force;
+		currentConstants->ExternalForces += force;
 	}
 
 }
@@ -784,9 +918,10 @@ void Game::UpdateHairTessellation(float deltaSeconds)
 {
 	UpdateEntities(deltaSeconds);
 	UpdateHairTessellationInput(deltaSeconds);
+	HairConstants* currentConstants = GetHairConstants();
 
 	//if (imGuiSettings.m_clearFaceTechnique == 1) { // 1 for wind
-	m_currentConstants->ExternalForces += Vec3(sinf(m_timeAlive * 1.34f), cosf(m_timeAlive * 1.98f), 0.0f) * imGuiSettings.m_windForce; // Random picked values
+	currentConstants->ExternalForces += Vec3(sinf(m_timeAlive * 1.34f), cosf(m_timeAlive * 1.98f), 0.0f) * imGuiSettings.m_windForce; // Random picked values
 	//}
 
 	DebugAddMessage(Stringf("Mode: Hair Tessellation"), 0.0f, Rgba8::BLUE, Rgba8::BLUE);
@@ -815,6 +950,8 @@ void Game::UpdateHairTessellationInput(float deltaSeconds)
 void Game::ShutDown()
 {
 	delete m_modelImportOptions;
+	delete m_densityMap;
+	delete m_diffuseMap;
 	for (int soundIndexPlaybackID = 0; soundIndexPlaybackID < GAME_SOUND::NUM_SOUNDS; soundIndexPlaybackID++) {
 		SoundPlaybackID soundPlayback = g_soundPlaybackIDs[soundIndexPlaybackID];
 		if (soundPlayback != -1) {
@@ -829,10 +966,10 @@ void Game::ShutDown()
 	m_timeAlive = 0.0f;
 
 
-	if (m_currentConstants) {
-		Plane3D limitingPlane = {};
-		m_currentConstants->LimitingPlane = limitingPlane;
-	}
+	//if (m_currentConstants) {
+	//	Plane3D limitingPlane = {};
+	//	m_currentConstants->LimitingPlane = limitingPlane;
+	//}
 
 	switch (m_currentState)
 	{
@@ -858,13 +995,14 @@ void Game::ShutDown()
 	}
 
 	imGuiSettings.m_amountOfLights = 0;
+	imGuiSettings.m_selectedEntity = 0;
 
 	ClearCollisionObjects();
 	DebugRenderClear();
 	imGuiSettings.m_requiresShutdown = false;
-	imGuiSettings.m_restartRequested = false;
 	m_isUsingKajiya = false;
 	m_isUsingMarschner = false;
+	m_allHairObjects.clear();
 }
 
 void Game::LoadAssets()
@@ -882,6 +1020,8 @@ void Game::LoadTextures()
 	g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
 	g_textures[(int)GAME_TEXTURE::SimplexNoise] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/SimplexNoise.png");
 	g_textures[(int)GAME_TEXTURE::PerlinNoise] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/PerlinNoise.png");
+	g_textures[(int)GAME_TEXTURE::TronCubeMap] = g_theRenderer->CreateOrGetCubemapFromFile("Data/Images/skyboxes/tron.png");
+	//g_textures[(int)GAME_TEXTURE::RainbowCubeMap] = g_theRenderer->CreateOrGetCubemapFromFile("Data/Images/skyboxes/rainbow.png");
 
 	for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
 		if (!g_textures[textureIndex]) {
@@ -925,10 +1065,24 @@ void Game::Update()
 
 	float gameDeltaSeconds = static_cast<float>(m_clock.GetDeltaTime());
 	m_timeAlive += gameDeltaSeconds;
-	m_currentConstants->DeltaTime = gameDeltaSeconds;
-	if ((SimulAlgorithm)m_currentConstants->SimulationAlgorithm == SimulAlgorithm::MASS_SPRINGS) {
-		if (m_timeAlive <= m_simulationInitialSlowmo) {
-			m_currentConstants->DeltaTime *= 0.05f;
+
+	if (gameDeltaSeconds > 0.025f) gameDeltaSeconds = 0.025f;
+	m_currentConstants[0]->DeltaTime = gameDeltaSeconds;
+	m_currentConstants[1]->DeltaTime = gameDeltaSeconds;
+
+	HairConstants* currentConstants = GetHairConstants();
+
+	if ((SimulAlgorithm)currentConstants->SimulationAlgorithm == SimulAlgorithm::MASS_SPRINGS) {
+		float totalSlowMo = m_simulationInitialSlowmo;
+		float slowDownTime = 0.05f;
+#ifdef _DEBUG
+		totalSlowMo *= 2.0f;
+		slowDownTime = 0.01f;
+#endif // _DEBUG
+
+		if (m_timeAlive <= totalSlowMo) {
+			m_currentConstants[0]->DeltaTime *= slowDownTime;
+			m_currentConstants[1]->DeltaTime *= slowDownTime;
 		}
 	}
 
@@ -941,6 +1095,7 @@ void Game::Update()
 	}
 
 	bool addHelperText = false;
+	UpdateDeveloperCheatCodes(gameDeltaSeconds);
 
 	switch (m_currentState)
 	{
@@ -977,12 +1132,11 @@ void Game::Update()
 		DebugAddMessage(helperText, 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 	}
 
-	UpdateDeveloperCheatCodes(gameDeltaSeconds);
-	UpdateDebugProperties();
-
 	if (m_player) {
 		UpdateHairConstants();
 	}
+	UpdateDebugProperties();
+
 
 }
 
@@ -1128,6 +1282,44 @@ void Game::UpdateDeveloperCheatCodes(float deltaSeconds)
 
 	XboxController controller = g_theInput->GetController(0);
 	Clock& sysClock = Clock::GetSystemClock();
+	HairConstants*& currentConstants = GetHairConstants();
+	currentConstants->ExternalForces = Vec3::ZERO;
+	currentConstants->Displacement = Vec3::ZERO;
+
+	HairConstants*& backConstants = GetBackHairConstants();
+	backConstants->ExternalForces = Vec3::ZERO;
+	backConstants->Displacement = Vec3::ZERO;
+
+	Vec2 mouseDelta = g_theInput->GetMouseClientDelta();
+	Vec3 mouseDisplacement = Vec3(0.0f, mouseDelta.y, 0.0f);
+
+	Mat44 inverseProj = m_worldCamera.GetProjectionMatrix().GetOrthonormalInverse();
+	Vec3 worldDisplacement = inverseProj.TransformVectorQuantity3D(mouseDisplacement);
+	worldDisplacement.Normalize();
+
+
+	if (g_theInput->IsKeyDown(KEYCODE_SHIFT) && g_theInput->IsKeyDown(KEYCODE_RIGHT_MOUSE)) {
+		if (mouseDisplacement.GetLengthSquared() > 0) {
+			float dt = (float)Clock::GetSystemClock().GetDeltaTime();
+			Vec3 clampedDisplacement = worldDisplacement * 0.15f;
+			currentConstants->ExternalForces -= worldDisplacement / dt;
+			currentConstants->Displacement += clampedDisplacement;
+			ClearCollisionObjects();
+			for (int hairObjIndex = 0; hairObjIndex < m_allHairObjects.size(); hairObjIndex++) {
+				HairObject* hairObject = m_allHairObjects[hairObjIndex];
+				hairObject->m_position = hairObject->m_position + clampedDisplacement;
+				AddHairCollisionSphere(hairObject->m_position, HairObject::Radius);
+			}
+
+			DebugAddWorldArrow(m_hairObjectMarschner->m_position, m_hairObjectMarschner->m_position + worldDisplacement, 0.1f, 0.0f, Rgba8::YELLOW, Rgba8::YELLOW, Rgba8::YELLOW, DebugRenderMode::USEDEPTH);
+		}
+	}
+
+	if (g_theInput->IsKeyDown(KEYCODE_CTRL) && g_theInput->IsKeyDown(KEYCODE_SHIFT)) {
+		if (g_theInput->WasKeyJustPressed('B')) {
+			m_renderSkyBox = !m_renderSkyBox;
+		}
+	}
 
 	if (g_theInput->IsKeyDown('B')) {
 
@@ -1135,17 +1327,21 @@ void Game::UpdateDeveloperCheatCodes(float deltaSeconds)
 		Vec3 dispToObject = usedObject->m_position - m_player->m_position;
 		float distToObject = dispToObject.GetLength();
 
-		float forceMultiplier = RangeMapClamped(distToObject, 0.0f, 3.0f, -10.0f * m_currentConstants->Gravity, -2.0f * m_currentConstants->Gravity);
+		float forceMultiplier = RangeMapClamped(distToObject, 0.0f, 3.0f, -10.0f * currentConstants->Gravity, -2.0f * currentConstants->Gravity);
 
 		Vec3 force = dispToObject.GetNormalized() * forceMultiplier;
 
-		m_currentConstants->ExternalForces += force;
+		currentConstants->ExternalForces += force;
 	}
 
 	if (g_theInput->IsKeyDown('G')) {
-		Vec3 force = Vec3(0.0f, 0.0f, -2.0f * m_currentConstants->Gravity);
+		Vec3 force = Vec3(0.0f, 0.0f, -2.0f * currentConstants->Gravity);
 
-		m_currentConstants->ExternalForces += force;
+		currentConstants->ExternalForces += force;
+
+		if (g_theInput->IsKeyDown(KEYCODE_SHIFT)) {
+			backConstants->ExternalForces += force;
+		}
 	}
 
 	if (g_theInput->WasKeyJustPressed('T')) {
@@ -1317,15 +1513,17 @@ void Game::UpdateWorldCamera(float deltaSeconds)
 
 void Game::UpdateDebugProperties()
 {
+	HairConstants* prevConstants = GetPrevHairConstants();
+	HairConstants* currentConstants = GetHairConstants();
 
-	if (m_prevConstants->DiffuseCoefficient != m_currentConstants->DiffuseCoefficient) {
-		m_currentConstants->SpecularCoefficient = 1.0f - m_currentConstants->DiffuseCoefficient;
-		m_prevConstants->SpecularCoefficient = m_currentConstants->SpecularCoefficient;
+	if (prevConstants->DiffuseCoefficient != currentConstants->DiffuseCoefficient) {
+		currentConstants->SpecularCoefficient = 1.0f - currentConstants->DiffuseCoefficient;
+		prevConstants->SpecularCoefficient = currentConstants->SpecularCoefficient;
 	}
 
-	if (m_prevConstants->SpecularCoefficient != m_currentConstants->SpecularCoefficient) {
-		m_currentConstants->DiffuseCoefficient = 1.0f - m_currentConstants->SpecularCoefficient;
-		m_prevConstants->DiffuseCoefficient = m_currentConstants->DiffuseCoefficient;
+	if (prevConstants->SpecularCoefficient != currentConstants->SpecularCoefficient) {
+		currentConstants->DiffuseCoefficient = 1.0f - currentConstants->SpecularCoefficient;
+		prevConstants->DiffuseCoefficient = currentConstants->DiffuseCoefficient;
 	}
 
 	bool isDisc = dynamic_cast<HairDisc*>(m_hairObjectKajiya) || dynamic_cast<HairDisc*>(m_hairObjectMarschner);
@@ -1377,14 +1575,14 @@ void Game::UpdateDebugProperties()
 	case GameState::HairDiscLighting:
 	{
 		if (!m_hairObjectKajiya) return;
-		m_hairObjectKajiya->m_specularExponent = m_currentConstants->SpecularExponent;
-		m_hairObjectKajiya->m_specularCoefficient = m_currentConstants->SpecularCoefficient;
-		m_hairObjectKajiya->m_diffuseCoefficient = m_currentConstants->DiffuseCoefficient;
+		m_hairObjectKajiya->m_specularExponent = currentConstants->SpecularExponent;
+		m_hairObjectKajiya->m_specularCoefficient = currentConstants->SpecularCoefficient;
+		m_hairObjectKajiya->m_diffuseCoefficient = currentConstants->DiffuseCoefficient;
 
 		if (m_hairObjectMarschner) {
-			m_hairObjectMarschner->m_specularExponent = m_currentConstants->SpecularExponent;
-			m_hairObjectMarschner->m_specularCoefficient = m_currentConstants->SpecularCoefficient;
-			m_hairObjectMarschner->m_diffuseCoefficient = m_currentConstants->DiffuseCoefficient;
+			m_hairObjectMarschner->m_specularExponent = currentConstants->SpecularExponent;
+			m_hairObjectMarschner->m_specularCoefficient = currentConstants->SpecularCoefficient;
+			m_hairObjectMarschner->m_diffuseCoefficient = currentConstants->DiffuseCoefficient;
 		}
 
 		break;
@@ -1393,8 +1591,8 @@ void Game::UpdateDebugProperties()
 	}
 
 
-	m_prevConstants->DiffuseCoefficient = m_currentConstants->DiffuseCoefficient;
-	m_prevConstants->SpecularCoefficient = m_currentConstants->SpecularCoefficient;
+	prevConstants->DiffuseCoefficient = currentConstants->DiffuseCoefficient;
+	prevConstants->SpecularCoefficient = currentConstants->SpecularCoefficient;
 }
 
 void Game::UpdateUICamera(float deltaSeconds)
@@ -1675,6 +1873,7 @@ void Game::RenderEntities() const
 
 void Game::RenderHairSimulation() const
 {
+	HairConstants* currentConstants = GetHairConstants();
 
 	g_theRenderer->BeginCamera(m_worldCamera);
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
@@ -1694,7 +1893,7 @@ void Game::RenderHairSimulation() const
 
 	if (m_hairObjectKajiya) {
 		int hairCount = m_hairObjectKajiya->GetHairCount();
-		int hairInterpolated = ((int)m_currentConstants->InterpolationFactor * hairCount) - hairCount;
+		int hairInterpolated = ((int)currentConstants->InterpolationFactor * hairCount) - hairCount;
 
 		DebugAddMessage(Stringf("Hair Count: %d", hairCount), 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 		DebugAddMessage(Stringf("Interp. Approx: %d", hairInterpolated), 0.0f, Rgba8::WHITE, Rgba8::WHITE);
@@ -1721,58 +1920,24 @@ void Game::RenderHairSimulation() const
 
 void Game::RenderHairTessellation() const
 {
+	HairConstants* currentConstants = GetHairConstants();
 
-
-	/*{
-		Camera lightCamera;
-		Vec3 iBasis(0.0f, -1.0f, 0.0f);
-		Vec3 jBasis(0.0f, 0.0f, 1.0f);
-		Vec3 kBasis(1.0f, 0.0f, 0.0f);
-
-		lightCamera.SetViewToRenderTransform(iBasis, jBasis, kBasis);
-		Vec3 fwdToObject = m_hairObjectMarschner->m_position - pointLight.Position;
-		fwdToObject.Normalize();
-
-		lightCamera.SetPerspectiveView(m_worldCamera.GetAspect(), m_worldCamera.GetFovDegrees(), m_worldCamera.GetNear(), m_worldCamera.GetFar());
-		lightCamera.SetPosition(pointLight.Position);
-		lightCamera.SetDepthTarget(m_shadowMap);
-		lightCamera.SetOrientation(EulerAngles::CreateEulerAngleFromForward(fwdToObject));
-
-		g_theRenderer->BeginDepthOnlyCamera(lightCamera);
-		g_theRenderer->ClearScreen(Rgba8::GRAY);
-		g_theRenderer->BindShader(m_diffuseTessMarschner);
-
-		g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-		g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
-		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
-
-		g_theRenderer->BindTexture(nullptr);
-		g_theRenderer->BindConstantBuffer(4, m_hairConstantBuffer);
-
-		g_theRenderer->SetModelColor(m_hairColor);
-		g_theRenderer->CopyAndBindModelConstants();
-
-		RenderEntities();
-		g_theRenderer->EndCamera(lightCamera);
-	}*/
-
-	//g_theRenderer->SetLight(pointLight, 0);
-	//g_theRenderer->SetLight(secPointLight, 1);
-	//g_theRenderer->CopyAndBindLightConstants();
 	{
 		g_theRenderer->BeginCamera(m_worldCamera);
-		g_theRenderer->ClearScreen(Rgba8::GRAY);
+		g_theRenderer->ClearScreen(Rgba8(28, 137, 176)); // Complementary color
 
 		g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 		g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 		g_theRenderer->BindTexture(nullptr);
-		g_theRenderer->BindConstantBuffer(4, m_hairConstantBuffer);
 
-		g_theRenderer->SetModelColor(imGuiSettings.m_hairColor);
+		if (imGuiSettings.m_useModelColorOnly) {
+			g_theRenderer->SetModelColor(imGuiSettings.m_hairColorModelOnly);
+		}
+		else {
+			g_theRenderer->SetModelColor(imGuiSettings.m_hairColor);
+		}
 		g_theRenderer->CopyAndBindModelConstants();
 		g_theRenderer->CopyAndBindLightConstants();
 
@@ -1787,6 +1952,30 @@ void Game::RenderHairTessellation() const
 			g_theRenderer->BindTexture(nullptr);
 			g_theRenderer->DrawVertexArray(m_meshBuilder->m_vertexes);
 		}
+
+		if (m_renderSkyBox) {
+			std::vector<Vertex_PCU> skyboxVerts;
+
+			float skyboxSize = 45.0f;
+			// X Facing
+			AddVertsForQuad3D(skyboxVerts, Vec3(skyboxSize, skyboxSize, -skyboxSize), Vec3(skyboxSize, -skyboxSize, -skyboxSize), Vec3(skyboxSize, -skyboxSize, skyboxSize), Vec3(skyboxSize, skyboxSize, skyboxSize));
+			AddVertsForQuad3D(skyboxVerts, Vec3(-skyboxSize, -skyboxSize, -skyboxSize), Vec3(-skyboxSize, skyboxSize, -skyboxSize), Vec3(-skyboxSize, skyboxSize, skyboxSize), Vec3(-skyboxSize, -skyboxSize, skyboxSize));
+
+			// Y Facing
+			AddVertsForQuad3D(skyboxVerts, Vec3(-skyboxSize, skyboxSize, -skyboxSize), Vec3(skyboxSize, skyboxSize, -skyboxSize), Vec3(skyboxSize, skyboxSize, skyboxSize), Vec3(-skyboxSize, skyboxSize, skyboxSize));
+			AddVertsForQuad3D(skyboxVerts, Vec3(skyboxSize, -skyboxSize, -skyboxSize), Vec3(-skyboxSize, -skyboxSize, -skyboxSize), Vec3(-skyboxSize, -skyboxSize, skyboxSize), Vec3(skyboxSize, -skyboxSize, skyboxSize));
+
+			// Z Facing
+			AddVertsForQuad3D(skyboxVerts, Vec3(skyboxSize, skyboxSize, skyboxSize), Vec3(skyboxSize, -skyboxSize, skyboxSize), Vec3(-skyboxSize, -skyboxSize, skyboxSize), Vec3(-skyboxSize, skyboxSize, skyboxSize));
+			AddVertsForQuad3D(skyboxVerts, Vec3(-skyboxSize, skyboxSize, -skyboxSize), Vec3(-skyboxSize, -skyboxSize, -skyboxSize), Vec3(skyboxSize, -skyboxSize, -skyboxSize), Vec3(skyboxSize, skyboxSize, -skyboxSize));
+
+			Shader* skyboxShader = g_theRenderer->CreateOrGetShader("Data/Shaders/skybox.hlsl");
+			g_theRenderer->BindShader(skyboxShader);
+			g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::TronCubeMap]);
+			g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, false);
+			g_theRenderer->DrawVertexArray(skyboxVerts);
+		}
+
 		g_theRenderer->EndCamera(m_worldCamera);
 
 	}
@@ -1803,18 +1992,18 @@ void Game::RenderHairTessellation() const
 
 	if (m_hairObjectKajiya) {
 		int kajiyaHairCount = m_hairObjectKajiya->GetHairCount();
-		hairInterpolated += ((int)m_currentConstants->InterpolationFactor * kajiyaHairCount) - kajiyaHairCount;
+		hairInterpolated += ((int)currentConstants->InterpolationFactor * kajiyaHairCount) - kajiyaHairCount;
 		if (m_renderMultInterp) {
-			float multStrandEstimate = 0.3f * m_hairObjectKajiya->GetMultiStrandBaseCount() * ((int)m_currentConstants->InterpolationFactorMultiStrand - 1);
+			float multStrandEstimate = 0.3f * m_hairObjectKajiya->GetMultiStrandBaseCount() * ((int)currentConstants->InterpolationFactorMultiStrand - 1);
 			hairInterpolated += static_cast<int>(multStrandEstimate);
 		}
 	}
 
 	if (m_hairObjectMarschner) {
 		hairCountMarschner = m_hairObjectMarschner->GetHairCount();
-		hairInterpolated += ((int)m_currentConstants->InterpolationFactor * hairCountMarschner) - hairCountMarschner;
+		hairInterpolated += ((int)currentConstants->InterpolationFactor * hairCountMarschner) - hairCountMarschner;
 		if (m_renderMultInterp) {
-			float multStrandEstimate = 0.3f * m_hairObjectMarschner->GetMultiStrandBaseCount() * ((int)m_currentConstants->InterpolationFactorMultiStrand - 1);
+			float multStrandEstimate = 0.3f * m_hairObjectMarschner->GetMultiStrandBaseCount() * ((int)currentConstants->InterpolationFactorMultiStrand - 1);
 			hairInterpolated += static_cast<int>(multStrandEstimate);
 		}
 	}
@@ -1836,7 +2025,12 @@ void Game::RenderHairDiscLighting() const
 	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
 	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
-	g_theRenderer->SetModelColor(Rgba8(imGuiSettings.m_hairColor));
+	if (imGuiSettings.m_useModelColorOnly) {
+		g_theRenderer->SetModelColor(imGuiSettings.m_hairColorModelOnly);
+	}
+	else {
+		g_theRenderer->SetModelColor(imGuiSettings.m_hairColor);
+	}
 
 	if (m_hairObjectKajiya) {
 		DebugAddMessage(Stringf("Hair Count: %d", m_hairObjectKajiya->GetHairCount()), 0.0f, Rgba8::WHITE, Rgba8::WHITE);
@@ -1849,6 +2043,8 @@ void Game::RenderHairDiscLighting() const
 
 void Game::RenderHairSphereLighting() const
 {
+	HairConstants* currentConstants = GetHairConstants();
+
 	g_theRenderer->BeginCamera(m_worldCamera);
 	g_theRenderer->ClearScreen(Rgba8::GRAY);
 
@@ -1858,12 +2054,17 @@ void Game::RenderHairSphereLighting() const
 	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 	g_theRenderer->BindConstantBuffer(4, m_hairConstantBuffer);
-	g_theRenderer->SetModelColor(imGuiSettings.m_hairColor);
+	if (imGuiSettings.m_useModelColorOnly) {
+		g_theRenderer->SetModelColor(imGuiSettings.m_hairColorModelOnly);
+	}
+	else {
+		g_theRenderer->SetModelColor(imGuiSettings.m_hairColor);
+	}
 	g_theRenderer->CopyAndBindModelConstants();
 
 	if (m_hairObjectKajiya) {
 		int hairCount = m_hairObjectKajiya->GetHairCount();
-		int hairInterpolated = ((int)m_currentConstants->InterpolationFactor * hairCount) - hairCount;
+		int hairInterpolated = ((int)currentConstants->InterpolationFactor * hairCount) - hairCount;
 
 		DebugAddMessage(Stringf("Hair Count: %d", hairCount), 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 		DebugAddMessage(Stringf("Interp. Approx: %d", hairInterpolated), 0.0f, Rgba8::WHITE, Rgba8::WHITE);
@@ -1985,21 +2186,51 @@ void Game::RenderTextAnimation() const
 
 void Game::RenderImGui() const
 {
-	RenderImGuiRenderingSection();
 
-	RenderImGuiPresetsSection();
+	ImGuiWindowFlags windowFlags = ImGuiWindowFlags_AlwaysAutoResize;
 
-	RenderImGuiSimulationSection();
 
+	ImGui::Begin("Debug Properties", NULL, windowFlags);
+	const char* windowOptions[] = { "Presets", "Rendering Properties", "Simulation Properties" };
+	ImGui::Combo("Current Window", &imGuiSettings.m_currentWindow, windowOptions, IM_ARRAYSIZE(windowOptions));
+
+	ImGui::NewLine();
+
+	switch (imGuiSettings.m_currentWindow)
+	{
+	case 0: // Presets
+		RenderImGuiPresetsSection();
+		break;
+
+	case 1: // Rendering
+		RenderImGuiRenderingSection();
+		break;
+
+	case 2: // Simulation
+		RenderImGuiSimulationSection();
+		break;
+	default:
+		RenderImGuiPresetsSection();
+		break;
+	}
+
+
+	ImGui::End();
+
+	HairConstants* currentConstants = GetHairConstants();
+	int interpolationUpperLimit = (imGuiSettings.m_isAntialiasingOn) ? 7 : 15;
+	float maxRadiusInterp = (imGuiSettings.m_interpPositionsInADir) ? 0.025f : 0.2f;
+	float tessellationUpperLimit = (imGuiSettings.m_isAntialiasingOn) ? 9.0f : 18.0f;
+	if (currentConstants->InterpolationFactorMultiStrand > interpolationUpperLimit) currentConstants->InterpolationFactorMultiStrand = interpolationUpperLimit;
+	if (currentConstants->TessellationFactor > tessellationUpperLimit) currentConstants->TessellationFactor = tessellationUpperLimit;
+	if (currentConstants->InterpolationRadius > maxRadiusInterp) currentConstants->InterpolationRadius = maxRadiusInterp;
 	//ImGui::ShowDemoWindow();
 }
 
 void Game::RenderImGuiRenderingSection() const
 {
-	ImGuiWindowFlags winmdowFlags = ImGuiWindowFlags_AlwaysAutoResize;
-	winmdowFlags |= ImGuiWindowFlags_NoCollapse;
+	HairConstants* currentConstants = GetHairConstants();
 
-	ImGui::Begin("Rendering Properties", NULL, winmdowFlags);
 
 	ImGuiTreeNodeFlags_ renderingHeaderFlags = ImGuiTreeNodeFlags_DefaultOpen;
 
@@ -2009,21 +2240,27 @@ void Game::RenderImGuiRenderingSection() const
 		ImGui::Combo("Used Shader", &imGuiSettings.m_usedShader, usedShaderOptions, IM_ARRAYSIZE(usedShaderOptions));
 
 		if (currentShader != imGuiSettings.m_usedShader) {
+			HairObject* currentHairObject = m_allHairObjects[imGuiSettings.m_selectedEntity];
 			if (imGuiSettings.m_usedShader == 0) { // Marschner;
 				/*
 				It should be m_hairObjectAny, but changing it now is a lot of work
 				Just bear in mind that this object can be using either Marschner or Kajiya Shaders
 				*/
-				m_isUsingMarschner = true;
-				m_isUsingKajiya = false;
-				m_hairObjectMarschner->SetShader(m_diffuseTessMarschner);
-				m_hairObjectMarschner->SetMutlInterpShader(m_diffuseMultTessMarschner);
+				if (m_allHairObjects.size() < 2) {
+					m_isUsingMarschner = true;
+					m_isUsingKajiya = false;
+				}
+				currentHairObject->SetShader(m_diffuseTessMarschner);
+				currentHairObject->SetMutlInterpShader(m_diffuseMultTessMarschner);
 			}
 			else { // Kajiya
-				m_isUsingMarschner = false;
-				m_isUsingKajiya = true;
-				m_hairObjectMarschner->SetShader(m_diffuseTessKajiya);
-				m_hairObjectMarschner->SetMutlInterpShader(m_diffuseMultTessKajiya);
+				if (m_allHairObjects.size() < 2) {
+					m_isUsingMarschner = false;
+					m_isUsingKajiya = true;
+				}
+
+				currentHairObject->SetShader(m_diffuseTessKajiya);
+				currentHairObject->SetMutlInterpShader(m_diffuseMultTessKajiya);
 			}
 		}
 
@@ -2039,8 +2276,15 @@ void Game::RenderImGuiRenderingSection() const
 	}
 
 	if (ImGui::CollapsingHeader("Shader Constants", renderingHeaderFlags)) {
-
-		ImGui::ColorEdit3("Diffuse", imGuiSettings.m_hairColor);
+		//ImGui::Checkbox("Use Acos for Diffuse", &imGuiSettings.m_useAcos);
+		ImGui::Checkbox("Invert Light Directtion for Diffuse", &imGuiSettings.m_invertDiffuseLightDir);
+		ImGui::Checkbox("Use Model Color Only", &imGuiSettings.m_useModelColorOnly);
+		if (imGuiSettings.m_useModelColorOnly) {
+			ImGui::ColorEdit3("Diffuse", imGuiSettings.m_hairColorModelOnly);
+		}
+		else {
+			ImGui::ColorEdit3("Diffuse", imGuiSettings.m_hairColor);
+		}
 		float max = 100.0f;
 		ImGui::SliderScalar("Hair Width", ImGuiDataType_Float, &HairGuide::HairWidth, &m_hairWidthMin, &max, "%.10f", ImGuiSliderFlags_Logarithmic);
 		ImGui::DragFloat("Hair Segment Length", &HairGuide::HairSegmentLength, 0.005f, 0.05f, 5.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
@@ -2048,17 +2292,25 @@ void Game::RenderImGuiRenderingSection() const
 		//int prevInterpolation = m_currentConstants->InterpolationFactor;
 		//int prevInterpolationMultStrand = m_currentConstants->InterpolationFactorMultiStrand;
 
+		int interpolationUpperLimit = (imGuiSettings.m_isAntialiasingOn) ? 7 : 15;
+		float maxRadiusInterp = (imGuiSettings.m_interpPositionsInADir) ? 0.025f : 0.2f;
+		float tessellationUpperLimit = (imGuiSettings.m_isAntialiasingOn) ? 9.0f : 18.0f;
 		if (m_currentState == GameState::HairTessellation) {
-			ImGui::SliderInt("Interpolation factor", &m_currentConstants->InterpolationFactor, 1, 5);
+			ImGui::SliderInt("Interpolation factor", &currentConstants->InterpolationFactor, 1, 5);
 			const char* singleStrandInterpOptions[] = { "Radius", "Plane" };
 			ImGui::Combo("Create Single-Strand Hair in a:", &imGuiSettings.m_interpPositionsInADir, singleStrandInterpOptions, IM_ARRAYSIZE(singleStrandInterpOptions));
 
 			const char* interpOptions[] = { "Model", "Other hairs" };
 			ImGui::Combo("Interpolate using positions from", &imGuiSettings.m_interpPositionsFrom, interpOptions, IM_ARRAYSIZE(interpOptions));
-			ImGui::SliderInt("Multi-Strand Interpolation factor", &m_currentConstants->InterpolationFactorMultiStrand, 1, 15);
-			ImGui::SliderFloat("Interpolation radius", &m_currentConstants->InterpolationRadius, 0.01f, 0.2f, "%.3f", ImGuiSliderFlags_Logarithmic);
-			ImGui::SliderFloat("Tessellation factor", &m_currentConstants->TessellationFactor, 1.0f, 18.0f);
+
+			ImGui::SliderInt("Multi-Strand Interpolation factor", &currentConstants->InterpolationFactorMultiStrand, 1, interpolationUpperLimit);
+
+			ImGui::SliderFloat("Interpolation radius", &currentConstants->InterpolationRadius, 0.01f, maxRadiusInterp, "%.3f", ImGuiSliderFlags_Logarithmic);
+
+
+			ImGui::SliderFloat("Tessellation factor", &currentConstants->TessellationFactor, 1.0f, tessellationUpperLimit);
 		}
+		
 
 
 		bool wasAliasingOn = imGuiSettings.m_isAntialiasingOn;
@@ -2091,20 +2343,25 @@ void Game::RenderImGuiRenderingSection() const
 
 		if (m_isUsingKajiya) {
 			if (ImGui::CollapsingHeader("Kajiya Shader Settings")) {
-				ImGui::SliderInt("Specular Exponent", &m_currentConstants->SpecularExponent, m_hairSpecularExpMin, m_hairSpecularExpMax);
+				ImGui::SliderInt("Specular Exponent", &currentConstants->SpecularExponent, m_hairSpecularExpMin, m_hairSpecularExpMax);
+				ImGui::SliderFloat("Diffuse  Constant (Kd)", &currentConstants->DiffuseCoefficient, 0.0f, 1.0f);
 
-				ImGui::SliderFloat("Specular Constant (Ks)", &m_currentConstants->SpecularCoefficient, 0.0f, 1.0f);
-				ImGui::SliderFloat("Diffuse  Constant (Kd)", &m_currentConstants->DiffuseCoefficient, 0.0f, 1.0f);
+				ImGui::SliderFloat("Specular Constant (Ks)", &currentConstants->SpecularCoefficient, 0.0f, 1.0f);
 			}
 		}
 
 		if (m_isUsingMarschner) {
 			if (ImGui::CollapsingHeader("Marschner Shader Settings")) {
-				ImGui::DragFloat("Scale Shift (alpha)", &m_currentConstants->ScaleShift, 0.01f, -10.0f, -5.0f, "%.5f");
-				ImGui::DragFloat("Longitudinal Width (Beta)", &m_currentConstants->LongitudinalWidth, 0.01f, 5.0f, 10.0f, "%.5f");
-				ImGui::DragFloat("Specular Coefficient", &m_currentConstants->SpecularMarchner, 0.01f, 0.0f, 2.0f, "%.5f");
+				ImGui::SliderFloat("Diffuse  Constant (Kd)", &currentConstants->DiffuseCoefficient, 0.0f, 1.0f);
+				ImGui::DragFloat("Scale Shift (alpha)", &currentConstants->ScaleShift, 0.01f, -10.0f, -5.0f, "%.5f");
+				ImGui::DragFloat("Longitudinal Width (Beta)", &currentConstants->LongitudinalWidth, 0.01f, 5.0f, 10.0f, "%.5f");
+				ImGui::DragFloat("Specular Coefficient", &currentConstants->SpecularMarchner, 0.01f, 0.0f, 2.0f, "%.5f");
+				ImGui::DragFloat("Transmission Coefficient", &currentConstants->MarschnerTransmCoeff, 0.01f, 0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
+				ImGui::DragFloat("TRT Coefficient", &currentConstants->MarschnerTRTCoeff, 0.01f, 0.0f, 1.0f, "%.5f", ImGuiSliderFlags_Logarithmic);
 				ImGui::DragFloat("Ambient Lighting", &imGuiSettings.m_ambientLight, 0.0001f, 0.0f, 1.0f, "%.10f", ImGuiSliderFlags_Logarithmic);
-				ImGui::Checkbox("Use Unreal Parameters", &m_currentConstants->UseUnrealParameters);
+				bool useUnrealParams = (bool)currentConstants->UseUnrealParameters;
+				ImGui::Checkbox("Use Unreal Parameters", &useUnrealParams);
+				currentConstants->UseUnrealParameters = (unsigned int)useUnrealParams;
 			}
 		}
 	}
@@ -2120,7 +2377,7 @@ void Game::RenderImGuiRenderingSection() const
 
 		if (ImGui::CollapsingHeader(headerText.c_str(), objectHeaderFlags)) {
 			ImGui::DragInt("Section Count", &HairObject::SectionCount, 1, 1, 36);
-			ImGui::DragInt("Hair Per Section", &HairObject::HairPerSection, 5, 1, INT_MAX);
+			ImGui::DragInt("Hair Per Section", &HairObject::HairPerSection, 1, 1, INT_MAX);
 			ImGui::DragFloat("Disc Radius", &HairObject::Radius, 0.5f, 1.0f, 20.0f);
 		}
 	}
@@ -2133,7 +2390,7 @@ void Game::RenderImGuiRenderingSection() const
 		if (ImGui::CollapsingHeader(headerText.c_str(), objectHeaderFlags)) {
 			ImGui::DragInt("Stack Count", &HairObject::StackCount, 1, 1, 36);
 			ImGui::DragInt("Slice Count", &HairObject::SliceCount, 1, 1, 36);
-			ImGui::DragInt("Hair Per Section", &HairObject::HairPerSection, 5, 1, INT_MAX);
+			ImGui::DragInt("Hair Per Section", &HairObject::HairPerSection, 1, 1, INT_MAX);
 			ImGui::DragFloat("Sphere Radius", &HairObject::Radius, 0.5f, 1.0f, 20.0f);
 		}
 	}
@@ -2142,7 +2399,6 @@ void Game::RenderImGuiRenderingSection() const
 		imGuiSettings.m_restartRequested = ImGui::Button("Restart");
 	}
 
-	ImGui::End();
 
 }
 
@@ -2176,12 +2432,10 @@ void Game::FetchAvailableModels()
 
 void Game::RenderImGuiSimulationSection() const
 {
+	HairConstants* currentConstants = GetHairConstants();
 
-	bool useMassSpring = (static_cast<SimulAlgorithm>(m_currentConstants->SimulationAlgorithm) == SimulAlgorithm::MASS_SPRINGS);
-	bool useDFTL = (static_cast<SimulAlgorithm>(m_currentConstants->SimulationAlgorithm) == SimulAlgorithm::DFTL);
-	ImGuiWindowFlags simulationWindowFlags = ImGuiWindowFlags_NoCollapse;
-
-	ImGui::Begin("Simulation Properties", NULL, simulationWindowFlags);
+	bool useMassSpring = (static_cast<SimulAlgorithm>(currentConstants->SimulationAlgorithm) == SimulAlgorithm::MASS_SPRINGS);
+	bool useDFTL = (static_cast<SimulAlgorithm>(currentConstants->SimulationAlgorithm) == SimulAlgorithm::DFTL);
 
 	ImGuiTreeNodeFlags_ simulationFlags = ImGuiTreeNodeFlags_DefaultOpen;
 	if (ImGui::CollapsingHeader("General", simulationFlags)) {
@@ -2190,10 +2444,10 @@ void Game::RenderImGuiSimulationSection() const
 		}
 
 		ImGui::Checkbox("Simulate Hair", &g_simulateHair);
-		ImGui::DragFloat("Gravity", &m_currentConstants->Gravity, 0.25f, -20.0f, 0.0f);
+		ImGui::DragFloat("Gravity", &currentConstants->Gravity, 0.25f, -20.0f, 0.0f);
 
-		ImGui::DragFloat("Friction", &m_currentConstants->FrictionCoefficient, 0.01f, 0.0f, 1.0f);
-		ImGui::DragFloat("Collision Tolerance", &m_currentConstants->CollisionTolerance, 0.01f, -1.0f, 1.0f);
+		ImGui::DragFloat("Friction", &currentConstants->FrictionCoefficient, 0.01f, 0.0f, 1.0f);
+		ImGui::DragFloat("Collision Tolerance", &currentConstants->CollisionTolerance, 0.01f, -1.0f, 1.0f);
 
 		float dampingMin = 0.0f;
 		float dampingMax = 200.0f;
@@ -2202,28 +2456,30 @@ void Game::RenderImGuiSimulationSection() const
 		if (useDFTL) {
 			dampingMax = 1.0f;
 			dampingSpeed = 0.005f;
-			m_currentConstants->DampingCoefficient = Clamp(m_currentConstants->DampingCoefficient, dampingMin, dampingMax);
+			currentConstants->DampingCoefficient = Clamp(currentConstants->DampingCoefficient, dampingMin, dampingMax);
 		}
 
 		if (useMassSpring) {
 			dampingMax = 2.0f;
-			if (!m_currentConstants->IsHairCurly) {
+			if (!currentConstants->IsHairCurly) {
 				dampingMin = 0.0f;
 			}
 			else {
-				dampingMin = 0.1f;
-				if (m_currentConstants->DampingCoefficient < 0.1f) m_currentConstants->DampingCoefficient = 0.1f;
+				dampingMin = 0.05f;
+				if (currentConstants->DampingCoefficient < 0.05f) currentConstants->DampingCoefficient = 0.05f;
 			}
 		}
-		ImGui::DragFloat("Damping Coefficient", &m_currentConstants->DampingCoefficient, dampingSpeed, dampingMin, dampingMax);
+		ImGui::DragFloat("Damping Coefficient", &currentConstants->DampingCoefficient, dampingSpeed, dampingMin, dampingMax);
 
 
 		int prevCurliness = imGuiSettings.m_hairCurliness;
 		if (useMassSpring) {
 			ImGui::BeginDisabled();
-			ImGui::Checkbox("Is Hair Curly", &m_currentConstants->IsHairCurly);
+			bool isHairCurly = (bool)currentConstants->IsHairCurly;
+			ImGui::Checkbox("Is Hair Curly", &isHairCurly);
+			currentConstants->IsHairCurly = (unsigned int)isHairCurly;
 			ImGui::EndDisabled();
-			if (m_currentConstants->IsHairCurly) {
+			if (currentConstants->IsHairCurly) {
 				ImGui::SliderInt("Curliness", &imGuiSettings.m_hairCurliness, 1, 10);
 			}
 
@@ -2240,19 +2496,19 @@ void Game::RenderImGuiSimulationSection() const
 		if (ImGui::CollapsingHeader("Advanced Settings")) {
 			float strainLimitMax = 1.0f;
 			float strainLimitMin = 0.0f;
-			if (!m_currentConstants->IsHairCurly) {
+			if (!currentConstants->IsHairCurly) {
 				strainLimitMax = 0.7f;
-				strainLimitMin = 0.4f;
-				if (m_currentConstants->StrainLimitingCoefficient > 0.75f) m_currentConstants->StrainLimitingCoefficient = 0.75f;
+				strainLimitMin = 0.3f;
+				if (currentConstants->StrainLimitingCoefficient > strainLimitMax) currentConstants->StrainLimitingCoefficient = strainLimitMax;
 			}
-			ImGui::DragFloat("Strain Limiting Coefficient", &m_currentConstants->StrainLimitingCoefficient, 0.001f, strainLimitMin, strainLimitMax);
+			ImGui::DragFloat("Strain Limiting Coefficient", &currentConstants->StrainLimitingCoefficient, 0.001f, strainLimitMin, strainLimitMax);
 
 			if (ImGui::CollapsingHeader("Spring Lengths", simulationFlags)) {
 				ImGui::Text(Stringf("Edge Spring length is segment length(%.3f)", HairGuide::HairSegmentLength).c_str());
 
 				float maxBendLength = 0.0f;
 				float maxTorsionLength = 0.0f;
-				if (m_currentConstants->IsHairCurly) {
+				if (currentConstants->IsHairCurly) {
 					maxBendLength = HairGuide::HairSegmentLength * 4.0f;
 					maxTorsionLength = HairGuide::HairSegmentLength * 5.0f;
 				}
@@ -2262,86 +2518,88 @@ void Game::RenderImGuiSimulationSection() const
 				}
 
 
-				if (m_currentConstants->TorsionInitialLength < m_currentConstants->BendInitialLength * 1.2f) {
-					m_currentConstants->TorsionInitialLength = m_currentConstants->BendInitialLength * 1.2f;
+				if (currentConstants->TorsionInitialLength < currentConstants->BendInitialLength * 1.2f) {
+					currentConstants->TorsionInitialLength = currentConstants->BendInitialLength * 1.2f;
 				}
 				/*
-				if (!m_currentConstants->IsHairCurly) {
+				if (!currentConstants->IsHairCurly) {
 						maxBendLength = HairGuide::HairSegmentLength * 5.0f;
 						maxTorsionLength = HairGuide::HairSegmentLength * 6.0f;
 					}
 				*/
 
-				ImGui::DragFloat("Bend Spring Length", &m_currentConstants->BendInitialLength, 0.05f, HairGuide::HairSegmentLength * 1.2f, maxBendLength);
-				ImGui::DragFloat("Torsion Spring Length", &m_currentConstants->TorsionInitialLength, 0.05f, m_currentConstants->BendInitialLength, maxTorsionLength);
+				ImGui::DragFloat("Bend Spring Length", &currentConstants->BendInitialLength, 0.05f, HairGuide::HairSegmentLength * 1.2f, maxBendLength);
+				ImGui::DragFloat("Torsion Spring Length", &currentConstants->TorsionInitialLength, 0.05f, currentConstants->BendInitialLength, maxTorsionLength);
 			}
 			if (ImGui::CollapsingHeader("Spring Stiffnesses", simulationFlags)) {
 				float stiffnessMin = 100.0f;
 				float stiffnessMax = 2000.0f;
 
-				if (!m_currentConstants->IsHairCurly) {
+				if (!currentConstants->IsHairCurly) {
 					stiffnessMax = 1800.0f;
 				}
 
-				ImGui::DragFloat("Edge Spring Stiffness", &m_currentConstants->EdgeStiffness, 20.0f, stiffnessMin, stiffnessMax);
-				ImGui::DragFloat("Bend Spring Stiffness", &m_currentConstants->BendStiffness, 20.0f, stiffnessMin, stiffnessMax * 0.8f);
-				ImGui::DragFloat("Torsion Spring Stiffness", &m_currentConstants->TorsionStiffness, 20.0f, stiffnessMin, stiffnessMax * 0.7f);
+				ImGui::DragFloat("Edge Spring Stiffness", &currentConstants->EdgeStiffness, 20.0f, stiffnessMin, stiffnessMax);
+				ImGui::DragFloat("Bend Spring Stiffness", &currentConstants->BendStiffness, 20.0f, stiffnessMin, stiffnessMax * 0.8f);
+				ImGui::DragFloat("Torsion Spring Stiffness", &currentConstants->TorsionStiffness, 20.0f, stiffnessMin, stiffnessMax * 0.7f);
 			}
 		}
 	}
 
-	ImGui::End();
 }
 
 void Game::SetCurlinessSettings() const
 {
+
+	HairConstants* currentConstants = GetHairConstants();
+
 	float curlinessAsFloat = static_cast<float>(imGuiSettings.m_hairCurliness);
-	m_currentConstants->Gravity = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, -20.0f, -9.8f);
-	m_currentConstants->FrictionCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.0f, 0.08f);
-	m_currentConstants->StrainLimitingCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.55f, 1.0f);
-	m_currentConstants->BendInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.0f, 0.3f);
-	m_currentConstants->TorsionInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.2f, 0.36f);
-	m_currentConstants->TorsionInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.2f, 0.36f);
-	m_currentConstants->DampingCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.1f, 0.5f);
-	m_currentConstants->TessellationFactor = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 18.0f, 13.0f);
+	currentConstants->Gravity = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, -20.0f, -9.8f);
+	currentConstants->FrictionCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.0f, 0.08f);
+	currentConstants->StrainLimitingCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.55f, 1.0f);
+	currentConstants->BendInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.0f, 0.3f);
+	currentConstants->TorsionInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.2f, 0.36f);
+	currentConstants->TorsionInitialLength = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 1.2f, 0.36f);
+	currentConstants->DampingCoefficient = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 0.05f, 0.5f);
+	currentConstants->TessellationFactor = RangeMapClamped(curlinessAsFloat, 1.0f, 10.0f, 18.0f, 13.0f);
 }
 
 void Game::RenderImGuiPresetsSection() const
 {
-	ImGuiWindowFlags presetsWindowFlags = ImGuiWindowFlags_NoCollapse;
 
-	ImGui::Begin("Presets", NULL, presetsWindowFlags);
+	HairConstants* currentConstants = GetHairConstants();
 
-	if (ImGui::CollapsingHeader("Models")) {
 
-		imGuiSettings.m_refreshModels = ImGui::Button("Refresh");
+	//if (ImGui::CollapsingHeader("Models")) {
 
-		char basisBuffer[10];
-		strncpy_s(basisBuffer, m_modelImportOptions->m_basis.c_str(), sizeof(basisBuffer) - 1);
-		if (ImGui::InputText("Basis", basisBuffer, sizeof(basisBuffer))) {
-			m_modelImportOptions->m_basis = basisBuffer;
-		}
-		ImGui::Checkbox("Reverse Winding Order", &m_modelImportOptions->m_reverseWindingOrder);
+	//	imGuiSettings.m_refreshModels = ImGui::Button("Refresh");
 
-		if (ImGui::BeginCombo("Available Files", m_modelImportOptions->m_name.c_str())) {
-			for (std::filesystem::path modelPath : m_availableModels) {
-				std::string fileName = modelPath.filename().string();
-				std::string extension = modelPath.filename().extension().string();
+	//	char basisBuffer[10];
+	//	strncpy_s(basisBuffer, m_modelImportOptions->m_basis.c_str(), sizeof(basisBuffer) - 1);
+	//	if (ImGui::InputText("Basis", basisBuffer, sizeof(basisBuffer))) {
+	//		m_modelImportOptions->m_basis = basisBuffer;
+	//	}
+	//	ImGui::Checkbox("Reverse Winding Order", &m_modelImportOptions->m_reverseWindingOrder);
 
-				bool selectedEntry = false;
-				if (ImGui::Selectable(fileName.c_str(), &selectedEntry)) {
-					EventArgs loadArgs;
-					m_modelImportOptions->m_name = fileName;
-					loadArgs.SetValue("path", modelPath.string());
-					loadArgs.SetValue("basis", m_modelImportOptions->m_basis);
-					std::string reverseWind = (m_modelImportOptions->m_reverseWindingOrder) ? "true" : "false";
-					loadArgs.SetValue("reverseWinding", reverseWind);
-					Game::ImportMesh(loadArgs);
-				}
-			}
-			ImGui::EndCombo();
-		}
-	}
+	//	if (ImGui::BeginCombo("Available Files", m_modelImportOptions->m_name.c_str())) {
+	//		for (std::filesystem::path modelPath : m_availableModels) {
+	//			std::string fileName = modelPath.filename().string();
+	//			std::string extension = modelPath.filename().extension().string();
+
+	//			bool selectedEntry = false;
+	//			if (ImGui::Selectable(fileName.c_str(), &selectedEntry)) {
+	//				EventArgs loadArgs;
+	//				m_modelImportOptions->m_name = fileName;
+	//				loadArgs.SetValue("path", modelPath.string());
+	//				loadArgs.SetValue("basis", m_modelImportOptions->m_basis);
+	//				std::string reverseWind = (m_modelImportOptions->m_reverseWindingOrder) ? "true" : "false";
+	//				loadArgs.SetValue("reverseWinding", reverseWind);
+	//				Game::ImportMesh(loadArgs);
+	//			}
+	//		}
+	//		ImGui::EndCombo();
+	//	}
+	//}
 
 	bool applyColorPreset[3] = {};
 	ImGuiTreeNodeFlags_ presetsFlags = ImGuiTreeNodeFlags_DefaultOpen;
@@ -2354,20 +2612,59 @@ void Game::RenderImGuiPresetsSection() const
 	}
 
 	if (applyColorPreset[0]) {
-		m_brown.GetAsFloats(imGuiSettings.m_hairColor);
+		if (imGuiSettings.m_useModelColorOnly) {
+			m_brown.GetAsFloats(imGuiSettings.m_hairColorModelOnly);
+		}
+		else {
+			m_brown.GetAsFloats(imGuiSettings.m_hairColor);
+		}
 	}
 
 	if (applyColorPreset[1]) {
-		m_black.GetAsFloats(imGuiSettings.m_hairColor);
+		if (imGuiSettings.m_useModelColorOnly) {
+			m_black.GetAsFloats(imGuiSettings.m_hairColorModelOnly);
+		}
+		else {
+			m_black.GetAsFloats(imGuiSettings.m_hairColor);
+		}
 	}
 
 	if (applyColorPreset[2]) {
-		Rgba8::LIGHTRED.GetAsFloats(imGuiSettings.m_hairColor);
+		if (imGuiSettings.m_useModelColorOnly) {
+			Rgba8::LIGHTRED.GetAsFloats(imGuiSettings.m_hairColorModelOnly);
+		}
+		else {
+			Rgba8::LIGHTRED.GetAsFloats(imGuiSettings.m_hairColor);
+		}
 	}
 
 	bool moveLightsTo[6] = {};
-	HairObject* currentEntity = (m_allHairObjects.size() > 0) ? m_allHairObjects[m_selectedEntity] : nullptr;
 
+	if (ImGui::CollapsingHeader("Entity", presetsFlags)) {
+		ImGui::Text(Stringf("Selected Entity: %d", imGuiSettings.m_selectedEntity).c_str());
+		ImGui::SameLine();
+		bool prevEntity = ImGui::ArrowButton("leftArrowEntity", 0);
+		ImGui::SameLine();
+		bool nextEntity = ImGui::ArrowButton("rightArrowEntity", 1);
+		if (nextEntity) {
+			imGuiSettings.m_selectedEntity++;
+		}
+		if (prevEntity) imGuiSettings.m_selectedEntity--;
+		if (imGuiSettings.m_selectedEntity < 0) imGuiSettings.m_selectedEntity = (int)m_allHairObjects.size() - 1;
+		if (imGuiSettings.m_selectedEntity >= m_allHairObjects.size()) imGuiSettings.m_selectedEntity = 0;
+
+		if (m_currentState == GameState::HairTessellation) {
+			bool addEntity = ImGui::Button("Add Second Entity");
+
+			if (addEntity) {
+				imGuiSettings.m_addSecondObject = true;
+				imGuiSettings.m_restartRequested = true;
+			}
+		}
+
+	}
+
+	HairObject* currentEntity = (m_allHairObjects.size() > 0) ? m_allHairObjects[imGuiSettings.m_selectedEntity] : nullptr;
 	if (ImGui::CollapsingHeader("Lights", presetsFlags)) {
 		ImGui::Text(Stringf("Num Lights: %d", imGuiSettings.m_amountOfLights).c_str());
 		ImGui::SameLine();
@@ -2451,18 +2748,18 @@ void Game::RenderImGuiPresetsSection() const
 			bool highInterp = ImGui::Button("High Interpolation");
 
 			if (highInterp) {
-				m_currentConstants->InterpolationFactor = 10;
-				m_currentConstants->InterpolationFactorMultiStrand = 20;
+				currentConstants->InterpolationFactor = 10;
+				currentConstants->InterpolationFactorMultiStrand = 20;
 			}
 
 			if (mediumInterp) {
-				m_currentConstants->InterpolationFactor = 6;
-				m_currentConstants->InterpolationFactorMultiStrand = 15;
+				currentConstants->InterpolationFactor = 6;
+				currentConstants->InterpolationFactorMultiStrand = 15;
 			}
 
 			if (lowInterp) {
-				m_currentConstants->InterpolationFactor = 3;
-				m_currentConstants->InterpolationFactorMultiStrand = 8;
+				currentConstants->InterpolationFactor = 3;
+				currentConstants->InterpolationFactorMultiStrand = 8;
 			}
 		}
 
@@ -2479,13 +2776,13 @@ void Game::RenderImGuiPresetsSection() const
 			bool lowSpec = ImGui::Button("Low Specular");
 
 			if (highSpec) {
-				m_currentConstants->SpecularMarchner = 1.0f;
-				m_currentConstants->LongitudinalWidth = 5.0f;
+				currentConstants->SpecularMarchner = 1.0f;
+				currentConstants->LongitudinalWidth = 5.0f;
 			}
 
 			if (lowSpec) {
-				m_currentConstants->SpecularMarchner = 0.5;
-				m_currentConstants->LongitudinalWidth = 10.0f;
+				currentConstants->SpecularMarchner = 0.5;
+				currentConstants->LongitudinalWidth = 10.0f;
 			}
 
 		}
@@ -2495,13 +2792,13 @@ void Game::RenderImGuiPresetsSection() const
 			ImGui::SameLine();
 			bool lowSpec = ImGui::Button("Low Specular");
 			if (highSpec) {
-				m_currentConstants->SpecularCoefficient = 0.6f;
-				m_currentConstants->SpecularExponent = 12;
+				currentConstants->SpecularCoefficient = 0.6f;
+				currentConstants->SpecularExponent = 12;
 			}
 
 			if (lowSpec) {
-				m_currentConstants->SpecularCoefficient = 0.4f;
-				m_currentConstants->SpecularExponent = 4;
+				currentConstants->SpecularCoefficient = 0.4f;
+				currentConstants->SpecularExponent = 4;
 			}
 
 		}
@@ -2512,54 +2809,57 @@ void Game::RenderImGuiPresetsSection() const
 		bool useMassCurly = ImGui::Button("Mass-Spring Systems Curly Hair");
 		bool useMassStraight = ImGui::Button("Mass-Spring Systems Straight Hair");
 
-		if ((SimulAlgorithm)m_currentConstants->SimulationAlgorithm != SimulAlgorithm::DFTL) {
+		if ((SimulAlgorithm)currentConstants->SimulationAlgorithm != SimulAlgorithm::DFTL) {
 			if (useDFTL) {
-				m_currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::DFTL;
+				currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::DFTL;
 				imGuiSettings.m_restartRequested = true;
-				m_currentConstants->DampingCoefficient = 0.925f;
+				currentConstants->DampingCoefficient = 0.925f;
+				currentConstants->CollisionTolerance = g_gameConfigBlackboard.GetValue("COLLISION_TOLERANCE", 0.04f);
 			}
 		}
 
 		if (useMassCurly) {
-			m_currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::MASS_SPRINGS;
-			m_currentConstants->InterpolationFactor = 1;
-			m_currentConstants->InterpolationFactorMultiStrand = 15;
-			m_currentConstants->TessellationFactor = 18.0f;
-			m_currentConstants->DampingCoefficient = 0.5f;
-			m_currentConstants->StrainLimitingCoefficient = 1.0f;
-			m_currentConstants->IsHairCurly = true;
-			m_currentConstants->Gravity = -9.8f;
-			m_currentConstants->SegmentLength = HairGuide::HairSegmentLength;
-			m_currentConstants->BendInitialLength = HairGuide::HairSegmentLength * 1.2f;
-			m_currentConstants->TorsionInitialLength = HairGuide::HairSegmentLength * 1.44f;
-			m_currentConstants->EdgeStiffness = 1800.0f;
-			m_currentConstants->BendStiffness = 1800.0f;
-			m_currentConstants->TorsionStiffness = 1500.0f;
+			currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::MASS_SPRINGS;
+			currentConstants->InterpolationFactor = 1;
+			currentConstants->InterpolationFactorMultiStrand = 15;
+			currentConstants->TessellationFactor = 18.0f;
+			currentConstants->DampingCoefficient = 0.5f;
+			currentConstants->StrainLimitingCoefficient = 1.0f;
+			currentConstants->IsHairCurly = true;
+			currentConstants->Gravity = -9.8f;
+			currentConstants->SegmentLength = HairGuide::HairSegmentLength;
+			currentConstants->BendInitialLength = HairGuide::HairSegmentLength * 1.2f;
+			currentConstants->TorsionInitialLength = HairGuide::HairSegmentLength * 1.44f;
+			currentConstants->EdgeStiffness = 1800.0f;
+			currentConstants->BendStiffness = 1800.0f;
+			currentConstants->TorsionStiffness = 1500.0f;
+			currentConstants->CollisionTolerance = 0.1f;
 			imGuiSettings.m_restartRequested = true;
 		}
 		if (useMassStraight) {
-			m_currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::MASS_SPRINGS;
-			m_currentConstants->InterpolationFactor = 2;
-			m_currentConstants->InterpolationRadius = 0.25f;
-			m_currentConstants->TessellationFactor = 10.0f;
-			m_currentConstants->InterpolationFactorMultiStrand = 6;
-			m_currentConstants->DampingCoefficient = 0.1f;
-			m_currentConstants->StrainLimitingCoefficient = 0.7f;
-			m_currentConstants->SegmentLength = HairGuide::HairSegmentLength;
-			m_currentConstants->Gravity = -17.0f;
-			m_currentConstants->IsHairCurly = false;
-			m_currentConstants->BendInitialLength = HairGuide::HairSegmentLength * 4.0f;
-			m_currentConstants->TorsionInitialLength = HairGuide::HairSegmentLength * 5.0f;
-			m_currentConstants->EdgeStiffness = 1800.0f;
-			m_currentConstants->BendStiffness = 1600.0f;
-			m_currentConstants->TorsionStiffness = 1200.0f;
+			currentConstants->SimulationAlgorithm = (unsigned int)SimulAlgorithm::MASS_SPRINGS;
+			currentConstants->InterpolationFactor = 2;
+			currentConstants->InterpolationRadius = 0.25f;
+			currentConstants->TessellationFactor = 10.0f;
+			currentConstants->InterpolationFactorMultiStrand = 6;
+			currentConstants->DampingCoefficient = 0.025f;
+			currentConstants->StrainLimitingCoefficient = 0.5f;
+			currentConstants->SegmentLength = HairGuide::HairSegmentLength;
+			currentConstants->Gravity = -17.0f;
+			currentConstants->IsHairCurly = false;
+			currentConstants->BendInitialLength = HairGuide::HairSegmentLength * 4.0f;
+			currentConstants->TorsionInitialLength = HairGuide::HairSegmentLength * 5.0f;
+			currentConstants->EdgeStiffness = 1800.0f;
+			currentConstants->BendStiffness = 1600.0f;
+			currentConstants->TorsionStiffness = 1200.0f;
+			currentConstants->CollisionTolerance = 0.1f;
+
 			imGuiSettings.m_restartRequested = true;
 		}
 	}
 
 
 
-	ImGui::End();
 }
 
 
@@ -2571,15 +2871,26 @@ Vec3 Game::GetPlayerPosition() const
 
 Shader* Game::GetSimulationShader() const
 {
-	SimulAlgorithm asEnum = (SimulAlgorithm)m_currentConstants->SimulationAlgorithm;
 
-	switch (asEnum)
+	HairConstants* currentConstants = GetHairConstants();
+	SimulAlgorithm asEnum = (SimulAlgorithm)currentConstants->SimulationAlgorithm;
+
+	return GetSimulationShader(asEnum, currentConstants->IsHairCurly);
+
+}
+
+
+Shader* Game::GetSimulationShader(SimulAlgorithm simulAlgorithm, bool isCurly) const
+{
+
+
+	switch (simulAlgorithm)
 	{
 	case SimulAlgorithm::DFTL:
 		return m_DFTLCShader;
 		break;
 	case SimulAlgorithm::MASS_SPRINGS:
-		if (m_currentConstants->IsHairCurly) {
+		if (isCurly) {
 			return m_MassSpringsCurlyCShader;
 		}
 		else {
@@ -2589,7 +2900,6 @@ Shader* Game::GetSimulationShader() const
 	}
 	return m_DFTLCShader;
 }
-
 
 Rgba8 const Game::GetRandomColor() const
 {
@@ -2837,3 +3147,4 @@ bool Game::InvertUV(EventArgs& eventArgs)
 	}
 	return false;
 }
+

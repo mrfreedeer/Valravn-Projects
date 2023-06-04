@@ -59,7 +59,7 @@ void Player::UpdateInputFromKeyboard()
 	}
 
 	if (g_theInput->IsKeyDown('W')) {
-		m_velocity += iBasis  * speedUsed;
+		m_velocity += iBasis * speedUsed;
 	}
 
 	if (g_theInput->IsKeyDown('S')) {
@@ -96,7 +96,9 @@ void Player::UpdateInputFromKeyboard()
 	}
 
 	deltaMouseInput *= mouseSpeed;
-	m_orientation += EulerAngles(deltaMouseInput.x, -deltaMouseInput.y, 0.0f);
+	if (!g_theInput->IsKeyDown(KEYCODE_SHIFT)) {
+		m_orientation += EulerAngles(deltaMouseInput.x, -deltaMouseInput.y, 0.0f);
+	}
 }
 
 void Player::UpdateInputFromController()
@@ -147,7 +149,7 @@ void Player::UpdateInputFromController()
 		Vec2 stickPos = leftStick.GetPosition();
 		iBasis *= stickPos.y;
 		jBasis *= -stickPos.x;
-		
+
 		m_velocity.x = 0.0f;
 		m_velocity.y = 0.0f;
 
@@ -163,5 +165,5 @@ void Player::UpdateInputFromController()
 		m_angularVelocity = EulerAngles(-cameraAngle.x * m_controllerCameraSpeed, -cameraAngle.y * m_controllerCameraSpeed, m_angularVelocity.m_rollDegrees);
 	}
 
-	
+
 }
