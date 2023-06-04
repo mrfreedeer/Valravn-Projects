@@ -1,0 +1,8 @@
+<CommandScript>
+    <LoadScene filename="test3"/>
+    <!--<LoadScene filename="businesscard"/>-->
+</CommandScript>
+
+<!-- executexmlfile filename=Data/LoadDefaultModel.xml -->
+
+    
