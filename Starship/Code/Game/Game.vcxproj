@@ -192,11 +192,6 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
-      <Project>{2762da7b-eb8b-4253-be94-e38102b89d43}</Project>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="Framework\App.cpp" />
     <ClCompile Include="Framework\GameCommon.cpp" />
     <ClCompile Include="Framework\Main_Windows.cpp" />
@@ -227,6 +222,11 @@
     <ClInclude Include="Gameplay\TimeWarper.hpp" />
     <ClInclude Include="Gameplay\TwinAttacker.hpp" />
     <ClInclude Include="Gameplay\Wasp.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
+      <Project>{1642dc84-dc5c-48e5-8352-3859b438eac2}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
