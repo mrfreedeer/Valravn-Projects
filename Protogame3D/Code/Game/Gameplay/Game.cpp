@@ -1,10 +1,12 @@
+#include "Game/Gameplay/Game.hpp"
 #include "Engine/Math/AABB2.hpp"
 #include "Engine/Renderer/DebugRendererSystem.hpp"
+#include "Engine/Renderer/Renderer.hpp"
 #include "Game/Framework/App.hpp"
 #include "Game/Framework/GameCommon.hpp"
-#include "Game/Gameplay/Game.hpp"
 #include "Game/Gameplay/Player.hpp"
 #include "Game/Gameplay/Prop.hpp"
+
 
 
 extern bool g_drawDebug;
@@ -84,7 +86,7 @@ void Game::Startup()
 	m_storedDeltaTimes = 0;
 	m_totalDeltaTimeSample = 0.0f;
 
-	g_squirrelFont = g_theRenderer->CreateOrGetBitmapFont("Data/Images/SquirrelFixedFont");
+	//g_squirrelFont = g_theRenderer->CreateOrGetBitmapFont("Data/Images/SquirrelFixedFont");
 
 	switch (m_currentState)
 	{
@@ -100,13 +102,13 @@ void Game::Startup()
 	default:
 		break;
 	}
-	DebugAddMessage("Hello", 0.0f, Rgba8::WHITE, Rgba8::WHITE);
+	//DebugAddMessage("Hello", 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 }
 
 void Game::StartupLogo()
 {
 	if (m_showEngineLogo) {
-		m_logoTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Engine Logo.png");
+		//m_logoTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Engine Logo.png");
 	}
 	else {
 		m_nextState = GameState::AttractScreen;
@@ -115,7 +117,7 @@ void Game::StartupLogo()
 
 void Game::StartupAttractScreen()
 {
-	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
+	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	m_currentText = g_gameConfigBlackboard.GetValue("GAME_TITLE", "Protogame3D");
 	m_startTextColor = GetRandomColor();
 	m_endTextColor = GetRandomColor();
@@ -130,12 +132,12 @@ void Game::StartupAttractScreen()
 	m_isCursorClipped = false;
 	m_isCursorRelative = false;
 
-	DebugRenderClear();
+	//DebugRenderClear();
 }
 
 void Game::StartupPlay()
 {
-	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
+	//g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 	Player* player = new Player(this, Vec3::ZERO, &m_worldCamera);
 	m_player = player;
 
@@ -286,14 +288,14 @@ void Game::LoadAssets()
 
 void Game::LoadTextures()
 {
-	g_textures[(int)GAME_TEXTURE::TestUV] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/TestUV.png");
-	g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
+	//g_textures[(int)GAME_TEXTURE::TestUV] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/TestUV.png");
+	//g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
 
-	for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
-		if (!g_textures[textureIndex]) {
-			ERROR_RECOVERABLE(Stringf("FORGOT TO LOAD TEXTURE %d", textureIndex));
-		}
-	}
+	//for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
+	//	if (!g_textures[textureIndex]) {
+	//		ERROR_RECOVERABLE(Stringf("FORGOT TO LOAD TEXTURE %d", textureIndex));
+	//	}
+	//}
 }
 
 void Game::LoadSoundFiles()
@@ -793,9 +795,9 @@ void Game::Render()
 		break;
 	}
 
-	DebugRenderWorld(m_worldCamera);
-	RenderUI();
-	DebugRenderScreen(m_UICamera);
+	//DebugRenderWorld(m_worldCamera);
+	//RenderUI();
+	//DebugRenderScreen(m_UICamera);
 
 }
 
@@ -812,50 +814,50 @@ void Game::RenderEntities() const
 void Game::RenderPlay()
 {
 
-	g_theRenderer->BeginCamera(m_worldCamera);
-	{
-		g_theRenderer->ClearScreen(Rgba8::BLACK);
-		g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-		g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-		g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
-		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
+	//g_theRenderer->BeginCamera(m_worldCamera);
+	//{
+	//	g_theRenderer->ClearScreen(Rgba8::BLACK);
+	//	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
+	//	g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
+	//	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
+	//	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
-		RenderEntities();
-	}
+	//	RenderEntities();
+	//}
 
 
-	g_theRenderer->EndCamera(m_worldCamera);
+	//g_theRenderer->EndCamera(m_worldCamera);
 
-	for (int effectInd = 0; effectInd < (int)ShaderEffect::NUM_EFFECTS; effectInd++) {
-		if (m_applyEffects[effectInd]) {
-			g_theRenderer->ApplyEffect(m_effectsShaders[effectInd], &m_worldCamera);
-		}
-	}
+	//for (int effectInd = 0; effectInd < (int)ShaderEffect::NUM_EFFECTS; effectInd++) {
+	//	if (m_applyEffects[effectInd]) {
+	//		g_theRenderer->ApplyEffect(m_effectsShaders[effectInd], &m_worldCamera);
+	//	}
+	//}
 
 }
 
 void Game::RenderAttractScreen() const
 {
-	g_theRenderer->BeginCamera(m_AttractScreenCamera); {
+	/*g_theRenderer->BeginCamera(m_AttractScreenCamera); {
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
 
 		g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 		g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
 		g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
-	}
+	}*/
 
-	if (m_useTextAnimation) {
-		RenderTextAnimation();
-	}
+	//if (m_useTextAnimation) {
+	//	RenderTextAnimation();
+	//}
 
-	Texture* testTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
-	std::vector<Vertex_PCU> testTextVerts;
-	AABB2 testTextureAABB2(740.0f, 150.0f, 1040.0f, 450.f);
-	AddVertsForAABB2D(testTextVerts, testTextureAABB2, Rgba8());
-	g_theRenderer->BindTexture(testTexture);
-	g_theRenderer->DrawVertexArray((int)testTextVerts.size(), testTextVerts.data());
-	g_theRenderer->BindTexture(nullptr);
+	//Texture* testTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
+	//std::vector<Vertex_PCU> testTextVerts;
+	//AABB2 testTextureAABB2(740.0f, 150.0f, 1040.0f, 450.f);
+	//AddVertsForAABB2D(testTextVerts, testTextureAABB2, Rgba8());
+	//g_theRenderer->BindTexture(testTexture);
+	//g_theRenderer->DrawVertexArray((int)testTextVerts.size(), testTextVerts.data());
+	//g_theRenderer->BindTexture(nullptr);
 
 	/*g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	Vertex_PCU vertices[] =
@@ -867,13 +869,13 @@ void Game::RenderAttractScreen() const
 
 	//g_theRenderer->DrawVertexArray(3, vertices);
 
-	g_theRenderer->EndCamera(m_AttractScreenCamera);
+	//g_theRenderer->EndCamera(m_AttractScreenCamera);
 
 }
 
 void Game::RenderLogo() const
 {
-	AABB2 screen = m_UICamera.GetCameraBounds();
+	/*AABB2 screen = m_UICamera.GetCameraBounds();
 	AABB2 logo = screen.GetBoxWithin(Vec2(0.27f, 0.25f), Vec2(0.68f, 0.75f));
 	AABB2 background = screen.GetBoxWithin(Vec2(0.34f, 0.305f), Vec2(0.605f, 0.72f));
 
@@ -908,7 +910,7 @@ void Game::RenderLogo() const
 		g_theRenderer->BindTexture(m_logoTexture);
 		g_theRenderer->DrawVertexArray(logoVerts);
 	}
-	g_theRenderer->EndCamera(m_UICamera);
+	g_theRenderer->EndCamera(m_UICamera);*/
 
 
 }
@@ -917,7 +919,7 @@ void Game::RenderLogo() const
 void Game::RenderUI() const
 {
 
-	g_theRenderer->BeginCamera(m_UICamera);
+	/*g_theRenderer->BeginCamera(m_UICamera);
 
 	if (m_useTextAnimation && m_currentState != GameState::AttractScreen) {
 
@@ -934,15 +936,15 @@ void Game::RenderUI() const
 	std::vector<Vertex_PCU> gameInfoVerts;
 
 	g_theConsole->Render(devConsoleBounds);
-	g_theRenderer->EndCamera(m_UICamera);
+	g_theRenderer->EndCamera(m_UICamera);*/
 }
 
 void Game::RenderTextAnimation() const
 {
-	if (m_textAnimTriangles.size() > 0) {
+	/*if (m_textAnimTriangles.size() > 0) {
 		g_theRenderer->BindTexture(&g_squirrelFont->GetTexture());
 		g_theRenderer->DrawVertexArray(int(m_textAnimTriangles.size()), m_textAnimTriangles.data());
-	}
+	}*/
 }
 
 void Game::ShakeScreenCollision()

@@ -3,6 +3,7 @@
 #include "Game/Gameplay/Prop.hpp"
 #include "Game/Gameplay/Game.hpp"
 #include "Game/Framework/GameCommon.hpp"
+#include "Engine/Renderer/Renderer.hpp"
 
 Prop::Prop(Game* pointerToGame, Vec3 const& startingWorldPosition, PropRenderType renderType, IntVec2 gridSize) :
 	Entity(pointerToGame, startingWorldPosition),
@@ -142,20 +143,20 @@ void Prop::Render() const
 
 void Prop::RenderMultiColoredCube() const
 {
-	g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::CompanionCube]);
+	//g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::CompanionCube]);
 	g_theRenderer->DrawVertexArray(m_verts);
 }
 
 void Prop::RenderGrid() const
 {
-	g_theRenderer->BindTexture(nullptr);
+	//g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->DrawVertexArray(m_verts);
 
 }
 
 void Prop::RenderSphere() const
 {
-	g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::TestUV]);
+	//g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::TestUV]);
 	//g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->DrawVertexArray(m_verts);
 }

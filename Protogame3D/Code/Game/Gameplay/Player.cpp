@@ -2,6 +2,7 @@
 #include "Game/Gameplay/Player.hpp"
 #include "Game/Gameplay/Game.hpp"
 #include "Engine/Renderer/Camera.hpp"
+#include "Game/Framework/GameCommon.hpp"
 
 Player::Player(Game* pointerToGame, Vec3 const& startingWorldPosition, Camera* pointerToCamera) :
 	Entity(pointerToGame, startingWorldPosition),

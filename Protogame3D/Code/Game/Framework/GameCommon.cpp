@@ -1,5 +1,6 @@
-#include "Engine/Math/MathUtils.hpp"
 #include "Game/Framework/GameCommon.hpp"
+#include "Engine/Math/MathUtils.hpp"
+#include "Engine/Renderer/Renderer.hpp"
 #include "Game/Framework/App.hpp"
 
 bool g_drawDebug = false;

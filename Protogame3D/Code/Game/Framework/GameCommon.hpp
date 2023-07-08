@@ -1,8 +1,4 @@
 #pragma once
-#include "Engine/Math/Vec2.hpp"
-#include "Engine/Core/Rgba8.hpp"
-#include "Engine/Core/Vertex_PCU.hpp"
-#include "Engine/Renderer/Renderer.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Engine/Audio/AudioSystem.hpp"
@@ -14,9 +10,11 @@
 #include "Engine/Window/Window.hpp"
 #include "Engine/Renderer/BitmapFont.hpp"
 #include "Engine/Core/Clock.hpp"
-
+//
 #include <math.h>
 
+struct Vec2;
+struct Rgba8;
 
 enum class GAME_TEXTURE {
 	TestUV,

@@ -1,10 +1,11 @@
+#include "Game/Framework/App.hpp"
+#include "Game/Framework/GameCommon.hpp"
+
 #define WIN32_LEAN_AND_MEAN		// Always #define this before #including <windows.h>
 #include <windows.h>			// #include this (massive, platform-specific) header in very few places
 #include <cmath>
 #include <cassert>
 #include <crtdbg.h>
-#include "Game/Framework/GameCommon.hpp"
-#include "Game/Framework/App.hpp"
 
 App* g_theApp = nullptr;
 

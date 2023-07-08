@@ -1,8 +1,5 @@
-#include "Engine/Math/Vec2.hpp"
-#include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Renderer/Renderer.hpp"
-#include "GameCommon.hpp"
-#include "Game/Gameplay/Game.hpp"
+#pragma once
+#include "Engine/Core/EventSystem.hpp"
 
 constexpr float playButtonHeight = 10.0f;
 constexpr float playButtonWidth = 10.0f;

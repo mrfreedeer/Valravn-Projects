@@ -1,8 +1,7 @@
 #pragma once
-#include "Engine/Renderer/Renderer.hpp"
 #include "Engine/Renderer/Camera.hpp"
-#include "Game/Framework/GameCommon.hpp"
 #include "Game/Gameplay/Entity.hpp"
+
 
 enum class GameState {
 	EngineLogo,
@@ -22,6 +21,7 @@ enum class ShaderEffect {
 
 class App;
 class Player;
+class Shader;
 
 class Game {
 

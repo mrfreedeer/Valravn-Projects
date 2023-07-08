@@ -1,3 +1,5 @@
+#include "Game/Framework/App.hpp"
+#include "Game/Gameplay/Game.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Engine/Core/Time.hpp"
 #include "Engine/Input/InputSystem.hpp"
@@ -6,7 +8,6 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Engine/Core/Clock.hpp"
-#include "Game/Framework/App.hpp"
 
 #include <thread>
 
