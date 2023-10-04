@@ -46,7 +46,7 @@ Game::Game(App* appPointer) :
 	SubscribeEventCallbackFunction("SuperTest", this, &Game::AnotherSuperTest);
 	SubscribeEventCallbackFunction("Controls", this, &Game::SuperTest);
 	UnsubscribeAllEventCallbackFunctions(this);
-	
+
 	DestructorUnsubTest unsubTest;
 	SubscribeEventCallbackFunction("SuperTest", &unsubTest, &DestructorUnsubTest::SomeSubFunction);
 
@@ -187,7 +187,7 @@ void Game::StartupPlay()
 	colorInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 	colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
-	colorInfo.m_memoryUsage = MemoryUsage::GPU;
+	colorInfo.m_memoryUsage = MemoryUsage::Default;
 
 	m_effectsShaders[(int)ShaderEffect::ColorBanding] = g_theRenderer->CreateOrGetShader("Data/Shaders/ColorBandEffect");
 	m_effectsShaders[(int)ShaderEffect::Grayscale] = g_theRenderer->CreateOrGetShader("Data/Shaders/GrayScaleEffect");
@@ -334,7 +334,7 @@ void Game::Update()
 	switch (m_currentState)
 	{
 	case GameState::AttractScreen:
-		UpdateAttractScreen(gameDeltaSeconds);
+		//UpdateAttractScreen(gameDeltaSeconds); #TODO 
 		break;
 	case GameState::Play:
 		UpdatePlay(gameDeltaSeconds);
@@ -814,6 +814,7 @@ void Game::RenderEntities() const
 void Game::RenderPlay()
 {
 
+	
 	//g_theRenderer->BeginCamera(m_worldCamera);
 	//{
 	//	g_theRenderer->ClearScreen(Rgba8::BLACK);
@@ -838,6 +839,14 @@ void Game::RenderPlay()
 
 void Game::RenderAttractScreen() const
 {
+	Vertex_PCU triangleVertices[] =
+	{
+		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 0, 0, 255), Vec2(0.0f, 0.0f)),
+		Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(0, 255, 0, 255), Vec2(0.0f, 0.0f)),
+		Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(0, 0, 255, 255), Vec2(0.0f, 0.0f))
+	};
+
+	g_theRenderer->DrawVertexArray(3, triangleVertices);
 	/*g_theRenderer->BeginCamera(m_AttractScreenCamera); {
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
 
