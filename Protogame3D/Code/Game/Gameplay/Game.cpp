@@ -187,7 +187,7 @@ void Game::StartupPlay()
 	colorInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 	colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
-	colorInfo.m_memoryUsage = MemoryUsage::Default;
+	//colorInfo.m_memoryUsage = MemoryUsage::Default;
 
 	m_effectsShaders[(int)ShaderEffect::ColorBanding] = g_theRenderer->CreateOrGetShader("Data/Shaders/ColorBandEffect");
 	m_effectsShaders[(int)ShaderEffect::Grayscale] = g_theRenderer->CreateOrGetShader("Data/Shaders/GrayScaleEffect");
