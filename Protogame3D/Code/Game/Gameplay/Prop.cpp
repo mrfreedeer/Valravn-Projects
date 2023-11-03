@@ -143,20 +143,20 @@ void Prop::Render() const
 
 void Prop::RenderMultiColoredCube() const
 {
-	//g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::CompanionCube]);
+	g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::CompanionCube]);
 	g_theRenderer->DrawVertexArray(m_verts);
 }
 
 void Prop::RenderGrid() const
 {
-	//g_theRenderer->BindTexture(nullptr);
+	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->DrawVertexArray(m_verts);
 
 }
 
 void Prop::RenderSphere() const
 {
-	//g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::TestUV]);
+	g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::TestUV]);
 	//g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->DrawVertexArray(m_verts);
 }

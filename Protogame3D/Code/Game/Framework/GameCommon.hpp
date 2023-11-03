@@ -18,6 +18,7 @@ struct Rgba8;
 
 enum class GAME_TEXTURE {
 	TestUV,
+	TextureTest,
 	CompanionCube,
 	NUM_TEXTURES
 };

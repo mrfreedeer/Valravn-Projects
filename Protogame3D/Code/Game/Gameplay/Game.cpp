@@ -86,7 +86,7 @@ void Game::Startup()
 	m_storedDeltaTimes = 0;
 	m_totalDeltaTimeSample = 0.0f;
 
-	//g_squirrelFont = g_theRenderer->CreateOrGetBitmapFont("Data/Images/SquirrelFixedFont");
+	g_squirrelFont = g_theRenderer->CreateOrGetBitmapFont("Data/Images/SquirrelFixedFont");
 
 	switch (m_currentState)
 	{
@@ -161,7 +161,8 @@ void Game::StartupPlay()
 
 	g_theInput->ResetMouseClientDelta();
 
-	DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
+	//#TODO fix this
+	/*DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
 
 	float axisLabelTextHeight = 0.25f;
 	Mat44 xLabelTransformMatrix(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3::ZERO);
@@ -180,20 +181,20 @@ void Game::StartupPlay()
 	float zLabelWidth = g_squirrelFont->GetTextWidth(axisLabelTextHeight, "Z - Up");
 	zLabelTransformMatrix.SetTranslation3D(Vec3(0.0f, axisLabelTextHeight, zLabelWidth * 0.7f));
 
-	DebugAddWorldText("Z - Up", zLabelTransformMatrix, axisLabelTextHeight, Vec2(0.5f, 0.5f), -1.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
+	DebugAddWorldText("Z - Up", zLabelTransformMatrix, axisLabelTextHeight, Vec2(0.5f, 0.5f), -1.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);*/
 
 
-	TextureCreateInfo colorInfo;
-	colorInfo.m_dimensions = g_theWindow->GetClientDimensions();
-	colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
-	colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
+	//TextureCreateInfo colorInfo;
+	//colorInfo.m_dimensions = g_theWindow->GetClientDimensions();
+	//colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
+	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
 
-	m_effectsShaders[(int)ShaderEffect::ColorBanding] = g_theRenderer->CreateOrGetShader("Data/Shaders/ColorBandEffect");
-	m_effectsShaders[(int)ShaderEffect::Grayscale] = g_theRenderer->CreateOrGetShader("Data/Shaders/GrayScaleEffect");
-	m_effectsShaders[(int)ShaderEffect::Inverted] = g_theRenderer->CreateOrGetShader("Data/Shaders/InvertedColorEffect");
-	m_effectsShaders[(int)ShaderEffect::Pixelized] = g_theRenderer->CreateOrGetShader("Data/Shaders/PixelizedEffect");
-	m_effectsShaders[(int)ShaderEffect::DistanceFog] = g_theRenderer->CreateOrGetShader("Data/Shaders/DistanceFogEffect");
+	//m_effectsShaders[(int)ShaderEffect::ColorBanding] = g_theRenderer->CreateOrGetShader("Data/Shaders/ColorBandEffect");
+	//m_effectsShaders[(int)ShaderEffect::Grayscale] = g_theRenderer->CreateOrGetShader("Data/Shaders/GrayScaleEffect");
+	//m_effectsShaders[(int)ShaderEffect::Inverted] = g_theRenderer->CreateOrGetShader("Data/Shaders/InvertedColorEffect");
+	//m_effectsShaders[(int)ShaderEffect::Pixelized] = g_theRenderer->CreateOrGetShader("Data/Shaders/PixelizedEffect");
+	//m_effectsShaders[(int)ShaderEffect::DistanceFog] = g_theRenderer->CreateOrGetShader("Data/Shaders/DistanceFogEffect");
 
 }
 
@@ -288,8 +289,9 @@ void Game::LoadAssets()
 
 void Game::LoadTextures()
 {
-	//g_textures[(int)GAME_TEXTURE::TestUV] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/TestUV.png");
-	//g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
+	g_textures[(int)GAME_TEXTURE::TestUV] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/TestUV.png");
+	g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
+	g_textures[(int)GAME_TEXTURE::TextureTest] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
 
 	//for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
 	//	if (!g_textures[textureIndex]) {
@@ -334,7 +336,7 @@ void Game::Update()
 	switch (m_currentState)
 	{
 	case GameState::AttractScreen:
-		//UpdateAttractScreen(gameDeltaSeconds); #TODO 
+		UpdateAttractScreen(gameDeltaSeconds);
 		break;
 	case GameState::Play:
 		UpdatePlay(gameDeltaSeconds);
@@ -440,6 +442,7 @@ void Game::UpdateAttractScreen(float deltaSeconds)
 	UpdateInputAttractScreen(deltaSeconds);
 	m_timeAlive += deltaSeconds;
 
+	//#TODO
 	if (m_useTextAnimation) {
 		UpdateTextAnimation(deltaSeconds, m_currentText, Vec2(m_UICenterX, m_UISizeY * m_textAnimationPosPercentageTop));
 	}
@@ -795,9 +798,9 @@ void Game::Render()
 		break;
 	}
 
-	//DebugRenderWorld(m_worldCamera);
-	//RenderUI();
-	//DebugRenderScreen(m_UICamera);
+	DebugRenderWorld(m_worldCamera);
+	RenderUI();
+	DebugRenderScreen(m_UICamera);
 
 }
 
@@ -814,20 +817,18 @@ void Game::RenderEntities() const
 void Game::RenderPlay()
 {
 
-	
-	//g_theRenderer->BeginCamera(m_worldCamera);
-	//{
-	//	g_theRenderer->ClearScreen(Rgba8::BLACK);
-	//	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-	//	g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	//	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
-	//	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
-	//	RenderEntities();
-	//}
+	g_theRenderer->BeginCamera(m_worldCamera);
+	{
+		g_theRenderer->ClearScreen(Rgba8::BLACK);
+		g_theRenderer->BindMaterial(nullptr);
+		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
+
+		RenderEntities();
+	}
 
 
-	//g_theRenderer->EndCamera(m_worldCamera);
+	g_theRenderer->EndCamera(m_worldCamera);
 
 	//for (int effectInd = 0; effectInd < (int)ShaderEffect::NUM_EFFECTS; effectInd++) {
 	//	if (m_applyEffects[effectInd]) {
@@ -839,34 +840,41 @@ void Game::RenderPlay()
 
 void Game::RenderAttractScreen() const
 {
+	//Vertex_PCU triangleVertices[] =
+	//{
+	//	Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 0, 0, 255), Vec2(0.0f, 0.0f)),
+	//	Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(0, 255, 0, 255), Vec2(1.0f, 0.0f)),
+	//	Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(0, 0, 255, 255), Vec2(0.5f, 1.0f))
+	//};
+
 	Vertex_PCU triangleVertices[] =
 	{
-		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 0, 0, 255), Vec2(0.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(0, 255, 0, 255), Vec2(0.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(0, 0, 255, 255), Vec2(0.0f, 0.0f))
+		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.0f, 0.0f)),
+		Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(1.0f, 0.0f)),
+		Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.5f, 1.0f))
 	};
 
-	g_theRenderer->DrawVertexArray(3, triangleVertices);
-	/*g_theRenderer->BeginCamera(m_AttractScreenCamera); {
+	g_theRenderer->BeginCamera(m_AttractScreenCamera);
+	{
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
+		if (m_useTextAnimation) {
+			RenderTextAnimation();
+		}
 
-		g_theRenderer->SetBlendMode(BlendMode::ALPHA);
-		g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-		g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
-		g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
-	}*/
+		Texture* testTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
+		std::vector<Vertex_PCU> testTextVerts;
+		AABB2 testTextureAABB2(740.0f, 150.0f, 1040.0f, 450.f);
+		AddVertsForAABB2D(testTextVerts, testTextureAABB2, Rgba8());
+		g_theRenderer->BindTexture(testTexture);
+		g_theRenderer->DrawVertexArray((int)testTextVerts.size(), testTextVerts.data());
+		//g_theRenderer->BindTexture(nullptr);
 
-	//if (m_useTextAnimation) {
-	//	RenderTextAnimation();
-	//}
 
-	//Texture* testTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
-	//std::vector<Vertex_PCU> testTextVerts;
-	//AABB2 testTextureAABB2(740.0f, 150.0f, 1040.0f, 450.f);
-	//AddVertsForAABB2D(testTextVerts, testTextureAABB2, Rgba8());
-	//g_theRenderer->BindTexture(testTexture);
-	//g_theRenderer->DrawVertexArray((int)testTextVerts.size(), testTextVerts.data());
-	//g_theRenderer->BindTexture(nullptr);
+	}
+	g_theRenderer->EndCamera(m_AttractScreenCamera);
+
+
+
 
 	/*g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	Vertex_PCU vertices[] =
@@ -884,7 +892,7 @@ void Game::RenderAttractScreen() const
 
 void Game::RenderLogo() const
 {
-	/*AABB2 screen = m_UICamera.GetCameraBounds();
+	AABB2 screen = m_UICamera.GetCameraBounds();
 	AABB2 logo = screen.GetBoxWithin(Vec2(0.27f, 0.25f), Vec2(0.68f, 0.75f));
 	AABB2 background = screen.GetBoxWithin(Vec2(0.34f, 0.305f), Vec2(0.605f, 0.72f));
 
@@ -919,7 +927,7 @@ void Game::RenderLogo() const
 		g_theRenderer->BindTexture(m_logoTexture);
 		g_theRenderer->DrawVertexArray(logoVerts);
 	}
-	g_theRenderer->EndCamera(m_UICamera);*/
+	g_theRenderer->EndCamera(m_UICamera);
 
 
 }
@@ -928,7 +936,7 @@ void Game::RenderLogo() const
 void Game::RenderUI() const
 {
 
-	/*g_theRenderer->BeginCamera(m_UICamera);
+	g_theRenderer->BeginCamera(m_UICamera);
 
 	if (m_useTextAnimation && m_currentState != GameState::AttractScreen) {
 
@@ -938,22 +946,21 @@ void Game::RenderUI() const
 	AABB2 devConsoleBounds(m_UICamera.GetOrthoBottomLeft(), m_UICamera.GetOrthoTopRight());
 	AABB2 screenBounds(m_UICamera.GetOrthoBottomLeft(), m_UICamera.GetOrthoTopRight());
 
-
-	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
-	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
+	Material* default2DMat = g_theRenderer->GetMaterialForName("Default2DMaterial");
+	g_theRenderer->BindMaterial(default2DMat); 
 
 	std::vector<Vertex_PCU> gameInfoVerts;
 
 	g_theConsole->Render(devConsoleBounds);
-	g_theRenderer->EndCamera(m_UICamera);*/
+	g_theRenderer->EndCamera(m_UICamera);
 }
 
 void Game::RenderTextAnimation() const
 {
-	/*if (m_textAnimTriangles.size() > 0) {
+	if (m_textAnimTriangles.size() > 0) {
 		g_theRenderer->BindTexture(&g_squirrelFont->GetTexture());
 		g_theRenderer->DrawVertexArray(int(m_textAnimTriangles.size()), m_textAnimTriangles.data());
-	}*/
+	}
 }
 
 void Game::ShakeScreenCollision()
