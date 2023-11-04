@@ -40,7 +40,7 @@ void App::Startup()
 	WindowConfig windowConfig;
 	windowConfig.m_inputSystem = g_theInput;
 	windowConfig.m_clientAspect = 2.0f;
-	windowConfig.m_windowTitle = "SD1 - A5: Starship Gold (Re-factored)";
+	windowConfig.m_windowTitle = "SD1 - A5: Starship Gold (Re-factored) DX12";
 	g_theWindow = new Window(windowConfig);
 
 	RendererConfig rendererConfig;
