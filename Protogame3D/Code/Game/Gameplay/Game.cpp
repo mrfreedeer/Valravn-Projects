@@ -102,13 +102,13 @@ void Game::Startup()
 	default:
 		break;
 	}
-	//DebugAddMessage("Hello", 0.0f, Rgba8::WHITE, Rgba8::WHITE);
+	DebugAddMessage("Hello", 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 }
 
 void Game::StartupLogo()
 {
 	if (m_showEngineLogo) {
-		//m_logoTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Engine Logo.png");
+		m_logoTexture = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Engine Logo.png");
 	}
 	else {
 		m_nextState = GameState::AttractScreen;
@@ -132,7 +132,7 @@ void Game::StartupAttractScreen()
 	m_isCursorClipped = false;
 	m_isCursorRelative = false;
 
-	//DebugRenderClear();
+	DebugRenderClear();
 }
 
 void Game::StartupPlay()
@@ -162,7 +162,7 @@ void Game::StartupPlay()
 	g_theInput->ResetMouseClientDelta();
 
 	//#TODO fix this
-	/*DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
+	DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
 
 	float axisLabelTextHeight = 0.25f;
 	Mat44 xLabelTransformMatrix(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3::ZERO);
@@ -181,7 +181,7 @@ void Game::StartupPlay()
 	float zLabelWidth = g_squirrelFont->GetTextWidth(axisLabelTextHeight, "Z - Up");
 	zLabelTransformMatrix.SetTranslation3D(Vec3(0.0f, axisLabelTextHeight, zLabelWidth * 0.7f));
 
-	DebugAddWorldText("Z - Up", zLabelTransformMatrix, axisLabelTextHeight, Vec2(0.5f, 0.5f), -1.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);*/
+	DebugAddWorldText("Z - Up", zLabelTransformMatrix, axisLabelTextHeight, Vec2(0.5f, 0.5f), -1.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
 
 
 	//TextureCreateInfo colorInfo;
@@ -293,11 +293,11 @@ void Game::LoadTextures()
 	g_textures[(int)GAME_TEXTURE::CompanionCube] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/CompanionCube.png");
 	g_textures[(int)GAME_TEXTURE::TextureTest] = g_theRenderer->CreateOrGetTextureFromFile("Data/Images/Test_StbiFlippedAndOpenGL.png");
 
-	//for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
-	//	if (!g_textures[textureIndex]) {
-	//		ERROR_RECOVERABLE(Stringf("FORGOT TO LOAD TEXTURE %d", textureIndex));
-	//	}
-	//}
+	for (int textureIndex = 0; textureIndex < (int)GAME_TEXTURE::NUM_TEXTURES; textureIndex++) {
+		if (!g_textures[textureIndex]) {
+			ERROR_RECOVERABLE(Stringf("FORGOT TO LOAD TEXTURE %d", textureIndex));
+		}
+	}
 }
 
 void Game::LoadSoundFiles()
