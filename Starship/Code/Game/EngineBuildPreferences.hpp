@@ -13,3 +13,5 @@
 #ifdef _DEBUG
 #define ENGINE_DEBUG_RENDER
 #endif // _DEBUG
+
+#define GAME_2D
