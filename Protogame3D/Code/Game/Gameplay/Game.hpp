@@ -9,7 +9,7 @@ enum class GameState {
 	Play
 };
 
-enum class ShaderEffect {
+enum class MaterialEffect {
 	NoEffect = -1,
 	ColorBanding,
 	Pixelized,
@@ -21,7 +21,7 @@ enum class ShaderEffect {
 
 class App;
 class Player;
-class Shader;
+class Material;
 
 class Game {
 
@@ -179,6 +179,6 @@ private:
 	double m_engineLogoLength = g_gameConfigBlackboard.GetValue("ENGINE_LOGO_LENGTH", 2.0);
 	bool m_showEngineLogo = g_gameConfigBlackboard.GetValue("SHOW_ENGINE_LOGO", true);
 
-	Shader* m_effectsShaders [(int)ShaderEffect::NUM_EFFECTS];
-	bool m_applyEffects [(int) ShaderEffect::NUM_EFFECTS];
+	Material* m_effectsMaterials [(int)MaterialEffect::NUM_EFFECTS];
+	bool m_applyEffects [(int) MaterialEffect::NUM_EFFECTS];
 };

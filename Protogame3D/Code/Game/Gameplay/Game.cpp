@@ -190,11 +190,11 @@ void Game::StartupPlay()
 	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
 
-	//m_effectsShaders[(int)ShaderEffect::ColorBanding] = g_theRenderer->CreateOrGetShader("Data/Shaders/ColorBandEffect");
-	//m_effectsShaders[(int)ShaderEffect::Grayscale] = g_theRenderer->CreateOrGetShader("Data/Shaders/GrayScaleEffect");
-	//m_effectsShaders[(int)ShaderEffect::Inverted] = g_theRenderer->CreateOrGetShader("Data/Shaders/InvertedColorEffect");
-	//m_effectsShaders[(int)ShaderEffect::Pixelized] = g_theRenderer->CreateOrGetShader("Data/Shaders/PixelizedEffect");
-	//m_effectsShaders[(int)ShaderEffect::DistanceFog] = g_theRenderer->CreateOrGetShader("Data/Shaders/DistanceFogEffect");
+	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theRenderer->GetMaterialForName("ColorBandFX");
+	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theRenderer->GetMaterialForName("GrayScaleFX");
+	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theRenderer->GetMaterialForName("InvertedColorFX");
+	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theRenderer->GetMaterialForName("PixelizedFX");
+	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theRenderer->GetMaterialForName("DistanceFogFX");
 
 }
 
@@ -405,7 +405,7 @@ void Game::UpdateInputPlay(float deltaSeconds)
 	}
 
 
-	for (int effectIndex = 0; effectIndex < (int)ShaderEffect::NUM_EFFECTS; effectIndex++) {
+	for (int effectIndex = 0; effectIndex < (int)MaterialEffect::NUM_EFFECTS; effectIndex++) {
 		int keyCode = 97 + effectIndex; // 97 is 1 numpad
 		if (g_theInput->WasKeyJustPressed((unsigned short)keyCode)) {
 			m_applyEffects[effectIndex] = !m_applyEffects[effectIndex];
@@ -823,18 +823,18 @@ void Game::RenderPlay()
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
-
+		g_theRenderer->BindTexture(nullptr, 1);
 		RenderEntities();
 	}
 
 
 	g_theRenderer->EndCamera(m_worldCamera);
 
-	//for (int effectInd = 0; effectInd < (int)ShaderEffect::NUM_EFFECTS; effectInd++) {
-	//	if (m_applyEffects[effectInd]) {
-	//		g_theRenderer->ApplyEffect(m_effectsShaders[effectInd], &m_worldCamera);
-	//	}
-	//}
+	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
+		if (m_applyEffects[effectInd]) {
+			g_theRenderer->ApplyEffect(m_effectsMaterials[effectInd], &m_worldCamera);
+		}
+	}
 
 }
 
