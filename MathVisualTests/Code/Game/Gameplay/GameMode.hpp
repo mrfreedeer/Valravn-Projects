@@ -2,7 +2,9 @@
 #include "Game/Gameplay/Shape2D.hpp"
 #include "Game/Framework/GameCommon.hpp"
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Renderer/Camera.hpp"
 #include "Engine/Renderer/DebugRendererSystem.hpp"
+
 class Game;
 struct Vec2;
 

@@ -247,7 +247,7 @@ void Shapes3DMode::Render() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 	g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
+	g_theRenderer->SetDepthStencilState(DepthFunc::LESSEQUAL, true);
 	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 	RenderShapes();

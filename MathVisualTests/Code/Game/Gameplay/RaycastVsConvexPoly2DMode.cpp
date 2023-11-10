@@ -213,10 +213,10 @@ bool RaycastVsConvexPoly2DMode::LoadGHCSScene(EventArgs& args)
 
 void RaycastVsConvexPoly2DMode::RenderNormalColorShapes() const
 {
-	size_t objectsToDraw = m_shapesBuffer->m_size / m_shapesBuffer->GetStride();
+	//size_t objectsToDraw = m_shapesBuffer->GetSize() / m_shapesBuffer->GetStride();
 
-	g_theRenderer->BindVertexBuffer(m_shapesBuffer, sizeof(Vertex_PCU));
-	g_theRenderer->DrawVertexBuffer(m_shapesBuffer, (int)objectsToDraw, 0, m_shapesBuffer->GetStride());
+	//g_theRenderer->BindVertexBuffer(m_shapesBuffer, sizeof(Vertex_PCU));
+	g_theRenderer->DrawVertexBuffer(m_shapesBuffer);
 	float planeDrawDist = 1000.0f;
 	float lineThickness = 1.0f;
 
@@ -1018,8 +1018,17 @@ void RaycastVsConvexPoly2DMode::CreateVertexBuffer()
 
 	}
 	allVerts.insert(allVerts.end(), fillingsVerts.begin(), fillingsVerts.end());
-	m_shapesBuffer = new VertexBuffer(g_theRenderer->m_device, allVerts.size(), sizeof(Vertex_PCU), MemoryUsage::Dynamic, allVerts.data());
-	g_theRenderer->CopyCPUToGPU(allVerts.data(), allVerts.size() * sizeof(Vertex_PCU), m_shapesBuffer);
+	BufferDesc newVBufferDesc = {};
+	newVBufferDesc.data = allVerts.data();
+	newVBufferDesc.descriptorHeap = nullptr;
+	newVBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	newVBufferDesc.owner = g_theRenderer;
+	newVBufferDesc.size = allVerts.size() * sizeof(Vertex_PCU);
+	newVBufferDesc.stride = sizeof(Vertex_PCU);
+
+	m_shapesBuffer = new VertexBuffer(newVBufferDesc);
+
+	//g_theRenderer->CopyCPUToGPU(allVerts.data(), allVerts.size() * sizeof(Vertex_PCU), m_shapesBuffer);
 }
 
 void RaycastVsConvexPoly2DMode::UpdateSelectedPoly(float deltaSeconds)
