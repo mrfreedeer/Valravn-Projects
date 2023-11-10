@@ -117,7 +117,7 @@ void Game::StartupLogo()
 
 void Game::StartupAttractScreen()
 {
-	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
+	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	m_currentText = g_gameConfigBlackboard.GetValue("GAME_TITLE", "Protogame3D");
 	m_startTextColor = GetRandomColor();
 	m_endTextColor = GetRandomColor();
@@ -137,9 +137,10 @@ void Game::StartupAttractScreen()
 
 void Game::StartupPlay()
 {
-	//g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-	Player* player = new Player(this, Vec3::ZERO, &m_worldCamera);
+	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
+	Player* player = new Player(this, Vec3(27.0f, -12.0f, 14.0f), &m_worldCamera);
 	m_player = player;
+	m_player->m_orientation = EulerAngles(521.0f, 36.0f, 0.0f);
 
 	Prop* cubeProp = new Prop(this, Vec3(-2.0f, 2.0f, 0.0f));
 	cubeProp->m_angularVelocity.m_yawDegrees = 45.0f;
@@ -190,11 +191,11 @@ void Game::StartupPlay()
 	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
 
-	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theRenderer->GetMaterialForName("ColorBandFX");
-	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theRenderer->GetMaterialForName("GrayScaleFX");
-	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theRenderer->GetMaterialForName("InvertedColorFX");
-	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theRenderer->GetMaterialForName("PixelizedFX");
-	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theRenderer->GetMaterialForName("DistanceFogFX");
+	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theMaterialSystem->GetMaterialForName("ColorBandFX");
+	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theMaterialSystem->GetMaterialForName("GrayScaleFX");
+	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
+	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theMaterialSystem->GetMaterialForName("PixelizedFX");
+	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
 
 }
 
@@ -857,6 +858,9 @@ void Game::RenderAttractScreen() const
 	g_theRenderer->BeginCamera(m_AttractScreenCamera);
 	{
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
+		Material* def2DMat =  g_theRenderer->GetDefault2DMaterial();
+		g_theRenderer->BindMaterial(def2DMat);
+		g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 		if (m_useTextAnimation) {
 			RenderTextAnimation();
 		}
@@ -946,7 +950,7 @@ void Game::RenderUI() const
 	AABB2 devConsoleBounds(m_UICamera.GetOrthoBottomLeft(), m_UICamera.GetOrthoTopRight());
 	AABB2 screenBounds(m_UICamera.GetOrthoBottomLeft(), m_UICamera.GetOrthoTopRight());
 
-	Material* default2DMat = g_theRenderer->GetMaterialForName("Default2DMaterial");
+	Material* default2DMat = g_theMaterialSystem->GetMaterialForName("Default2DMaterial");
 	g_theRenderer->BindMaterial(default2DMat); 
 
 	std::vector<Vertex_PCU> gameInfoVerts;
