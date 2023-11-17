@@ -16,18 +16,18 @@ void GameCamera::Update(float deltaSeconds)
 {
 	switch (m_mode)
 	{
-	case CameraMode::SPECTATOR:
+	case GameCameraMode::SPECTATOR:
 		UpdateSpectator(deltaSeconds);
 		break;
-	case CameraMode::INDEPENDENT: // Camera does nothing here, just stays put
+	case GameCameraMode::INDEPENDENT: // Camera does nothing here, just stays put
 		break;
-	case CameraMode::FIRST_PERSON:
+	case GameCameraMode::FIRST_PERSON:
 		UpdateFirstPerson();
 		break;
-	case CameraMode::FIXED_ANGLE_TRACKING:
+	case GameCameraMode::FIXED_ANGLE_TRACKING:
 		UpdateFixedAngle();
 		break;
-	case CameraMode::OVERSHOULDER:
+	case GameCameraMode::OVERSHOULDER:
 		UpdateOverShoulder();
 		break;
 	}
@@ -35,15 +35,15 @@ void GameCamera::Update(float deltaSeconds)
 
 void GameCamera::SetNextCameraMode()
 {
-	m_mode = CameraMode(((int)m_mode + 1) % (int)CameraMode::NUM_CAMERA_MODES);
-	if ((m_mode == CameraMode::FIRST_PERSON) || (m_mode == CameraMode::SPECTATOR)) {
+	m_mode = GameCameraMode(((int)m_mode + 1) % (int)GameCameraMode::NUM_CAMERA_MODES);
+	if ((m_mode == GameCameraMode::FIRST_PERSON) || (m_mode == GameCameraMode::SPECTATOR)) {
 		m_player->m_renderMesh = false;
 	}
 	else {
 		m_player->m_renderMesh = true;
 	}
 
-	if (m_mode == CameraMode::SPECTATOR) {
+	if (m_mode == GameCameraMode::SPECTATOR) {
 		m_position = m_player->m_position;
 		m_isPreventativeEnabled = false;
 		m_player->m_isPreventativeEnabled = false;
@@ -55,11 +55,11 @@ void GameCamera::SetNextCameraMode()
 	}
 }
 
-void GameCamera::SetCameraMode(CameraMode const& newCameraMode)
+void GameCamera::SetCameraMode(GameCameraMode const& newCameraMode)
 {
 	m_mode = newCameraMode;
 
-	if (m_mode == CameraMode::SPECTATOR) {
+	if (m_mode == GameCameraMode::SPECTATOR) {
 		m_position = m_player->m_position;
 		m_isPreventativeEnabled = false;
 		m_player->m_isPreventativeEnabled = false;
@@ -75,19 +75,19 @@ std::string GameCamera::GetCurrentCameraModeAsText() const
 {
 	switch (m_mode)
 	{
-	case CameraMode::SPECTATOR:
+	case GameCameraMode::SPECTATOR:
 		return "Spectator";
 		break;
-	case CameraMode::INDEPENDENT: // Camera does nothing here, just stays put
+	case GameCameraMode::INDEPENDENT: // Camera does nothing here, just stays put
 		return "Independent";
 		break;
-	case CameraMode::FIRST_PERSON:
+	case GameCameraMode::FIRST_PERSON:
 		return "First Person";
 		break;
-	case CameraMode::FIXED_ANGLE_TRACKING:
+	case GameCameraMode::FIXED_ANGLE_TRACKING:
 		return "Fixed Angle";
 		break;
-	case CameraMode::OVERSHOULDER:
+	case GameCameraMode::OVERSHOULDER:
 		return "Over Shoulder";
 		break;
 	}

@@ -109,7 +109,7 @@ private:
 
 	ConstantBuffer* m_gameCBO = nullptr;
 	bool m_disableWorldShader = g_gameConfigBlackboard.GetValue("DEBUG_DISABLE_WORLD_SHADER", false);
-	Shader* m_worldShader = nullptr;
+	Material* m_worldShader = nullptr;
 
 	float m_worldDay = 0.5f;
 

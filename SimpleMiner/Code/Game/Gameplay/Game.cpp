@@ -114,7 +114,7 @@ void Game::StartupPlay()
 	m_world = new World(this);
 
 	m_gameCamera = new GameCamera(this, player);
-	m_gameCamera->SetCameraMode(CameraMode::SPECTATOR);
+	m_gameCamera->SetCameraMode(GameCameraMode::SPECTATOR);
 
 	m_playerController = new PlayerController(this);
 	m_playerController->Possess(*m_gameCamera);
@@ -563,12 +563,12 @@ void Game::UpdateDeveloperCheatCodes(float deltaSeconds)
 		g_drawDebug = !g_drawDebug;
 	}
 	if (g_theInput->WasKeyJustPressed(KEYCODE_F2)) {
-		if (m_gameCamera->GetMode() == CameraMode::SPECTATOR) {
+		if (m_gameCamera->GetMode() == GameCameraMode::SPECTATOR) {
 			m_playerController->Unpossess();
 			m_playerController->Possess(*m_player);
 		}
 		m_gameCamera->SetNextCameraMode();
-		if (m_gameCamera->GetMode() == CameraMode::SPECTATOR) {
+		if (m_gameCamera->GetMode() == GameCameraMode::SPECTATOR) {
 			m_playerController->Unpossess();
 			m_playerController->Possess(*m_gameCamera);
 		}
@@ -906,7 +906,7 @@ void Game::Render() const
 
 void Game::RenderEntities() const
 {
-	g_theRenderer->BindShader(nullptr);
+	g_theRenderer->BindMaterial(nullptr);
 	for (int entityIndex = 0; entityIndex < m_allEntities.size(); entityIndex++) {
 		Entity* entity = m_allEntities[entityIndex];
 		if (entity) {
@@ -914,7 +914,7 @@ void Game::RenderEntities() const
 		}
 	}
 
-	if (m_gameCamera->GetMode() != CameraMode::FIRST_PERSON) {
+	if (m_gameCamera->GetMode() != GameCameraMode::FIRST_PERSON) {
 		std::vector<Vertex_PCU> velocityVerts;
 		velocityVerts.reserve(6);
 		AddVertsForLineSegment3D(velocityVerts, m_player->m_position, m_player->m_position + m_player->m_velocity, Rgba8::GREEN, 0.0025f);
@@ -931,7 +931,7 @@ void Game::RenderPlay() const
 
 	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 	g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
+	g_theRenderer->SetDepthStencilState(DepthFunc::LESSEQUAL, true);
 	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 	m_world->Render();
@@ -971,7 +971,7 @@ void Game::RenderAttractScreen() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	if (m_useTextAnimation) {

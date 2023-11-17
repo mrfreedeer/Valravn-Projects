@@ -8,8 +8,14 @@
     <Filter Include="Gameplay">
       <UniqueIdentifier>{c92b0697-1d39-4a49-9035-494bc34c39c8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders">
+    <Filter Include="Materials">
       <UniqueIdentifier>{d76e653c-8633-4c3d-bbe6-65d8f4e1d5c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Materials\Shaders">
+      <UniqueIdentifier>{63060b0b-56f6-46fd-a3f3-79e1cb5fe871}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Materials\Shaders\Individual Stages">
+      <UniqueIdentifier>{a4b66cb9-4394-4340-ae2d-7371fc09a628}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -104,16 +110,27 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
+    <Xml Include="..\..\Run\Data\Materials\World.xml">
+      <Filter>Materials</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\..\Run\Data\Shaders\Default.hlsl">
-      <Filter>Shaders</Filter>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Individual Stages\World_p.hlsl">
+      <Filter>Materials\Shaders\Individual Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\DefaultLit.hlsl">
-      <Filter>Shaders</Filter>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Individual Stages\World_v.hlsl">
+      <Filter>Materials\Shaders\Individual Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\World.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\Run\Data\Materials\Shaders\Default.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\World.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\DefaultLit.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

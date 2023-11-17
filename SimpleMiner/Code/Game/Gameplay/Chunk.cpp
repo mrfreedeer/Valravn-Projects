@@ -704,33 +704,48 @@ void Chunk::Update(float deltaSeconds)
 	UNUSED(deltaSeconds);
 
 	if (!m_chunkVBO || !m_chunkWaterVBO) {
-		m_chunkVBO = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PCU));
-		m_chunkWaterVBO = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PCU));
+		BufferDesc newVBODesc = {};
+		newVBODesc.data = nullptr;
+		newVBODesc.descriptorHeap = nullptr;
+		newVBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newVBODesc.owner = g_theRenderer;
+		newVBODesc.size = sizeof(Vertex_PCU);
+		newVBODesc.stride = sizeof(Vertex_PCU);
+
+		m_chunkVBO = new VertexBuffer(newVBODesc);
+		m_chunkWaterVBO = new VertexBuffer(newVBODesc);
 	}
 
 	if (!m_chunkIBO || !m_chunkWaterIBO) {
-		m_chunkIBO = new IndexBuffer(g_theRenderer->m_device, 1);
-		m_chunkWaterIBO = new IndexBuffer(g_theRenderer->m_device, 1);
+		BufferDesc newIBODesc = {};
+		newIBODesc.data = nullptr;
+		newIBODesc.descriptorHeap = nullptr;
+		newIBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newIBODesc.owner = g_theRenderer;
+		newIBODesc.size = sizeof(unsigned int);
+		newIBODesc.stride = sizeof(unsigned int);
+		m_chunkIBO = new IndexBuffer(newIBODesc);
+		m_chunkWaterIBO = new IndexBuffer(newIBODesc);
 	}
 
 }
 
 void Chunk::Render() const
 {
-	bool doesTerrainHaveVerts = m_chunkVBO->m_size > 1 && m_chunkIBO->m_size > 1;
+	bool doesTerrainHaveVerts = (m_chunkVBO->GetSize() > 1) && (m_chunkIBO->GetSize() > 1) && (m_blockIndexes.size() > 0);
 
 	if (doesTerrainHaveVerts) {
-		g_theRenderer->DrawIndexedVertexBuffer(m_chunkVBO, 0, m_chunkIBO, (int)m_blockIndexes.size(), 0);
+		g_theRenderer->DrawIndexedVertexBuffer(m_chunkVBO, m_chunkIBO, (int)m_blockIndexes.size());
 	}
 
 }
 
 void Chunk::RenderWater() const
 {
-	bool doesWaterHaveVerts = m_chunkWaterVBO->m_size > 1 && m_chunkWaterIBO->m_size > 1;
+	bool doesWaterHaveVerts = (m_chunkWaterVBO->GetSize() > 1) && (m_chunkWaterIBO->GetSize() > 1);
 
 	if (doesWaterHaveVerts) {
-		g_theRenderer->DrawIndexedVertexBuffer(m_chunkWaterVBO, 0, m_chunkWaterIBO, (int)m_blockIndexesWater.size(), 0);
+		g_theRenderer->DrawIndexedVertexBuffer(m_chunkWaterVBO, m_chunkWaterIBO, (int)m_blockIndexesWater.size());
 	}
 
 }
@@ -1088,20 +1103,49 @@ void Chunk::GenerateCPUMesh()
 	m_isDirty = false;
 
 	if (!m_chunkVBO || !m_chunkWaterVBO) {
-		m_chunkVBO = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PCU));
-		m_chunkWaterVBO = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PCU));
+		BufferDesc newVBODesc = {};
+		newVBODesc.data = nullptr;
+		newVBODesc.descriptorHeap = nullptr;
+		newVBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newVBODesc.owner = g_theRenderer;
+		newVBODesc.size = sizeof(Vertex_PCU);
+		newVBODesc.stride = sizeof(Vertex_PCU);
+
+		m_chunkVBO = new VertexBuffer(newVBODesc);
+		m_chunkWaterVBO = new VertexBuffer(newVBODesc);
 	}
 
 	if (!m_chunkIBO || !m_chunkWaterIBO) {
-		m_chunkIBO = new IndexBuffer(g_theRenderer->m_device, 1);
-		m_chunkWaterIBO = new IndexBuffer(g_theRenderer->m_device, 1);
+
+		BufferDesc newIBODesc = {};
+		newIBODesc.data = nullptr;
+		newIBODesc.descriptorHeap = nullptr;
+		newIBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newIBODesc.owner = g_theRenderer;
+		newIBODesc.size = sizeof(unsigned int);
+		newIBODesc.stride = sizeof(unsigned int);
+
+		m_chunkIBO = new IndexBuffer(newIBODesc);
+		m_chunkWaterIBO = new IndexBuffer(newIBODesc);
 	}
 
-	g_theRenderer->CopyCPUToGPU(m_blockVertexes.data(), m_chunkVBO->GetStride() * m_blockVertexes.size(), m_chunkVBO);
-	g_theRenderer->CopyCPUToGPU(m_blockIndexes.data(), m_chunkIBO->GetStride() * m_blockIndexes.size(), m_chunkIBO);
 
-	g_theRenderer->CopyCPUToGPU(m_blockVertexesWater.data(), m_chunkWaterVBO->GetStride() * m_blockVertexesWater.size(), m_chunkWaterVBO);
-	g_theRenderer->CopyCPUToGPU(m_blockIndexesWater.data(), m_chunkWaterIBO->GetStride() * m_blockIndexesWater.size(), m_chunkWaterIBO);
+	size_t chunkVBOSize = m_chunkVBO->GetStride() * m_blockVertexes.size();
+	size_t chunkIBOSize = m_chunkIBO->GetStride() * m_blockIndexes.size();
+	m_chunkVBO->GuaranteeBufferSize(chunkVBOSize);
+	m_chunkIBO->GuaranteeBufferSize(chunkIBOSize);
+
+	m_chunkVBO->CopyCPUToGPU(m_blockVertexes.data(), chunkVBOSize);
+	m_chunkIBO->CopyCPUToGPU(m_blockIndexes.data(), chunkIBOSize);
+
+
+	size_t chunkWaterVBOSize = m_chunkWaterVBO->GetStride() * m_blockVertexesWater.size();
+	size_t chunkWaterIBOSize = m_chunkWaterIBO->GetStride() * m_blockIndexesWater.size();
+	m_chunkWaterVBO->GuaranteeBufferSize(chunkWaterVBOSize);
+	m_chunkWaterIBO->GuaranteeBufferSize(chunkWaterIBOSize);
+
+	m_chunkWaterVBO->CopyCPUToGPU(m_blockVertexesWater.data(), chunkWaterVBOSize);
+	m_chunkWaterIBO->CopyCPUToGPU(m_blockIndexesWater.data(), chunkWaterIBOSize);
 
 	double endTime = GetCurrentTimeSeconds();
 

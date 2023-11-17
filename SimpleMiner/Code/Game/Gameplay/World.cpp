@@ -35,7 +35,14 @@ GameConstants g_gameConstants = {};
 World::World(Game* gamePointer) :
 	m_game(gamePointer)
 {
-	m_gameCBO = new ConstantBuffer(g_theRenderer->m_device, sizeof(GameConstants));
+	BufferDesc newCBODesc = {};
+	newCBODesc.data = nullptr;
+	newCBODesc.descriptorHeap = nullptr;
+	newCBODesc.memoryUsage = MemoryUsage::Dynamic;
+	newCBODesc.owner = g_theRenderer;
+	newCBODesc.size = sizeof(GameConstants);
+	newCBODesc.stride = sizeof(GameConstants);
+	m_gameCBO = new ConstantBuffer(newCBODesc);
 
 	Rgba8 defaultIndoorLightColor = g_gameConfigBlackboard.GetValue("DEFAULT_INDOOR_LIGHT_COLOR", Rgba8::WHITE);
 	Rgba8 defaultOutdoorLightColor = g_gameConfigBlackboard.GetValue("DEFAULT_OUTOOR_LIGHT_COLOR", Rgba8::WHITE);
@@ -56,7 +63,7 @@ World::World(Game* gamePointer) :
 		g_gameConstants.FogEndDistance = fogEndDistance;
 	}
 
-	m_worldShader = g_theRenderer->CreateOrGetShader("Data/Shaders/World");
+	m_worldShader = g_theRenderer->CreateOrGetMaterial("Data/Materials/World");
 
 	g_theJobSystem->ClearCompletedJobs();
 
@@ -126,8 +133,9 @@ void World::Update(float deltaSeconds)
 
 	g_gameConstants.Time = static_cast<float>(GetCurrentTimeSeconds());
 
-	g_theRenderer->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants), m_gameCBO);
-	g_theRenderer->BindConstantBuffer(4, m_gameCBO);
+	m_gameCBO->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants));
+	//g_theRenderer->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants), m_gameCBO);
+	g_theRenderer->BindConstantBuffer(m_gameCBO, 2);
 
 	m_vertexAmount = 0;
 	m_indexAmount = 0;
@@ -170,14 +178,14 @@ void World::Update(float deltaSeconds)
 void World::Render() const
 {
 	if (m_disableWorldShader) {
-		g_theRenderer->BindShader(nullptr);
+		g_theRenderer->BindMaterial(nullptr);
 	}
 	else {
-		g_theRenderer->BindShader(m_worldShader);
+		g_theRenderer->BindMaterial(m_worldShader);
 	}
 
 	g_theRenderer->SetModelMatrix(Mat44());
-	g_theRenderer->CopyAndBindModelConstants();
+	//g_theRenderer->CopyAndBindModelConstants();
 	g_theRenderer->BindTexture(g_textures[(int)GAME_TEXTURE::SimpleMinerSprites]);
 
 	for (std::map<IntVec2, Chunk*>::const_iterator chunkIt = m_activeChunks.begin(); chunkIt != m_activeChunks.end(); chunkIt++) {
@@ -245,7 +253,7 @@ void World::Render() const
 	}
 
 
-	g_theRenderer->BindShader(nullptr);
+	g_theRenderer->BindMaterial(nullptr);
 	g_theRenderer->BindTexture(nullptr);
 
 

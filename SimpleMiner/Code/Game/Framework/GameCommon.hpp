@@ -12,6 +12,7 @@
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RaycastUtils.hpp"
+#include "Engine/Math/EulerAngles.hpp"
 #include "Engine/Renderer/SimpleTriangleFont.hpp"
 #include "Engine/Renderer/BitmapFont.hpp"
 #include "Engine/Renderer/Renderer.hpp"

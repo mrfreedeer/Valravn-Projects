@@ -1,0 +1,14 @@
+<Material name="World">
+    <VertexShader headerSrc="Shaders/" shaderName="World_v" src="Data/Materials/Shaders/Individual Stages/World_v.hlsl" entryPoint="VertexMain"/>
+    <PixelShader  headerSrc="Shaders/" shaderName="World_p" src="Data/Materials/Shaders/Individual Stages/World_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Opaque"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="BackFace"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="LESSEQUAL" writeDepth="true"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>

@@ -1,7 +1,7 @@
 #pragma once
 #include "Game/Gameplay/Entity.hpp"
 
-enum class CameraMode {
+enum class GameCameraMode {
 	SPECTATOR,
 	INDEPENDENT,
 	FIRST_PERSON,
@@ -20,8 +20,8 @@ public:
 	void Jump() override {};
 
 	void SetNextCameraMode();
-	void SetCameraMode(CameraMode const& newCameraMode);
-	CameraMode GetMode() { return m_mode; }
+	void SetCameraMode(GameCameraMode const& newCameraMode);
+	GameCameraMode GetMode() { return m_mode; }
 	std::string GetCurrentCameraModeAsText() const;
 
 private:
@@ -31,6 +31,6 @@ private:
 	void UpdateOverShoulder();
 private:
 	Entity* m_player = nullptr;
-	CameraMode m_mode = CameraMode::FIRST_PERSON;
+	GameCameraMode m_mode = GameCameraMode::FIRST_PERSON;
 	float m_eyeHeight = g_gameConfigBlackboard.GetValue("CAMERA_HEIGHT", 1.6f);
 };
