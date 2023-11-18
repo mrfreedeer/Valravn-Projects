@@ -43,6 +43,14 @@ World::World(Game* gamePointer) :
 	newCBODesc.size = sizeof(GameConstants);
 	newCBODesc.stride = sizeof(GameConstants);
 	m_gameCBO = new ConstantBuffer(newCBODesc);
+	size_t test = sizeof(GameConstants);
+	DebuggerPrintf("%d", test);
+	test &= ~0xFF;
+	DebuggerPrintf("%d", test);
+	test += 256;
+	DebuggerPrintf("%d", test);
+
+	m_gameCBO->Initialize();
 
 	Rgba8 defaultIndoorLightColor = g_gameConfigBlackboard.GetValue("DEFAULT_INDOOR_LIGHT_COLOR", Rgba8::WHITE);
 	Rgba8 defaultOutdoorLightColor = g_gameConfigBlackboard.GetValue("DEFAULT_OUTOOR_LIGHT_COLOR", Rgba8::WHITE);
