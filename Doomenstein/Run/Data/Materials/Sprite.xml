@@ -1,0 +1,14 @@
+<Material name="Sprite">
+    <VertexShader headerSrc="Shaders/" shaderName="Sprite_v" src="Data/Materials/Shaders/Shader Stages/Sprite_v.hlsl" entryPoint="VertexMain"/>
+    <PixelShader  headerSrc="Shaders/" shaderName="Sprite_p" src="Data/Materials/Shaders/Shader Stages/Sprite_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Opaque"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="BackFace"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="ALWAYS" writeDepth="true"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>

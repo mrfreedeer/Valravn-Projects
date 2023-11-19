@@ -270,12 +270,7 @@ void Actor::Render2DSprite(Camera const& camera) const
 	g_theRenderer->SetModelMatrix(GetModelMatrix(camera));
 	SpriteAnimGroupDefinition const* currentAnimGroup = GetCurrentAnimationGroup();
 
-	if (m_definition->m_renderDepth) {
-		g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
-	}
-	else {
-		g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
-	}
+	
 
 	if(currentAnimGroup) {
 		Mat44 actorModelMat = m_orientation.GetMatrix_XFwd_YLeft_ZUp().GetOrthonormalInverse();
@@ -310,7 +305,8 @@ void Actor::Render2DSprite(Camera const& camera) const
 		animVertsLit.reserve(12);
 
 		SpriteAnimGroupDefinition const* spriteAnimGroup = m_definition->m_spriteAnimationGroups.at(0);
-		std::string shaderName = spriteAnimGroup->GetShaderName();
+		std::string shaderName = spriteAnimGroup->GetMatName();
+		g_theRenderer->BindMaterialByPath(shaderName.c_str());
 
 		Vec3 worldPivotPoint = m_position;
 		worldPivotPoint.y -= m_definition->m_appearanceSize.x * m_definition->m_pivot.x;
@@ -319,7 +315,6 @@ void Actor::Render2DSprite(Camera const& camera) const
 
 		//DebugAddWorldPoint(m_position, m_physicsRadius, 0.0f, Rgba8::YELLOW, Rgba8::YELLOW, DebugRenderMode::USEDEPTH);
 
-		g_theRenderer->BindShaderByName(shaderName.c_str());
 		//g_theRenderer->BindTexture(nullptr);
 		g_theRenderer->BindTexture(&currentAnimSprite->GetTexture());
 		if (m_definition->m_renderLit) {
@@ -336,6 +331,13 @@ void Actor::Render2DSprite(Camera const& camera) const
 			g_theRenderer->DrawVertexArray(animVerts);
 		}
 
+	}
+
+	if (m_definition->m_renderDepth) {
+		g_theRenderer->SetDepthStencilState(DepthFunc::LESSEQUAL, true);
+	}
+	else {
+		g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	}
 }
 
@@ -356,14 +358,14 @@ void Actor::Render3DModel(Camera const& camera) const
 	int animIndex = RoundDownToInt(timeWithinAnimationDuration * amountOfFrames);
 	if (animIndex == amountOfFrames) animIndex = 0;
 
-	IndexBuffer* currentIndexBuffer = currentModelAnim.m_indexBuffers[animIndex];
-	VertexBuffer* currentVertexBuffer = currentModelAnim.m_vertexBuffers[animIndex];
+	IndexBuffer* const& currentIndexBuffer = currentModelAnim.m_indexBuffers[animIndex];
+	VertexBuffer* const& currentVertexBuffer = currentModelAnim.m_vertexBuffers[animIndex];
 
-	g_theRenderer->BindShader(currentModelAnim.m_shader);
+	g_theRenderer->BindMaterial(currentModelAnim.m_material);
 	g_theRenderer->BindTexture(currentModelAnim.m_texture);
 	g_theRenderer->SetModelMatrix(modelMat);
-	g_theRenderer->CopyAndBindModelConstants();
-	g_theRenderer->DrawIndexedVertexBuffer(currentVertexBuffer, 0, currentIndexBuffer, currentModelAnim.m_amountOfIndexes[animIndex], 0, currentVertexBuffer->GetStride());
+	//g_theRenderer->CopyAndBindModelConstants();
+	g_theRenderer->DrawIndexedVertexBuffer(currentVertexBuffer, currentIndexBuffer, currentModelAnim.m_amountOfIndexes[animIndex]);
 
 }
 

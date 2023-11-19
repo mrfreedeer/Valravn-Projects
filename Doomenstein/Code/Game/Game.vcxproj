@@ -164,6 +164,13 @@
     <PostBuildEvent>
       <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
     </PostBuildEvent>
+    <FxCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)Run\Data\Materials\Shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </FxCompile>
+    <FxCompile>
+      <ShaderModel>6.5</ShaderModel>
+      <AdditionalOptions>-Qembed_debug</AdditionalOptions>
+    </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -190,6 +197,12 @@
     <PostBuildEvent>
       <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
     </PostBuildEvent>
+    <FxCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)Run\Data\Materials\Shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </FxCompile>
+    <FxCompile>
+      <ShaderModel>6.5</ShaderModel>
+    </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Framework\App.cpp" />
@@ -243,6 +256,8 @@
     <Xml Include="..\..\Run\Data\Definitions\TileSetDefinitions.xml" />
     <Xml Include="..\..\Run\Data\Definitions\WeaponDefinitions.xml" />
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
+    <Xml Include="..\..\Run\Data\Materials\Sprite.xml" />
+    <Xml Include="..\..\Run\Data\Materials\SpriteLit.xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
@@ -250,30 +265,36 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\..\Run\Data\Shaders\Default.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Shader Stages\SpriteLit_p.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\DefaultLit.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Shader Stages\SpriteLit_v.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\Sprite.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Shader Stages\Sprite_p.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\SpriteLit.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Shader Stages\Sprite_v.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
+    <None Include="..\..\Run\Data\Materials\Shaders\Sprite.hlsli">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\SpriteLit.hlsli">
+      <FileType>Document</FileType>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -150,7 +150,7 @@ protected:
 	std::vector<Vertex_PNCU> m_vertexes;
 	std::vector<unsigned int> m_indexes;
 	const Texture* m_texture = nullptr;
-	Shader* m_shader = nullptr;
+	Material* m_material = nullptr;
 	VertexBuffer* m_vertexBuffer = nullptr;
 	IndexBuffer* m_indexBuffer = nullptr;
 

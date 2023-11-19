@@ -1055,7 +1055,7 @@ void Game::RenderPlay() const
 
 			g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 			g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-			g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
+			g_theRenderer->SetDepthStencilState(DepthFunc::LESSEQUAL, true);
 			g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 			m_map->Render(worldCamera, playerIndex);
@@ -1072,7 +1072,7 @@ void Game::RenderAttractScreen() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	if (m_useTextAnimation) {
@@ -1097,7 +1097,7 @@ void Game::RenderLobby() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	AABB2 cameraBounds = m_UICamera.GetCameraBounds();
@@ -1158,7 +1158,7 @@ void Game::RenderGamemodeLobby() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	AABB2 cameraBounds = m_UICamera.GetCameraBounds();
@@ -1196,7 +1196,7 @@ void Game::RenderVictory() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	AABB2 cameraBounds = m_UICamera.GetCameraBounds();

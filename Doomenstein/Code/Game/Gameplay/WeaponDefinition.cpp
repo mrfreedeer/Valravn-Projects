@@ -21,12 +21,12 @@ bool WeaponDefinition::LoadFromXmlElement(XMLElement const& element)
 	m_projectileSpeed = ParseXmlAttribute(element, "projectileSpeed", 0.0f);
 
 	XMLElement const* hudElement = element.FirstChildElement("HUD");
-	std::string shaderName = ParseXmlAttribute(*hudElement, "shader", "Default");
+	std::string materialName = ParseXmlAttribute(*hudElement, "material", "Default");
 	std::string baseTexturePath = ParseXmlAttribute(*hudElement, "baseTexture", "");
 	std::string reticleTexturePath = ParseXmlAttribute(*hudElement, "reticleTexture", "");
 
 
-	m_shader = g_theRenderer->CreateOrGetShader(shaderName.c_str());
+	m_material = g_theRenderer->CreateOrGetMaterial(materialName.c_str());
 	m_hudBaseTexture = g_theRenderer->CreateOrGetTextureFromFile(baseTexturePath.c_str());
 	m_reticleTexture = g_theRenderer->CreateOrGetTextureFromFile(reticleTexturePath.c_str());
 	m_reticleSize = ParseXmlAttribute(*hudElement, "reticleSize", Vec2::ONE);
@@ -45,14 +45,14 @@ bool WeaponDefinition::LoadFromXmlElement(XMLElement const& element)
 		int endFrame = ParseXmlAttribute(*animationsElement, "endFrame", 0);
 		int durationFrames = abs(endFrame - startFrame) + 1;
 		float secondsPerFrame = ParseXmlAttribute(*animationsElement, "secondsPerFrame", 1.0f);
-		std::string animationShaderPath = ParseXmlAttribute(*animationsElement, "shader", "Default");
+		std::string animationMaterialPath = ParseXmlAttribute(*animationsElement, "material", "Default");
 
-		Shader* shader = g_theRenderer->CreateOrGetShader(animationShaderPath.c_str());
+		Material* material = g_theRenderer->CreateOrGetMaterial(animationMaterialPath.c_str());
 		if (animationName == "Idle") {
-			m_idleAnimationDefinition = new SpriteAnimDefinition(*m_spriteSheet, startFrame, endFrame, durationFrames * secondsPerFrame, SpriteAnimPlaybackType::ONCE, Vec3::ZERO, shader);
+			m_idleAnimationDefinition = new SpriteAnimDefinition(*m_spriteSheet, startFrame, endFrame, durationFrames * secondsPerFrame, SpriteAnimPlaybackType::ONCE, Vec3::ZERO, material);
 		}
 		else {
-			m_attackAnimationDefinition = new SpriteAnimDefinition(*m_spriteSheet, startFrame, endFrame, durationFrames * secondsPerFrame, SpriteAnimPlaybackType::ONCE, Vec3::ZERO, shader);
+			m_attackAnimationDefinition = new SpriteAnimDefinition(*m_spriteSheet, startFrame, endFrame, durationFrames * secondsPerFrame, SpriteAnimPlaybackType::ONCE, Vec3::ZERO, material);
 		}
 
 		animationsElement = animationsElement->NextSiblingElement();

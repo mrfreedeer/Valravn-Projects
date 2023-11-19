@@ -6,7 +6,7 @@
 #include <string>
 
 //------------------------------------------------------------------------------------------------
-class Shader;
+class Material;
 class Texture;
 
 //------------------------------------------------------------------------------------------------
@@ -19,7 +19,7 @@ public:
 	std::string m_name;
 	bool m_isVisible = true;
 	AABB2 m_uv = AABB2::ZERO_TO_ONE;
-	Shader* m_shader = nullptr;
+	Material* m_material = nullptr;
 	const Texture* m_texture = nullptr;
 
 	static void InitializeDefinitions();

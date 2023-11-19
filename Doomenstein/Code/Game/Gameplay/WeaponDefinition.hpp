@@ -27,7 +27,7 @@ public:
 	SpriteAnimDefinition* m_idleAnimationDefinition;
 	SpriteAnimDefinition* m_attackAnimationDefinition;
 
-	Shader* m_shader = nullptr;
+	Material* m_material = nullptr;
 	Texture* m_hudBaseTexture = nullptr;
 	SpriteSheet* m_spriteSheet = nullptr;
 	Vec2 m_spriteSize = Vec2(1.0f, 1.0f);

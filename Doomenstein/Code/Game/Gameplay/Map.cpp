@@ -240,7 +240,7 @@ void Map::UpdatePlayerCameras()
 
 void Map::Render(Camera const& camera, int playerIndex) const
 {
-	g_theRenderer->BindShader(m_shader);
+	g_theRenderer->BindMaterial(m_material);
 	g_theRenderer->BindTexture(m_texture);
 
 	g_theRenderer->SetModelMatrix(Mat44());
@@ -252,10 +252,9 @@ void Map::Render(Camera const& camera, int playerIndex) const
 	g_theRenderer->SetAmbientIntensity(m_ambientLightIntensities[playerIndex]);
 	g_theRenderer->SetDirectionalLightIntensity(m_directionalLightIntensities[playerIndex]);
 
-	g_theRenderer->CopyAndBindModelConstants();
-	g_theRenderer->CopyAndBindLightConstants();
+	g_theRenderer->BindLightConstants();
 
-	g_theRenderer->DrawIndexedVertexBuffer(m_vertexBuffer, 0, m_indexBuffer, (int)m_indexes.size(), 0, m_vertexBuffer->GetStride());
+	g_theRenderer->DrawIndexedVertexBuffer(m_vertexBuffer, m_indexBuffer, (int)m_indexes.size());
 
 	for (int actorIndex = 0; actorIndex < m_actors.size(); actorIndex++) {
 		Actor* actor = m_actors[actorIndex];
@@ -299,11 +298,27 @@ void Map::CreateGeometry()
 
 void Map::CreateBuffers()
 {
-	m_vertexBuffer = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PNCU));
-	m_indexBuffer = new IndexBuffer(g_theRenderer->m_device, 1);
+	BufferDesc vBufferDesc = {};
+	vBufferDesc.data = nullptr;
+	vBufferDesc.descriptorHeap = nullptr;
+	vBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	vBufferDesc.owner = g_theRenderer;
+	vBufferDesc.size = sizeof(Vertex_PNCU);
+	vBufferDesc.stride = sizeof(Vertex_PNCU);
 
-	g_theRenderer->CopyCPUToGPU(m_vertexes.data(), m_vertexes.size() * m_vertexBuffer->GetStride(), m_vertexBuffer);
-	g_theRenderer->CopyCPUToGPU(m_indexes.data(), m_indexes.size() * sizeof(unsigned int), m_indexBuffer);
+	BufferDesc iBufferDesc = {};
+	iBufferDesc.data = nullptr;
+	iBufferDesc.descriptorHeap = nullptr;
+	iBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	iBufferDesc.owner = g_theRenderer;
+	iBufferDesc.size = sizeof(unsigned int);
+	iBufferDesc.stride = sizeof(unsigned int);
+
+	m_vertexBuffer = new VertexBuffer(vBufferDesc);
+	m_indexBuffer = new IndexBuffer(iBufferDesc);
+
+	m_vertexBuffer->CopyCPUToGPU(m_vertexes.data(), m_vertexes.size() * m_vertexBuffer->GetStride());
+	m_indexBuffer->CopyCPUToGPU(m_indexes.data(), m_indexes.size() * sizeof(unsigned int));
 }
 
 void Map::RaycastVsMap(Vec3 const& start, Vec3 const& direction, float distance, Player* playerToExclude) const
@@ -603,8 +618,8 @@ void Map::AddVertsForTile(Tile const& tile, IntVec2 const& tileCoords)
 	TileMaterialDefinition const* tileFloorDef = tileDef->m_floorMaterialDefinition;
 	TileMaterialDefinition const* tileWallDef = tileDef->m_wallMaterialDefinition;
 
-	if ((!m_shader && !m_texture) && tileCeilingDef) {
-		m_shader = tileCeilingDef->m_shader;
+	if ((!m_material && !m_texture) && tileCeilingDef) {
+		m_material = tileCeilingDef->m_material;
 		m_texture = tileCeilingDef->m_texture;
 	}
 

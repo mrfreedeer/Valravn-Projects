@@ -5,8 +5,8 @@ std::vector<TileMaterialDefinition*> TileMaterialDefinition::s_definitions;
 bool TileMaterialDefinition::LoadFromXmlElement(const XMLElement& element)
 {
 	m_name = ParseXmlAttribute(element, "name", "None");
-	std::string shaderName = ParseXmlAttribute(element, "shader", "Default");
-	m_shader = g_theRenderer->CreateOrGetShader(shaderName.c_str());
+	std::string materialName = ParseXmlAttribute(element, "material", "Default3DMaterial");
+	m_material = g_theRenderer->CreateOrGetMaterial(materialName.c_str());
 	std::string textureName = ParseXmlAttribute(element, "texture", "None");
 	m_texture = (textureName == "None") ? nullptr : g_theRenderer->CreateOrGetTextureFromFile(textureName.c_str());
 

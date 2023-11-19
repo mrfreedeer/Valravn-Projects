@@ -143,7 +143,7 @@ bool ActorDefinition::LoadFromXmlElement(const XMLElement& element)
 			m_spriteAnimationGroups.push_back(newSpriteAnimGroup);
 
 			currentAnimationGroupDef = currentAnimationGroupDef->NextSiblingElement();
-			g_theRenderer->CreateOrGetShader(newSpriteAnimGroup->GetShaderName().c_str());
+			g_theRenderer->CreateOrGetMaterial(newSpriteAnimGroup->GetMatName().c_str());
 		}
 
 	}
@@ -180,11 +180,27 @@ bool ActorDefinition::LoadFromXmlElement(const XMLElement& element)
 				if (!textureName.empty()) {
 					texture = g_theRenderer->CreateOrGetTextureFromFile(textureName.c_str());
 				}
-				std::string shaderName = ParseXmlAttribute(*animationModelElement, "shader", "");
-				Shader* shader = nullptr;
-				if (!shaderName.empty()) {
-					shader = g_theRenderer->CreateOrGetShader(shaderName.c_str());
+				std::string materialName = ParseXmlAttribute(*animationModelElement, "material", "");
+				Material* material = nullptr;
+				if (!materialName.empty()) {
+					material = g_theRenderer->CreateOrGetMaterial(materialName.c_str());
 				}
+
+				BufferDesc vBufferDesc = {};
+				vBufferDesc.data = nullptr;
+				vBufferDesc.descriptorHeap = nullptr;
+				vBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+				vBufferDesc.owner = g_theRenderer;
+				vBufferDesc.size = sizeof(Vertex_PNCU);
+				vBufferDesc.stride = sizeof(Vertex_PNCU);
+
+				BufferDesc iBufferDesc = {};
+				iBufferDesc.data = nullptr;
+				iBufferDesc.descriptorHeap = nullptr;
+				iBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+				iBufferDesc.owner = g_theRenderer;
+				iBufferDesc.size = sizeof(unsigned int);
+				iBufferDesc.stride = sizeof(unsigned int);
 
 				while (modelFile) {
 					std::string modelPath = ParseXmlAttribute(*modelFile, "path", "Unknown path");
@@ -192,11 +208,13 @@ bool ActorDefinition::LoadFromXmlElement(const XMLElement& element)
 					std::vector<unsigned int> indexes;
 
 					LoadMeshFromPlyFile(modelPath, Rgba8::WHITE, verts, indexes);
-					VertexBuffer* newVertexBuffer = new VertexBuffer(g_theRenderer->m_device, 1, sizeof(Vertex_PNCU));
-					IndexBuffer* newIndexBuffer = new IndexBuffer(g_theRenderer->m_device, 1);
+					
 
-					g_theRenderer->CopyCPUToGPU(verts.data(), verts.size() * newVertexBuffer->GetStride(), newVertexBuffer);
-					g_theRenderer->CopyCPUToGPU(indexes.data(), indexes.size() * sizeof(unsigned int), newIndexBuffer);
+					VertexBuffer* newVertexBuffer = new VertexBuffer(vBufferDesc);
+					IndexBuffer* newIndexBuffer = new IndexBuffer(iBufferDesc);
+
+					newVertexBuffer->CopyCPUToGPU(verts.data(), verts.size() * newVertexBuffer->GetStride());
+					newIndexBuffer->CopyCPUToGPU(indexes.data(), indexes.size() * sizeof(unsigned int));
 
 					vertexBuffers.push_back(newVertexBuffer);
 					indexBuffers.push_back(newIndexBuffer);
@@ -214,7 +232,7 @@ bool ActorDefinition::LoadFromXmlElement(const XMLElement& element)
 					secondsPerFrame,
 					scaleBySpeed,
 					texture,
-					shader
+					material
 				};
 				m_modelAnimationByAction[name] = newModelAnim;
 

@@ -4,6 +4,7 @@
 #include "Engine/Renderer/SpriteAnimDefinition.hpp"
 #include "Game/Gameplay/Actor.hpp"
 #include <string>
+#include <map>
 
 class WeaponDefinition;
 class VertexBuffer;
@@ -23,7 +24,7 @@ struct ModelAnimation {
 	float m_secondsPerFrame = 0.0f;
 	bool m_scaledBySpeed = false;
 	Texture* m_texture = nullptr;
-	Shader* m_shader = nullptr;
+	Material* m_material = nullptr;
 };
 
 //------------------------------------------------------------------------------------------------
