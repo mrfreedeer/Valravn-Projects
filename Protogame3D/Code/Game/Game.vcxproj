@@ -407,8 +407,11 @@
     <ClCompile Include="Framework\App.cpp" />
     <ClCompile Include="Framework\GameCommon.cpp" />
     <ClCompile Include="Framework\Main_Windows.cpp" />
+    <ClCompile Include="Gameplay\AttractScreenMode.cpp" />
+    <ClCompile Include="Gameplay\Basic3DMode.cpp" />
     <ClCompile Include="Gameplay\Entity.cpp" />
     <ClCompile Include="Gameplay\Game.cpp" />
+    <ClCompile Include="Gameplay\GameMode.cpp" />
     <ClCompile Include="Gameplay\Player.cpp" />
     <ClCompile Include="Gameplay\Prop.cpp" />
   </ItemGroup>
@@ -416,8 +419,11 @@
     <ClInclude Include="EngineBuildPreferences.hpp" />
     <ClInclude Include="Framework\App.hpp" />
     <ClInclude Include="Framework\GameCommon.hpp" />
+    <ClInclude Include="Gameplay\AttractScreenMode.hpp" />
+    <ClInclude Include="Gameplay\Basic3DMode.hpp" />
     <ClInclude Include="Gameplay\Entity.hpp" />
     <ClInclude Include="Gameplay\Game.hpp" />
+    <ClInclude Include="Gameplay\GameMode.hpp" />
     <ClInclude Include="Gameplay\Player.hpp" />
     <ClInclude Include="Gameplay\Prop.hpp" />
   </ItemGroup>
