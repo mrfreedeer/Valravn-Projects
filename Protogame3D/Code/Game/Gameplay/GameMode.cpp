@@ -25,6 +25,7 @@ void GameMode::Startup()
 
 void GameMode::Update(float deltaSeconds)
 {
+	UNUSED(deltaSeconds);
 	CheckIfWindowHasFocus();
 }
 

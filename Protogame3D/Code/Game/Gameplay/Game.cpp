@@ -48,11 +48,13 @@ Game::~Game()
 
 bool Game::SuperTest(EventArgs& testArgs)
 {
+	UNUSED(testArgs);
 	return true;
 }
 
 bool Game::AnotherSuperTest(EventArgs& testArgs)
 {
+	UNUSED(testArgs);
 	g_theConsole->ExecuteXmlCommandScriptFile("Data/XMLScriptTest.xml");
 
 	return true;
