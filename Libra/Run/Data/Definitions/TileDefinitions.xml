@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<TileDefinitions>
+	<TileDefinition  name="SHORT_GRASS"				spriteCoords="2,0" isSolid ="false" />
+	<TileDefinition  name="DRY_GRASS"				spriteCoords="1,1" isSolid ="false" />
+	<TileDefinition  name="GRASS"					spriteCoords="2,1" isSolid ="false" mapImageColor="14,209,69,255"  />
+	<TileDefinition  name="STONE"					spriteCoords="7,6" isSolid ="true"	mapImageColor="195,195,195,255" />
+	<TileDefinition  name="CHAIN_METAL"				spriteCoords="5,6" isSolid ="true" />
+	<TileDefinition  name="EXIT"					spriteCoords="0,7" isSolid ="false" />
+	<TileDefinition  name="BRICK"					spriteCoords="0,5" isSolid ="true" />
+	<TileDefinition  name="SOLID_LAVA"				spriteCoords="6,7" isSolid ="false" />
+	<TileDefinition  name="MOLTEN_LAVA"				spriteCoords="7,7" isSolid ="false" />
+	<TileDefinition  name="SAND"					spriteCoords="7,2" isSolid ="false" />
+	<TileDefinition  name="GOLDEN_BRICKS"			spriteCoords="2,7" isSolid ="true" />
+	<TileDefinition  name="BACKGROUND_STONE_BRICK"	spriteCoords="7,3" isSolid ="false" tint="128, 128, 128"/>
+	<TileDefinition  name="IRREGULAR_STONE_BRICK"	spriteCoords="2,3" isSolid ="false" tint="128, 128, 128"/>
+	<TileDefinition  name="IRREGULAR_STONE_BRICK_2"	spriteCoords="3,3" isSolid ="false" tint="128, 128, 128"/>
+	<TileDefinition  name="CRACKED_STONE_BRICK"		spriteCoords="6,4" isSolid ="true" isDestructible="true" turnsInto="GRASS" health="10"/>
+	<TileDefinition  name="STONE_BRICK"				spriteCoords="5,4" isSolid ="true" isDestructible="true" turnsInto="CRACKED_STONE_BRICK" health="10" />
+	<TileDefinition  name="MOSSY_STONE_BRICK"		spriteCoords="5,5" isSolid ="true" isDestructible="true" turnsInto="STONE_BRICK" health="10" />
+	<TileDefinition  name="WATER"					spriteCoords="5,7" isSolid ="false" isWater ="true"/>
+</TileDefinitions>
