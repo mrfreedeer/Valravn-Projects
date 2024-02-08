@@ -1,0 +1,19 @@
+﻿  Ant.cpp
+D:\Github\GuildhallProjects\AntAI\Code\Ant.cpp(302,6): warning C4189: 'closeDistance': local variable is initialized but not referenced
+D:\Github\GuildhallProjects\AntAI\Code\Ant.cpp(456,6): warning C4189: 'guardsPerWorker': local variable is initialized but not referenced
+  ArenaPlayerImpl.cpp
+  Colony.cpp
+  ColonyJob.cpp
+  Common.cpp
+  Main.cpp
+  ThreadSafeStructures.cpp
+  Tile.cpp
+     Creating library D:\Github\GuildhallProjects\AntAI\x64\Release\C31_Ospina_Juan.lib and object D:\Github\GuildhallProjects\AntAI\x64\Release\C31_Ospina_Juan.exp
+  Generating code
+  997 of 1008 functions (98.9%) were compiled, the rest were copied from previous compilation.
+    34 functions were new in current compilation
+    1 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  AntAI.vcxproj -> D:\Github\GuildhallProjects\AntAI\x64\Release\C31_Ospina_Juan.dll
+  D:\Github\GuildhallProjects\AntAI\x64\Release\C31_Ospina_Juan.dll -> D:\Github\GuildhallProjects\Ants\Arena\Run_Windows\Players\C31_Ospina_Juan.dll
+  1 File(s) copied
