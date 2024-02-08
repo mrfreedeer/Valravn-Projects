@@ -1,0 +1,14 @@
+<Material name="SpriteLit">
+    <VertexShader headerSrc="Shaders/" shaderName="SpriteLit_v" src="Data/Materials/Shaders/Shader Stages/SpriteLit_v.hlsl" entryPoint="VertexMain"/>
+    <PixelShader  headerSrc="Shaders/" shaderName="SpriteLit_p" src="Data/Materials/Shaders/Shader Stages/SpriteLit_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Alpha"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="BackFace"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="LESSEQUAL" writeDepth="true"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>

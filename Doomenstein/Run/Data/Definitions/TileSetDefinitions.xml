@@ -1,0 +1,10 @@
+<Definitions>
+  <TileSetDefinition name="Default" defaultTile="Air">
+    <TileMapping color="0,0,0" tile="StoneFloor" />
+    <TileMapping color="48,48,48" tile="WoodFloor" />
+    <TileMapping color="255,255,255" tile="BrickWall" />
+    <TileMapping color="143,136,82" tile="WoodWall" />
+    <TileMapping color="0,128,0" tile="OpenGrass" />
+    <TileMapping color="127,51,0" tile="OpenDirt" />
+  </TileSetDefinition>
+</Definitions>

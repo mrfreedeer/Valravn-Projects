@@ -1,0 +1,45 @@
+<Definitions>
+	<MapDefinition name="TestMap" image="Data/Maps/TestMap.png" tileSet="Default">
+		<SpawnInfos>
+			<SpawnInfo actor="SpawnPoint" position="30.5,15.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="SpawnPoint" position="27.0,15.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="SpawnPoint" position="25.5,15.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="30.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="29.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="28.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="27.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="26.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Demon" position="25.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="Spider" position="25.5,10.5,0.0" orientation="270.0,0.0,0.0" />
+		</SpawnInfos>
+	</MapDefinition>
+	<MapDefinition name="HordeMap" image="Data/Maps/HordeMap.png" tileSet="Default" isHordeMode ="true">
+		<SpawnInfos>
+			<SpawnInfo actor="SpawnPoint" position="48.5,48.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="SpawnPoint" position="49.5,48.5,0.0" orientation="270.0,0.0,0.0" />
+			<SpawnInfo actor="SpiderSpawnPoint" position="89.5,56.5,0.0" orientation="180.0,0.0,0.0" />
+			<!--<SpawnInfo actor="SpiderSpawnPoint" position="89.5,53.5,0.0" orientation="180.0,0.0,0.0" />-->
+			<SpawnInfo actor="SpiderSpawnPoint" position="89.5,49.5,0.0" orientation="180.0,0.0,0.0" />
+			<!--<SpawnInfo actor="SpiderSpawnPoint" position="89.5,45.5,0.0" orientation="180.0,0.0,0.0" />-->
+			
+			<SpawnInfo actor="DemonSpawnPoint" position="53.5,10.5,0.0" orientation="90.0,0.0,0.0" />
+			<!--<SpawnInfo actor="DemonSpawnPoint" position="49.5,10.5,0.0" orientation="90.0,0.0,0.0" />-->
+			<!--<SpawnInfo actor="DemonSpawnPoint" position="46.5,10.5,0.0" orientation="90.0,0.0,0.0" />-->
+			<SpawnInfo actor="DemonSpawnPoint" position="43.5,10.5,0.0" orientation="90.0,0.0,0.0" />
+			
+			<SpawnInfo actor="DemonSpawnPoint" position="10.5,45.5,0.0" orientation="0.0,0.0,0.0" />
+			<SpawnInfo actor="DemonSpawnPoint" position="10.5,49.5,0.0" orientation="0.0,0.0,0.0" />
+			<SpawnInfo actor="SpiderSpawnPoint" position="10.5,51.5,0.0" orientation="0.0,0.0,0.0" />
+			<SpawnInfo actor="SpiderSpawnPoint" position="10.5,54.5,0.0" orientation="0.0,0.0,0.0" />
+		</SpawnInfos>
+		<Horde>
+			<Wave amountOfEnemies ="1" timeBeforeNextWave="10.0"/>
+			<Wave amountOfEnemies ="10" timeBeforeNextWave="60.0"/>
+			<Wave amountOfEnemies ="10" timeBeforeNextWave="60.0"/>
+			<Wave amountOfEnemies ="10" timeBeforeNextWave="60.0"/>
+			<Wave amountOfEnemies ="10" timeBeforeNextWave="60.0"/>
+		</Horde>
+	</MapDefinition>
+</Definitions>
+
+

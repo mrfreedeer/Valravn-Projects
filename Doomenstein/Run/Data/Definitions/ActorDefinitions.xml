@@ -1,0 +1,156 @@
+<Definitions>
+  <!-- SpawnPoint -->
+  <ActorDefinition name="SpawnPoint" visible="false"/>
+  <ActorDefinition name="DemonSpawnPoint" visible="false" spawns ="Demon" spawnTimer ="2.0~10.0"/>
+  <ActorDefinition name="SpiderSpawnPoint" visible="false" spawns ="Spider" spawnTimer ="2.0~10.0"/>
+  <!-- Marine -->
+  <ActorDefinition name="Marine" faction="Marine" health="100" canBePossessed="true" corpseLifetime="2.0">
+    <Collision radius="0.25" height="0.6" collidesWithWorld="true" collidesWithActors="true"/>
+    <Physics simulated="true" walkSpeed="1.5" runSpeed="6.0" turnSpeed="180.0" drag="9.0"/>
+    <Camera eyeHeight="0.5" cameraFOV="60.0"/>
+    <Appearance size="1.6,1.6" pivot="0.5,0.0" billboardType="Facing" renderDepth="true" renderLit="true" renderRoundedNormals="true">
+      <AnimationGroup name="Walk" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Marine_7x9.png" cellCount="7,9" secondsPerFrame="0.25" playbackMode="Loop" scaleBySpeed="true">
+        <Direction vector="-1,0,0"><Animation startFrame="0" endFrame="3"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="7" endFrame="10"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="14" endFrame="17"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="21" endFrame="24"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="28" endFrame="31"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="35" endFrame="38"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="42" endFrame="45"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="49" endFrame="52"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Attack" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Marine_7x9.png" cellCount="7,9" secondsPerFrame="0.1" playbackMode="Once">
+        <Direction vector="-1,0,0"><Animation startFrame="4" endFrame="5"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="11" endFrame="12"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="18" endFrame="19"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="25" endFrame="26"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="32" endFrame="33"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="39" endFrame="40"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="46" endFrame="47"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="53" endFrame="54"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Pain" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Marine_7x9.png" cellCount="7,9" secondsPerFrame="0.75" playbackMode="Once">
+        <Direction vector="-1,0,0"><Animation startFrame="6" endFrame="6"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="13" endFrame="1135"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="20" endFrame="20"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="27" endFrame="27"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="34" endFrame="34"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="41" endFrame="41"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="48" endFrame="48"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="55" endFrame="55"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Death" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Marine_7x9.png" cellCount="7,9" secondsPerFrame="0.25" playbackMode="Once">
+        <Direction vector="1,0,0"><Animation startFrame="56" endFrame="62"/></Direction>
+      </AnimationGroup>
+    </Appearance>
+    <Sounds>
+      <Sound sound="Pain" name="Data/Audio/PlayerHurt.wav"/>
+      <Sound sound="Death" name="Data/Audio/PlayerDeath1.wav"/>
+    </Sounds>
+    <Inventory>
+      <Weapon name="Pistol" />
+      <Weapon name="PlasmaRifle" />
+      <Weapon name="GravityRifle" />
+    </Inventory>
+  </ActorDefinition>
+  <!-- Demon -->
+  <ActorDefinition name="Demon" faction="Demon" health="160" canBePossessed="true" corpseLifetime="2.0">
+    <Collision radius="0.35" height="0.85" collidesWithWorld="true" collidesWithActors="true"/>
+    <Physics simulated="true" walkSpeed="2.0" runSpeed="5.0" turnSpeed="180.0" drag="9.0"/>
+    <Camera eyeHeight="0.75" cameraFOV="120.0"/>
+    <AI aiEnabled="true" sightRadius="64.0" sightAngle="120.0" meleeDamage="4.0~8.0" meleeDelay="1.0" meleeRange="0.5"/>
+    <Appearance size="2.1,2.1" pivot="0.5,0.0" billboardType="Facing" renderDepth="true" renderLit="true" renderRoundedNormals="true">
+      <AnimationGroup name="Walk" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Pinky_8x9.png" cellCount="8,9" secondsPerFrame="0.25" playbackMode="Loop" scaleBySpeed="true">
+        <Direction vector="-1,0,0"><Animation startFrame="0" endFrame="3"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="8" endFrame="11"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="16" endFrame="19"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="24" endFrame="27"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="32" endFrame="35"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="40" endFrame="43"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="48" endFrame="51"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="56" endFrame="59"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Attack" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Pinky_8x9.png" cellCount="8,9" secondsPerFrame="0.25" playbackMode="Once">
+        <Direction vector="-1,0,0"><Animation startFrame="4" endFrame="6"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="12" endFrame="14"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="20" endFrame="22"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="28" endFrame="30"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="36" endFrame="38"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="44" endFrame="46"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="52" endFrame="54"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="60" endFrame="62"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Pain" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Pinky_8x9.png" cellCount="8,9" secondsPerFrame="0.75" playbackMode="Once">
+        <Direction vector="-1,0,0"><Animation startFrame="7" endFrame="7"/></Direction>
+        <Direction vector="-1,-1,0"><Animation startFrame="15" endFrame="15"/></Direction>
+        <Direction vector="0,-1,0"><Animation startFrame="23" endFrame="23"/></Direction>
+        <Direction vector="1,-1,0"><Animation startFrame="31" endFrame="31"/></Direction>
+        <Direction vector="1,0,0"><Animation startFrame="39" endFrame="39"/></Direction>
+        <Direction vector="1,1,0"><Animation startFrame="47" endFrame="47"/></Direction>
+        <Direction vector="0,1,0"><Animation startFrame="55" endFrame="55"/></Direction>
+        <Direction vector="-1,1,0"><Animation startFrame="63" endFrame="63"/></Direction>
+      </AnimationGroup>
+      <AnimationGroup name="Death" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Actor_Pinky_8x9.png" cellCount="8,9" secondsPerFrame="0.25" playbackMode="Once">
+        <Direction vector="1,0,0"><Animation startFrame="64" endFrame="69"/></Direction>
+      </AnimationGroup>
+    </Appearance>
+    <Sounds>
+      <Sound sound="Attack" name="Data/Audio/DemonAttack.wav"/>
+      <Sound sound="Pain" name="Data/Audio/DemonHurt.wav"/>
+      <Sound sound="Death" name="Data/Audio/DemonDeath.wav"/>
+    </Sounds>
+  </ActorDefinition>
+  <!-- BulletHit -->
+  <ActorDefinition name="BulletHit" canBePossessed="false" dieOnSpawn="true" corpseLifetime="0.4">
+    <Appearance size="0.2,0.2" pivot="0.5,0.5" billboardType="Facing" renderDepth="true" renderLit="true" renderRounded="false">
+      <AnimationGroup name="Death" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Projectile_PistolHit.png" cellCount="4,1" secondsPerFrame="0.1" playbackMode="Once">
+        <Direction vector="1,0,0"><Animation startFrame="0" endFrame="3"/></Direction>
+      </AnimationGroup>
+    </Appearance>
+  </ActorDefinition>
+  <!-- BloodHit -->
+  <ActorDefinition name="BloodSplatter" canBePossessed="false" dieOnSpawn="true" corpseLifetime="0.3">
+    <Appearance size="0.45,0.45" pivot="0.5,0.5" billboardType="Facing" renderDepth="true" renderLit="true" renderRounded="false">
+      <AnimationGroup name="Death" material="Data/Materials/SpriteLit" spriteSheet="Data/Images/Projectile_BloodSplatter.png" cellCount="3,1" secondsPerFrame="0.1" playbackMode="Once">
+        <Direction vector="1,0,0"><Animation startFrame="0" endFrame="2"/></Direction>
+      </AnimationGroup>
+    </Appearance>
+  </ActorDefinition>
+	<ActorDefinition name="Spider" faction="Demon" health="160" canBePossessed="true" corpseLifetime="2.0" is3DModel ="true">
+		<Collision radius="0.45" height="0.85" collidesWithWorld="true" collidesWithActors="true"/>
+		<Physics simulated="true" walkSpeed="2.0" runSpeed="5.0" turnSpeed="180.0" drag="9.0"/>
+		<Camera eyeHeight="0.55" cameraFOV="120.0"/>
+		<AI aiEnabled="true" hasPathing="true" sightRadius="90.0" sightAngle="120.0" meleeDamage="4.0~8.0" meleeDelay="1.0" meleeRange="0.5"/>
+		<Sounds>
+			<Sound sound="Attack" name="Data/Audio/SpiderAttack.wav"/>
+			<Sound sound="Pain" name="Data/Audio/SpiderHurt.wav"/>
+			<Sound sound="Death" name="Data/Audio/SpiderDeath.wav"/>
+			<Sound sound="Walk" name="Data/Audio/SpiderWalk.wav"/>
+		</Sounds>
+		<Models>
+			<AnimationModel name="Walk" secondsPerModel="0.0125" material="Data/Materials/SpriteLit" scaleBySpeed="true" texture="Data/Images/infectedTexture.jpg">
+				<Model path="Data/Models/FinalSpiderWalk00.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk01.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk02.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk03.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk04.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk05.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk06.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk07.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk08.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk09.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk10.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk11.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk12.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk13.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk14.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk15.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk16.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk17.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk18.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk19.ply"/>
+				<Model path="Data/Models/FinalSpiderWalk20.ply"/>
+			</AnimationModel>
+		</Models>
+	</ActorDefinition>
+</Definitions>

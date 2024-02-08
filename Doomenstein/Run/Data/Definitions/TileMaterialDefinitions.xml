@@ -1,0 +1,12 @@
+<Definitions>
+  <TileMaterialDefinition name="None" isVisible="false" />
+  <TileMaterialDefinition name="Stone" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="3,6" />
+  <TileMaterialDefinition name="Brick" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="0,5" />
+  <TileMaterialDefinition name="Grass" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="2,1" />
+  <TileMaterialDefinition name="Dirt" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="5,2" />
+  <TileMaterialDefinition name="CaveStone" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="4,3" />
+  <TileMaterialDefinition name="WoodWall" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="1,6" />
+  <TileMaterialDefinition name="WoodTile" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="2,6" />
+  <TileMaterialDefinition name="WoodFloor" material="DefaultDiffuse3D" texture="Data/Images/Terrain_8x8.png" cellCount="8,8" cell="0,6" />
+</Definitions>
+        
