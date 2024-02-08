@@ -1,0 +1,203 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Framework">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Gameplay">
+      <UniqueIdentifier>{c92b0697-1d39-4a49-9035-494bc34c39c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="2DShapes">
+      <UniqueIdentifier>{bc360af3-4bcb-4f59-8c25-7dbf5cb87abe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3DShapes">
+      <UniqueIdentifier>{c166991e-6d54-4059-afeb-7454deb43f08}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Framework\App.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Framework\GameCommon.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Framework\Main_Windows.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\Game.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\GameMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\AttractGameMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\NearestPointGameMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\RaycastVsDiscsGameMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\3DShapesMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\Entity.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\Player.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\BilliardsMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\RaycastVsBoxes2DMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\RaycastVsOBB2Mode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\RaycastVsLineSegments2DMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\PachinkoMachineMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\SplinesMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\AABB2Shape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\AABB3Shape3D.cpp">
+      <Filter>3DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\CapsuleShape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\CylinderShape3D.cpp">
+      <Filter>3DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\DiscShape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\OBB2Shape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\Shape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\Shape3D.cpp">
+      <Filter>3DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\SphereShape3D.cpp">
+      <Filter>3DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\ConvexPolyShape2D.cpp">
+      <Filter>2DShapes</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\RaycastVsConvexPoly2DMode.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\AABB2Tree.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Gameplay\ConvexSceneUtils.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Framework\App.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Framework\GameCommon.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="EngineBuildPreferences.hpp" />
+    <ClInclude Include="Gameplay\Game.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\GameMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\AttractGameMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\NearestPointGameMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\RaycastVsDiscsGameMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\3DShapesMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\Entity.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\Player.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\BilliardsMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\RaycastVsBoxes2DMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\RaycastVsOBB2Mode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\RaycastVsLineSegments2DMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\PachinkoMachineMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\SplinesMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\AABB2Shape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\AABB3Shape3D.hpp">
+      <Filter>3DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\CapsuleShape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\CylinderShape3D.hpp">
+      <Filter>3DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\DiscShape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\OBB2Shape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\Shape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\Shape3D.hpp">
+      <Filter>3DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\SphereShape3D.hpp">
+      <Filter>3DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\ConvexPolyShape2D.hpp">
+      <Filter>2DShapes</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\RaycastVsConvexPoly2DMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\AABB2Tree.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\ConvexSceneUtils.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="..\..\Run\Data\GameConfig.xml" />
+  </ItemGroup>
+</Project>
