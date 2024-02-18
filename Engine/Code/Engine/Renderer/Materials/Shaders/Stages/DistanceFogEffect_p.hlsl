@@ -1,0 +1,1 @@
+#include "../DistanceFogEffect.hlsli"

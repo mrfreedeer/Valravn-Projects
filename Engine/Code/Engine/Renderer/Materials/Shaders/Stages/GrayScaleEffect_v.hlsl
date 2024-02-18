@@ -1,0 +1,1 @@
+#include "../GrayScaleEffect.hlsli"

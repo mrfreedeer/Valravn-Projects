@@ -1,0 +1,14 @@
+<Material name="DefaultDiffuse3D">
+    <VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="DefaultDiffuse_v" src="Shaders/Stages/DefaultDiffuse_v.hlsl" entryPoint="VertexMain"/>
+    <PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="DefaultDiffuse_p" src="Shaders/Stages/DefaultDiffuse_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Opaque"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="BackFace"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="LESSEQUAL" writeDepth="true"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>

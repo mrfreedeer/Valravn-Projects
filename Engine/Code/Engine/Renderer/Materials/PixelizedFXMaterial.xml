@@ -1,0 +1,14 @@
+<Material name="PixelizedFX">
+    <VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="PixelizedEffect_v" src="Shaders/Stages/PixelizedEffect_v.hlsl" entryPoint="VertexMain"/>
+	<PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="PixelizedEffect_p" src="Shaders/Stages/PixelizedEffect_p.hlsl" entryPoint="PixelMain"/>
+	<DepthStencil depthFunction="ALWAYS" writeDepth="false"/>
+	<BlendMode value="Opaque"/>
+	<!-- CCW - CounterClockwise
+    CW - ClockWise -->
+	<WindingOrder value="CCW"/>
+	<CullMode value="None"/>
+	<FillMode value="Solid"/>
+	<Topology value="TriangleList"/>
+	<Antialiasing value="8"/>
+	<Metadata src="material.mtl"/>
+</Material>

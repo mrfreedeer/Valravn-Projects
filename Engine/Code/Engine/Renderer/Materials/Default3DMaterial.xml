@@ -1,0 +1,14 @@
+<Material name="Default3DMaterial">
+    <VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="Default_v" src="Shaders/Stages/Default_v.hlsl" entryPoint="VertexMain"/>
+    <PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="Default_p" src="Shaders/Stages/Default_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Opaque"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="BackFace"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="LESSEQUAL" writeDepth="true"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>
