@@ -1116,7 +1116,6 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       </PreprocessorDefinitions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">-Qembed_debug %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
-    <None Include="packages.config" />
     <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli" />
     <None Include="Renderer\Materials\Shaders\Common\Math.hlsli" />
     <None Include="Renderer\Materials\Shaders\Default.hlsli" />
@@ -1145,7 +1144,6 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\..\..\Protogame3D\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\Protogame3D\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />
     <Import Project="..\..\..\Protogame3D\packages\Microsoft.Direct3D.D3D12.1.611.1\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\Protogame3D\packages\Microsoft.Direct3D.D3D12.1.611.1\build\native\Microsoft.Direct3D.D3D12.targets')" />
     <Import Project="..\..\..\SimpleMiner\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\SimpleMiner\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />
     <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />

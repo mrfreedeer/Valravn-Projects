@@ -1249,7 +1249,7 @@ void Game::RenderDelaunay2D() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 
@@ -1329,12 +1329,12 @@ void Game::RenderDelaunay3D() const
 
 	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 	g_theRenderer->SetRasterizerState(CullMode::BACK, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::LESSEQUAL, true);
+	g_theRenderer->SetDepthStencilState(DepthFunc::LESSEQUAL, true);
 	g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 
 	//RenderEntities();
 
-	g_theRenderer->BindShader(nullptr);
+	g_theRenderer->BindMaterial(nullptr);
 	g_theRenderer->BindTexture(nullptr);
 
 	std::vector<Vertex_PCU> verts;
@@ -1421,7 +1421,7 @@ void Game::RenderAttractScreen() const
 	g_theRenderer->ClearScreen(Rgba8::BLACK);
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
-	g_theRenderer->SetDepthStencilState(DepthTest::ALWAYS, false);
+	g_theRenderer->SetDepthStencilState(DepthFunc::ALWAYS, false);
 	g_theRenderer->SetSamplerMode(SamplerMode::POINTCLAMP);
 
 	if (m_useTextAnimation) {

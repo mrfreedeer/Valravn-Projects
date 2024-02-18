@@ -285,15 +285,15 @@ void DevConsole::Render_OpenFull(AABB2 const& bounds, Renderer& renderer, Bitmap
 	m_linesMutex.unlock();
 	//#TODO DX12 FIXTHIS
 
-	//renderer.BindTexture(nullptr);
-	//renderer.SetBlendMode(BlendMode::ALPHA);
-	//renderer.DrawVertexArray(blackOverlayVerts);
-	//renderer.DrawVertexArray(whiteInputOverlayVerts);
+	renderer.BindTexture(nullptr);
+	renderer.SetBlendMode(BlendMode::ALPHA);
+	renderer.DrawVertexArray(blackOverlayVerts);
+	renderer.DrawVertexArray(whiteInputOverlayVerts);
 
-	//Render_InputCaret(renderer, font, fontAspect, cellHeight);
+	Render_InputCaret(renderer, font, fontAspect, cellHeight);
 
-	//renderer.BindTexture(&font.GetTexture());
-	//renderer.DrawVertexArray(textVerts);
+	renderer.BindTexture(&font.GetTexture());
+	renderer.DrawVertexArray(textVerts);
 
 	Render_UserInput(renderer, font, fontAspect, cellHeight);
 
