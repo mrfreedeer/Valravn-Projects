@@ -29,6 +29,7 @@ public:
 	void SetDimensions(Vec3 const& newDimensions);
 	void SetDimensions(float dimX, float dimY, float dimZ);
 	void StretchToIncludePoint(Vec3 const& pointToInclude);
+	void SetFromText(char const* text);
 
 	FloatRange const GetXRange() const;
 	FloatRange const GetYRange() const;

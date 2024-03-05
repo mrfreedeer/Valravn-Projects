@@ -755,6 +755,15 @@ void DebugAddWorldBox(const AABB3& bounds, float duration, const Rgba8& startCol
 	debugRenderSystem->AddShape(newShape);
 }
 
+void DebugAddWorldWireBox(const AABB3& bounds, float duration, const Rgba8& startColor, const Rgba8& endColor, DebugRenderMode mode)
+{
+	Mat44 modelMatrix;
+
+	DebugShape* newShape = new DebugShape(modelMatrix, mode, duration, debugRenderSystem->GetClock(), startColor, endColor);
+	AddVertsForWireAABB3D(newShape->m_verts, bounds);
+	debugRenderSystem->AddWireShape(newShape);
+}
+
 void DebugAddWorldBasis(const Mat44& basis, float duration, const Rgba8& startColor, const Rgba8& endColor, DebugRenderMode mode)
 {
 	Mat44 modelMatrix;

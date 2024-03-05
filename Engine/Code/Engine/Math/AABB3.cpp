@@ -2,6 +2,8 @@
 #include "Engine/Math/AABB2.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/FloatRange.hpp"
+#include "Engine/Core/StringUtils.hpp"
+#include "Engine/Core/ErrorWarningAssert.hpp"
 
 AABB3 const AABB3::ZERO_TO_ONE = AABB3(Vec3::ZERO, Vec3::ONE);
 
@@ -89,6 +91,22 @@ void AABB3::SetDimensions(float dimX, float dimY, float dimZ)
 	Vec3 center = GetCenter();
 	m_mins = center - newDimensions * 0.5f;
 	m_maxs = m_mins + newDimensions;
+}
+
+void AABB3::SetFromText(char const* text)
+{
+	Strings aabb2Info = SplitStringOnDelimiter(text, '~');
+
+
+	if (aabb2Info.size() == 2) {
+		m_mins.SetFromText(aabb2Info[0].c_str());
+		m_maxs.SetFromText(aabb2Info[1].c_str());
+		return;
+	}
+
+	ERROR_AND_DIE(Stringf("FLOATRANGE SETSTRING VECTOR TOO LONG: %s", text));
+
+
 }
 
 void AABB3::StretchToIncludePoint(Vec3 const& pointToInclude)

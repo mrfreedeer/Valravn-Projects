@@ -410,6 +410,7 @@
     <ClCompile Include="Gameplay\AttractScreenMode.cpp" />
     <ClCompile Include="Gameplay\Basic3DMode.cpp" />
     <ClCompile Include="Gameplay\Entity.cpp" />
+    <ClCompile Include="Gameplay\FluidSolver.cpp" />
     <ClCompile Include="Gameplay\Game.cpp" />
     <ClCompile Include="Gameplay\GameMode.cpp" />
     <ClCompile Include="Gameplay\Player.cpp" />
@@ -422,6 +423,7 @@
     <ClInclude Include="Gameplay\AttractScreenMode.hpp" />
     <ClInclude Include="Gameplay\Basic3DMode.hpp" />
     <ClInclude Include="Gameplay\Entity.hpp" />
+    <ClInclude Include="Gameplay\FluidSolver.hpp" />
     <ClInclude Include="Gameplay\Game.hpp" />
     <ClInclude Include="Gameplay\GameMode.hpp" />
     <ClInclude Include="Gameplay\Player.hpp" />

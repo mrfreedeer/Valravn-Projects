@@ -43,6 +43,9 @@
     <ClCompile Include="Gameplay\AttractScreenMode.cpp">
       <Filter>Gameplay</Filter>
     </ClCompile>
+    <ClCompile Include="Gameplay\FluidSolver.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Framework\App.hpp">
@@ -71,6 +74,9 @@
       <Filter>Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="Gameplay\AttractScreenMode.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Gameplay\FluidSolver.hpp">
       <Filter>Gameplay</Filter>
     </ClInclude>
   </ItemGroup>

@@ -2,6 +2,7 @@
 #include "Engine/Math/IntRange.hpp"
 #include "Engine/Math/FloatRange.hpp"
 #include "Engine/Math/AABB2.hpp"
+#include "Engine/Math/AABB3.hpp"
 
 NamedStrings::NamedStrings()
 {
@@ -165,6 +166,18 @@ AABB2 NamedStrings::GetValue(std::string const& keyName, AABB2 const& defaultVal
 	std::string valueAsString = GetValue(keyName, std::string());
 	if (!valueAsString.empty()) {
 		AABB2 value;
+		value.SetFromText(valueAsString.c_str());
+		return value;
+	}
+
+	return defaultValue;
+}
+
+AABB3 NamedStrings::GetValue(std::string const& keyName, AABB3 const& defaultValue) const
+{
+	std::string valueAsString = GetValue(keyName, std::string());
+	if (!valueAsString.empty()) {
+		AABB3 value;
 		value.SetFromText(valueAsString.c_str());
 		return value;
 	}

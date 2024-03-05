@@ -8,7 +8,7 @@
 
 Basic3DMode* pointerToSelf = nullptr;
 
-Basic3DMode::Basic3DMode(Game* game, Vec2 const& UISize):
+Basic3DMode::Basic3DMode(Game* game, Vec2 const& UISize) :
 	GameMode(game, UISize)
 {
 	m_worldCamera.SetPerspectiveView(g_theWindow->GetConfig().m_clientAspect, 60, 0.1f, 100.0f);
@@ -40,7 +40,7 @@ void Basic3DMode::Startup()
 
 
 	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
-	Player* player = new Player(m_game, Vec3(27.0f, -12.0f, 14.0f), &m_worldCamera);
+	Player* player = new Player(m_game, Vec3(2.0f, -2.0f, 2.0f), &m_worldCamera);
 	m_player = player;
 	m_player->m_orientation = EulerAngles(521.0f, 36.0f, 0.0f);
 
@@ -64,7 +64,6 @@ void Basic3DMode::Startup()
 
 	g_theInput->ResetMouseClientDelta();
 
-	//#TODO fix this
 	DebugAddWorldBasis(Mat44(), -1.0f, Rgba8::WHITE, Rgba8::WHITE, DebugRenderMode::USEDEPTH);
 
 	float axisLabelTextHeight = 0.25f;
@@ -99,6 +98,28 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theMaterialSystem->GetMaterialForName("PixelizedFX");
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
 
+	FluidSolverConfig config = {};
+	config.m_particlePerSide = 8;
+	config.m_pointerToParticles = &m_particles;
+	config.m_simulationBounds = m_particlesBounds;
+	config.m_iterations = 3;
+	config.m_kernelRadius = 0.3f;
+	config.m_restDensity = 1000.0f;
+
+
+	m_fluidSolver = FluidSolver(config);
+	m_fluidSolver.InitializeParticles();
+
+	m_verts.clear();
+	int lastIndex = 0;
+	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
+		FluidParticle const& particle = m_particles[particleIndex];
+		AddVertsForSphere(m_verts, 0.15f, 2, 2);
+		TransformVertexArray3D(m_verts.size() - lastIndex, &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
+		lastIndex = m_verts.size();
+	}
+	m_vertsPerParticle = m_verts.size() / m_particles.size();
+
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -115,8 +136,11 @@ void Basic3DMode::Update(float deltaSeconds)
 	std::string gameInfoStr = Stringf("Delta: (%.2f, %.2f)", mouseClientDelta.x, mouseClientDelta.y);
 	DebugAddMessage(gameInfoStr, 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 
+	DebugAddWorldWireBox(m_particlesBounds, 0.0f, Rgba8(255,0,0,20), Rgba8::RED, DebugRenderMode::USEDEPTH);
+
 	UpdateDeveloperCheatCodes(deltaSeconds);
 	UpdateEntities(deltaSeconds);
+	UpdateParticles(deltaSeconds);
 
 	DisplayClocksInfo();
 
@@ -131,6 +155,7 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 		g_theRenderer->BindTexture(nullptr, 1);
 		RenderEntities();
+		RenderParticles();
 	}
 
 
@@ -156,6 +181,15 @@ void Basic3DMode::Shutdown()
 	m_deltaTimeSample = nullptr;
 
 	GameMode::Shutdown();
+
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireSphere", DebugSpawnWorldWireSphere);
+	UnsubscribeEventCallbackFunction("DebugAddWorldLine", DebugSpawnWorldLine3D);
+	UnsubscribeEventCallbackFunction("DebugRenderClear", DebugClearShapes);
+	UnsubscribeEventCallbackFunction("DebugRenderToggle", DebugToggleRenderMode);
+	UnsubscribeEventCallbackFunction("DebugAddBasis", DebugSpawnPermanentBasis);
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireCylinder", DebugSpawnWorldWireCylinder);
+	UnsubscribeEventCallbackFunction("DebugAddBillboardText", DebugSpawnBillboardText);
+	UnsubscribeEventCallbackFunction("Controls", GetControls);
 
 }
 
@@ -396,4 +430,26 @@ void Basic3DMode::DisplayClocksInfo() const
 	DebugAddScreenText(devClockInfo, devClockInfoPos, 0.0f, Vec2(1.0f, 0.0f), m_textCellHeight, Rgba8::WHITE, Rgba8::WHITE);
 	DebugAddScreenText(debugClockInfo, debugClockInfoPos, 0.0f, Vec2(1.0f, 0.0f), m_textCellHeight, Rgba8::WHITE, Rgba8::WHITE);
 	DebugAddScreenText(gameClockInfo, gameClockInfoPos, 0.0f, Vec2(1.0f, 0.0f), m_textCellHeight, Rgba8::WHITE, Rgba8::WHITE);
+}
+
+void Basic3DMode::UpdateParticles(float deltaSeconds)
+{
+	m_fluidSolver.Update(deltaSeconds);
+	for (int vertIndex = 0, particleIndex = 0; vertIndex < m_verts.size(); vertIndex+= m_vertsPerParticle, particleIndex++) {
+		FluidParticle const& particle = m_particles[particleIndex];
+		Vertex_PCU* vertices = &m_verts[vertIndex];
+		TransformVertexArray3D(m_vertsPerParticle, vertices, Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position - particle.m_prevPos));
+	}
+
+}
+
+void Basic3DMode::RenderParticles() const
+{
+	//for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
+	//	FluidParticle const& particle = m_particles[particleIndex];
+	//	AddVertsForSphere(verts, 0.15f, 2, 4);
+	//}
+	g_theRenderer->SetModelMatrix(Mat44());
+	g_theRenderer->BindTexture(nullptr);
+	g_theRenderer->DrawVertexArray(m_verts);
 }

@@ -4,6 +4,7 @@
 #include <string>
 
 struct AABB2;
+struct AABB3;
 class NamedStrings {
 public:
 	NamedStrings();
@@ -24,6 +25,7 @@ public:
 	IntRange GetValue(std::string const& keyName, IntRange const& defaultValue) const;
 	FloatRange GetValue(std::string const& keyName, FloatRange const& defaultValue) const;
 	AABB2 GetValue(std::string const& keyName, AABB2 const& defaultValue) const;
+	AABB3 GetValue(std::string const& keyName, AABB3 const& defaultValue) const;
 
 private:
 	std::map <std::string, std::string> m_keyValuePairs;
