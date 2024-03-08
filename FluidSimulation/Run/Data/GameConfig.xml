@@ -38,5 +38,5 @@
 	SHOW_ENGINE_LOGO ="false"
 	GAME_TITLE = "Fluid Simulation"
 	
-	BOX_BOUNDS ="0,0,0~1,1,1"
+	BOX_BOUNDS ="0,0,0~2,2,5"
 	/>

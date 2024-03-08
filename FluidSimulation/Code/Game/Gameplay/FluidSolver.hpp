@@ -51,6 +51,7 @@ private:
 	void UpdatePositionDelta(float deltaSeconds);
 	void UpdatePosition(float deltaSeconds);
 	Vec3 CalculateDeltaPosition(FluidParticle const& particle);
+	Vec3 KeepParticleInBounds(Vec3 const& position);
 	FluidSolverConfig m_config = {};
 	std::unordered_map<unsigned int, std::vector<FluidParticle*>> m_neighbors;
 	Vec3 m_forces = Vec3::ZERO;

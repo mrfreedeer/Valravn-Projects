@@ -42,7 +42,7 @@ void Basic3DMode::Startup()
 	g_theRenderer->SetBlendMode(BlendMode::OPAQUE);
 	Player* player = new Player(m_game, Vec3(2.0f, -2.0f, 2.0f), &m_worldCamera);
 	m_player = player;
-	m_player->m_orientation = EulerAngles(521.0f, 36.0f, 0.0f);
+	m_player->m_orientation = EulerAngles(130.0f, 36.0f, 0.0f);
 
 	Prop* cubeProp = new Prop(m_game, Vec3(-2.0f, 2.0f, 0.0f));
 	cubeProp->m_angularVelocity.m_yawDegrees = 45.0f;
@@ -99,7 +99,7 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
 
 	FluidSolverConfig config = {};
-	config.m_particlePerSide = 8;
+	config.m_particlePerSide = 5;
 	config.m_pointerToParticles = &m_particles;
 	config.m_simulationBounds = m_particlesBounds;
 	config.m_iterations = 3;
@@ -114,7 +114,7 @@ void Basic3DMode::Startup()
 	int lastIndex = 0;
 	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
 		FluidParticle const& particle = m_particles[particleIndex];
-		AddVertsForSphere(m_verts, 0.15f, 2, 2);
+		AddVertsForSphere(m_verts, 0.05f, 2, 2);
 		TransformVertexArray3D(m_verts.size() - lastIndex, &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
 		lastIndex = m_verts.size();
 	}

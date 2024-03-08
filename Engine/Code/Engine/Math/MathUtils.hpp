@@ -104,6 +104,7 @@ bool PushDiscsOutOfEachOther2D(Vec2& aCenter, float aRadius, Vec2& bCenter, floa
 bool PushDiscOutOfAABB2D(Vec2& mobileDiscCenter, float discRadius, AABB2 const& fixedBox);
 bool PushConvexPolysOutOfEachOther(DelaunayConvexPoly2D& convexPolyA, DelaunayConvexPoly2D& convexPolyB);
 bool PushConvexPolyOutOfOtherPoly(DelaunayConvexPoly2D const& fixedPolyA, DelaunayConvexPoly2D& convexPolyB);
+bool PushSphereOutOfPoint(Vec3& mobileSpherecenter, float radius, Vec3 const& fixedPoint);
 
 bool PushAABB3OutOfPoint(AABB3& mobileAABB3, Vec3 const& fixedPoint);
 bool PushAABB3OutOfAABB3(AABB3 const& fixedAABB3, AABB3& mobileAABB3);

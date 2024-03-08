@@ -1088,6 +1088,22 @@ bool PushConvexPolyOutOfOtherPoly(DelaunayConvexPoly2D const& fixedPolyA, Delaun
 	return false;
 }
 
+bool PushSphereOutOfPoint(Vec3& mobileSpherecenter, float radius, Vec3 const& fixedPoint)
+{
+	if(!IsPointInsideSphere(fixedPoint, mobileSpherecenter, radius)) return false;
+	float distance = GetDistance3D(mobileSpherecenter, fixedPoint);
+
+	float distanceToPush = distance - radius;
+	Vec3 dispToSphere = mobileSpherecenter - fixedPoint;
+	if (dispToSphere.GetLengthSquared() == 0.0f) {
+		dispToSphere = Vec3(-1.0f, 0.0f, 0.0f);
+	}
+
+	dispToSphere.SetLength(distanceToPush);
+	mobileSpherecenter += dispToSphere;
+	return true;
+}
+
 bool PushAABB3OutOfPoint(AABB3& mobileAABB3, Vec3 const& fixedPoint)
 {
 	if (!IsPointInsideAABB3D(fixedPoint, mobileAABB3))return false;
