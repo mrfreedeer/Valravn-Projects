@@ -13,7 +13,8 @@ struct FluidParticle {
 	Vec3 m_prevPos = Vec3::ZERO;
 	Vec3 m_velocity = Vec3::ZERO;
 	Vec3 m_gradient = Vec3::ZERO;
-	float m_lambda = 0;
+	float m_lambda = 0.f;
+	float m_density = 0.0f;
 };
 
 struct FluidSolverConfig {
@@ -29,6 +30,7 @@ struct FluidSolverConfig {
 struct DensityReturnStruct {
 	float density = 0.f;
 	Vec3 gradient = Vec3::ZERO;
+	float gradientLengthSum = 0.0f;
 };
 
 class FluidSolver {
@@ -48,8 +50,10 @@ private:
 	float Poly6Kernel(float distance);
 	Vec3 SpikyKernelGradient(Vec3 const& displacement);
 	DensityReturnStruct SPHDensity(FluidParticle const& particle);
+	Vec3 GetViscosity(FluidParticle const& particle);
 	void UpdatePositionDelta(float deltaSeconds);
-	void UpdatePosition(float deltaSeconds);
+	void UpdateVelocity(float deltaSeconds);
+	void UpdateVorticityAndPosition();
 	Vec3 CalculateDeltaPosition(FluidParticle const& particle);
 	Vec3 KeepParticleInBounds(Vec3 const& position);
 	FluidSolverConfig m_config = {};

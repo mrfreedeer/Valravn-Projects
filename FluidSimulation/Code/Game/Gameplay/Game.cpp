@@ -209,7 +209,6 @@ void Game::Update()
 {
 
 	float gameDeltaSeconds = static_cast<float>(m_clock.GetDeltaTime());
-
 	UpdateGameState();
 	switch (m_currentState)
 	{

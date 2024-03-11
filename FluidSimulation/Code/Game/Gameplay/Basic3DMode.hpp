@@ -37,20 +37,12 @@ protected:
 	virtual void UpdateInput(float deltaSeconds) override;
 
 private:
-	double GetFPS() const;
-	void AddDeltaToFPSCounter();
 	void DisplayClocksInfo() const;
 
 	void UpdateParticles(float deltaSeconds);
 	void RenderParticles() const;
 
 private:
-	int m_fpsSampleSize = g_gameConfigBlackboard.GetValue("FPS_SAMPLE_SIZE", 60);
-	double* m_deltaTimeSample = nullptr;
-	int m_storedDeltaTimes = 0;
-	int m_currentFPSAvIndex = 0;
-	double m_totalDeltaTimeSample = 0.0f;
-
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
 
@@ -58,5 +50,6 @@ private:
 	FluidSolver m_fluidSolver = {};
 	std::vector<FluidParticle> m_particles = {};
 	std::vector<Vertex_PCU> m_verts = {};
+	float m_fps = 0.0f;
 	unsigned int m_vertsPerParticle = 0;
 };
