@@ -27,6 +27,7 @@
 bool is3DDefault = true;
 MaterialSystem* g_theMaterialSystem = nullptr;
 
+
 constexpr int g_cameraBufferSlot = 0;
 constexpr int g_modelBufferSlot = 1;
 constexpr int g_lightBufferSlot = 2;
@@ -691,6 +692,8 @@ void Renderer::Startup()
 	debugSystemConfig.m_fontName = "Data/Images/SquirrelFixedFont";
 
 	DebugRenderSystemStartup(debugSystemConfig);
+
+	m_immediateCtxs = new ImmediateContext[m_immediateCtxCount]{};
 }
 
 
@@ -1082,9 +1085,11 @@ Material* Renderer::GetDefault3DMaterial() const
 
 void Renderer::SetWindingOrder(WindingOrder newWindingOrder)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::WINDING_ORDER_SIBLING, (unsigned int)newWindingOrder);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetRasterizerState(CullMode cullMode, FillMode fillMode, WindingOrder windingOrder)
@@ -1096,16 +1101,20 @@ void Renderer::SetRasterizerState(CullMode cullMode, FillMode fillMode, WindingO
 
 void Renderer::SetDepthFunction(DepthFunc newDepthFunc)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::DEPTH_FUNC_SIBLING, (unsigned int)newDepthFunc);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetWriteDepth(bool writeDepth)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::DEPTH_ENABLING_SIBLING, (unsigned int)writeDepth);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetDepthStencilState(DepthFunc newDepthFunc, bool writeDepth)
@@ -1116,9 +1125,11 @@ void Renderer::SetDepthStencilState(DepthFunc newDepthFunc, bool writeDepth)
 
 void Renderer::SetTopology(TopologyType newTopologyType)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::TOPOLOGY_SIBLING, (unsigned int)newTopologyType);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetDirectionalLight(Vec3 const& direction)
@@ -1189,18 +1200,20 @@ void Renderer::BindLightConstants()
 
 void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	BindVertexBuffer(vertexBuffer);
-	m_currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
@@ -1208,30 +1221,31 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 	m_cbvHandleStart += 2;
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
-	m_immediateCtxs.push_back(m_currentDrawCtx);
 	m_hasUsedModelSlot = true;
-	m_currentDrawCtx.m_immediateVBO = nullptr;
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	BindVertexBuffer(vertexBuffer);
 	BindIndexBuffer(indexBuffer, indexCount);
 
-	m_currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	m_currentDrawCtx.m_isIndexedDraw = true;
+	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	currentDrawCtx.m_isIndexedDraw = true;
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
@@ -1239,14 +1253,11 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	m_cbvHandleStart += 2;
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
-	m_immediateCtxs.push_back(m_currentDrawCtx);
 	m_hasUsedModelSlot = true;
-	m_currentDrawCtx.m_immediateVBO = nullptr;
-	m_currentDrawCtx.m_immediateIBO = nullptr;
-	m_currentDrawCtx.m_isIndexedDraw = false;
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::SetDebugName(ID3D12Object* object, char const* name)
@@ -1348,6 +1359,19 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 
 }
 
+void Renderer::CopyCurrentDrawCtxToNext()
+{
+	if (m_currentDrawCtx <= IMMEDIATE_CTX_AMOUNT - 1) {
+		ImmediateContext& nextCtx = m_immediateCtxs[m_currentDrawCtx + 1];
+
+		nextCtx = m_immediateCtxs[m_currentDrawCtx];
+		nextCtx.m_immediateIBO = nullptr;
+		nextCtx.m_immediateVBO = nullptr;
+		nextCtx.m_isIndexedDraw = false;
+	}
+	m_currentDrawCtx++;
+}
+
 ComPtr<ID3D12GraphicsCommandList2> Renderer::GetBufferCommandList()
 {
 	return m_ResourcesCommandList;
@@ -1373,67 +1397,72 @@ void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes)
 {
-	m_currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
 
 	m_cbvHandleStart += 2;
 
-	m_currentDrawCtx.m_vertexCount = (size_t)numVertexes;
-	m_currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
+	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
+	currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
-	m_immediateCtxs.push_back(m_currentDrawCtx);
+	CopyCurrentDrawCtxToNext();
 	m_hasUsedModelSlot = true;
 }
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes)
 {
-	m_currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
 
 	m_cbvHandleStart += 2;
 
-	m_currentDrawCtx.m_vertexCount = (size_t)numVertexes;
-	m_currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
+	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
+	currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
 
-	m_currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
-	m_immediateCtxs.push_back(m_currentDrawCtx);
+	currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
+
+	CopyCurrentDrawCtxToNext();
 	m_hasUsedModelSlot = true;
-	m_currentDrawCtx.m_immediateVBO = nullptr;
+
 
 }
 
@@ -1444,38 +1473,40 @@ void Renderer::DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes)
 
 void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes, unsigned int numIndices, unsigned int const* indices)
 {
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	m_currentDrawCtx.m_isIndexedDraw = true;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	currentDrawCtx.m_isIndexedDraw = true;
 
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
 
 	m_cbvHandleStart += 2;
 
-	m_currentDrawCtx.m_vertexCount = (size_t)numVertexes;
-	m_currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
+	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
+	currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
 
-	m_currentDrawCtx.m_indexCount = (size_t)numIndices;
-	m_currentDrawCtx.m_indexStart = m_immediateIndices.size();
+	currentDrawCtx.m_indexCount = (size_t)numIndices;
+	currentDrawCtx.m_indexStart = m_immediateIndices.size();
 	std::copy(indices, indices + numIndices, std::back_inserter(m_immediateIndices));
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
-	m_immediateCtxs.push_back(m_currentDrawCtx);
 	m_hasUsedModelSlot = true;
-	m_currentDrawCtx.m_isIndexedDraw = false;
+	CopyCurrentDrawCtxToNext();
+
 }
 
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PCU> const& vertexes, std::vector<unsigned int> const& indices)
@@ -1485,40 +1516,41 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PCU> const& vertexes, s
 
 void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices)
 {
-	m_currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	m_currentDrawCtx.m_isIndexedDraw = true;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+	currentDrawCtx.m_isIndexedDraw = true;
 
 	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 
-	auto texMaxIt = std::max_element(m_currentDrawCtx.m_boundTextures.begin(), m_currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(m_currentDrawCtx.m_boundCBuffers.begin(), m_currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
 
-	unsigned int texMax = (texMaxIt != m_currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != m_currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 
 	m_srvHandleStart += texMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
 
 	m_cbvHandleStart += 2;
 
-	m_currentDrawCtx.m_vertexCount = (size_t)numVertexes;
-	m_currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
+	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
+	currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
 
-	m_currentDrawCtx.m_indexCount = (size_t)numIndices;
-	m_currentDrawCtx.m_indexStart = m_immediateIndices.size();
+	currentDrawCtx.m_indexCount = (size_t)numIndices;
+	currentDrawCtx.m_indexStart = m_immediateIndices.size();
 	std::copy(indices, indices + numIndices, std::back_inserter(m_immediateIndices));
 
 	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 	}
-	m_currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
-	m_immediateCtxs.push_back(m_currentDrawCtx);
+	currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
 	m_hasUsedModelSlot = true;
-	m_currentDrawCtx.m_isIndexedDraw = false;
-	m_currentDrawCtx.m_immediateVBO = nullptr;
+
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices)
@@ -1528,19 +1560,23 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, 
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	if (m_hasUsedModelSlot) {
-		m_currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
+		currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
 	}
-	m_currentDrawCtx.m_modelConstants.ModelMatrix = modelMat;
+	currentDrawCtx.m_modelConstants.ModelMatrix = modelMat;
 	m_hasUsedModelSlot = false;
 }
 
 void Renderer::SetModelColor(Rgba8 const& modelColor)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	if (m_hasUsedModelSlot) {
-		m_currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
+		currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
 	}
-	modelColor.GetAsFloats(m_currentDrawCtx.m_modelConstants.ModelColor);
+	modelColor.GetAsFloats(currentDrawCtx.m_modelConstants.ModelColor);
 	m_hasUsedModelSlot = false;
 }
 
@@ -2103,18 +2139,24 @@ BitmapFont* Renderer::CreateOrGetBitmapFont(std::filesystem::path bitmapPath)
 
 void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*= 0*/)
 {
-	m_currentDrawCtx.m_boundCBuffers[slot] = cBuffer;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_boundCBuffers[slot] = cBuffer;
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 {
-	m_currentDrawCtx.m_boundTextures[slot] = texture;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_boundTextures[slot] = texture;
 }
 
 void Renderer::BindMaterial(Material* mat)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	if (!mat) mat = GetDefaultMaterial();
-	m_currentDrawCtx.m_material = mat;
+	currentDrawCtx.m_material = mat;
 }
 
 void Renderer::BindMaterialByName(char const* materialName)
@@ -2136,16 +2178,20 @@ void Renderer::BindMaterialByPath(std::filesystem::path materialPath)
 
 void Renderer::BindVertexBuffer(VertexBuffer* const& vertexBuffer)
 {
-	m_currentDrawCtx.m_immediateVBO = &vertexBuffer;
-	m_currentDrawCtx.m_vertexStart = 0;
-	m_currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_immediateVBO = &vertexBuffer;
+	currentDrawCtx.m_vertexStart = 0;
+	currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
 }
 
 void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount)
 {
-	m_currentDrawCtx.m_immediateIBO = &indexBuffer;
-	m_currentDrawCtx.m_indexStart = 0;
-	m_currentDrawCtx.m_indexCount = indexCount;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_immediateIBO = &indexBuffer;
+	currentDrawCtx.m_indexStart = 0;
+	currentDrawCtx.m_indexCount = indexCount;
 }
 
 void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot)
@@ -2234,6 +2280,7 @@ ConstantBuffer& Renderer::GetCurrentLightBuffer()
 
 void Renderer::DrawAllImmediateContexts()
 {
+
 	// Unlit
 	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
 	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
@@ -2248,7 +2295,7 @@ void Renderer::DrawAllImmediateContexts()
 	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
 	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
 
-	for (unsigned int ctxIndex = 0; ctxIndex < m_immediateCtxs.size(); ctxIndex++) {
+	for (unsigned int ctxIndex = 0; ctxIndex < m_currentDrawCtx; ctxIndex++) {
 	//for (ImmediateContext& ctx : m_immediateCtxs) {
 		ImmediateContext& ctx = m_immediateCtxs[ctxIndex];
 		DrawImmediateCtx(ctx);
@@ -2257,8 +2304,8 @@ void Renderer::DrawAllImmediateContexts()
 
 void Renderer::ClearAllImmediateContexts()
 {
-	m_immediateCtxs.clear();
-	m_immediateCtxs.resize(0);
+	/*std::uninitialized_fill_n(m_immediateCtxs, IMMEDIATE_CTX_AMOUNT, ImmediateContext());*/
+	//memset(m_immediateCtxs, 0, sizeof(ImmediateContext) * IMMEDIATE_CTX_AMOUNT);
 }
 
 void Renderer::SetMaterialPSO(Material* mat)
@@ -2268,23 +2315,29 @@ void Renderer::SetMaterialPSO(Material* mat)
 
 void Renderer::SetBlendMode(BlendMode newBlendMode)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::BLEND_MODE_SIBLING, (unsigned int)newBlendMode);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetCullMode(CullMode newCullMode)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::CULL_MODE_SIBLING, (unsigned int)newCullMode);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetFillMode(FillMode newFillMode)
 {
-	Material* currentMaterial = (m_currentDrawCtx.m_material) ? m_currentDrawCtx.m_material : GetDefaultMaterial();
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
 	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::FILL_MODE_SIBLING, (unsigned int)newFillMode);
-	m_currentDrawCtx.m_material = siblingMat;
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::BeginFrame()
@@ -2295,7 +2348,7 @@ void Renderer::BeginFrame()
 	m_currentModelCBufferSlot = 0;
 	m_currentCameraCBufferSlot = 0;
 
-	m_currentDrawCtx = ImmediateContext();
+	m_currentDrawCtx = 0;
 	m_srvHandleStart = SRV_HANDLE_START;
 	m_cbvHandleStart = CBV_HANDLE_START;
 
@@ -2394,7 +2447,7 @@ void Renderer::EndFrame()
 	// Flush Command Queue getting ready for next Frame
 	WaitForGPU();
 
-	ClearAllImmediateContexts();
+	//ClearAllImmediateContexts();
 	m_effectsCtxs.clear();
 	m_effectsCtxs.resize(0);
 
@@ -2425,7 +2478,7 @@ void Renderer::Shutdown()
 		commandAlloc.Reset();
 	}
 
-	ClearAllImmediateContexts();
+	//ClearAllImmediateContexts();
 
 	//for (auto backBuffer : m_backBuffers) {
 	//	backBuffer.Reset();
@@ -2483,10 +2536,15 @@ void Renderer::Shutdown()
 	g_theMaterialSystem->Shutdown();
 	delete g_theMaterialSystem;
 	g_theMaterialSystem = nullptr;
+
+	delete[] m_immediateCtxs;
 }
 
 void Renderer::BeginCamera(Camera const& camera)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+	currentDrawCtx = ImmediateContext();
+
 	m_currentCamera = &camera;
 	if (camera.GetCameraMode() == CameraMode::Orthographic) {
 		BindMaterial(m_default2DMaterial);
@@ -2497,8 +2555,9 @@ void Renderer::BeginCamera(Camera const& camera)
 
 	BindTexture(m_defaultTexture);
 	SetSamplerMode(SamplerMode::POINTCLAMP);
-	m_currentDrawCtx.m_renderTargets[0] = GetActiveRenderTarget();
-	m_currentDrawCtx.m_depthTarget = m_defaultDepthTarget;
+
+	currentDrawCtx.m_renderTargets[0] = GetActiveRenderTarget();
+	currentDrawCtx.m_depthTarget = m_defaultDepthTarget;
 
 	CameraConstants cameraConstants = {};
 	cameraConstants.ProjectionMatrix = camera.GetProjectionMatrix();
@@ -2512,9 +2571,9 @@ void Renderer::BeginCamera(Camera const& camera)
 	ConstantBuffer& nextModelBuffer = GetCurrentModelBuffer();
 	m_currentModelCBufferSlot++;
 
-	m_currentDrawCtx.m_cameraCBO = &nextCameraBuffer;
-	m_currentDrawCtx.m_modelConstants = ModelConstants();
-	m_currentDrawCtx.m_modelCBO = &nextModelBuffer;
+	currentDrawCtx.m_cameraCBO = &nextCameraBuffer;
+	currentDrawCtx.m_modelConstants = ModelConstants();
+	currentDrawCtx.m_modelCBO = &nextModelBuffer;
 	m_hasUsedModelSlot = false;
 	//BindConstantBuffer(m_cameraCBO, 2);
 	//BindConstantBuffer(m_modelCBO, 3);
@@ -2522,18 +2581,20 @@ void Renderer::BeginCamera(Camera const& camera)
 
 void Renderer::EndCamera(Camera const& camera)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
 	if (&camera != m_currentCamera) {
 		ERROR_RECOVERABLE("USING A DIFFERENT CAMERA TO END CAMERA PASS");
 	}
 
 	if (m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = m_currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&m_currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 		m_currentModelCBufferSlot++;
 	}
 
 	m_currentCamera = nullptr;
-	m_currentDrawCtx = ImmediateContext();
+	currentDrawCtx = ImmediateContext();
 	Material* defaultMat = GetDefaultMaterial();
 	m_commandList->ClearState(defaultMat->m_PSO);
 }

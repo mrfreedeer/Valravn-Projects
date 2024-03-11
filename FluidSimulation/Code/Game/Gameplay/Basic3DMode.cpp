@@ -103,14 +103,14 @@ void Basic3DMode::Startup()
 	m_fluidSolver.InitializeParticles();
 
 	m_verts.clear();
-	int lastIndex = 0;
+	size_t lastIndex = 0;
 	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
 		FluidParticle const& particle = m_particles[particleIndex];
 		AddVertsForSphere(m_verts, config.m_renderingRadius, 4, 8, Rgba8(0, 0, 180, 100));
-		TransformVertexArray3D(m_verts.size() - lastIndex, &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
+		TransformVertexArray3D(int(m_verts.size() - lastIndex), &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
 		lastIndex = m_verts.size();
 	}
-	m_vertsPerParticle = m_verts.size() / m_particles.size();
+	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
 
 }
 

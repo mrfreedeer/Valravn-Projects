@@ -19,21 +19,21 @@ void FluidSolver::InitializeParticles() const
 
 	distancePerParticle = bounds.GetDimensions() / float(particlesPerside);
 
-	int particleIndex = 0;
 
 	particles->reserve(particlesPerside * 3);
 
 
 	Vec3 aabb3Center = bounds.GetCenter() - bounds.GetDimensions() / 4;
-	for (int x = 0; x < particlesPerside; x++) {
-		for (int y = 0; y < particlesPerside; y++) {
-			for (int z = 0; z < particlesPerside; z++) {
-				particles->push_back(FluidParticle(Vec3(x, y, z) * m_config.m_renderingRadius * 2.0f + aabb3Center, Vec3::ZERO));
+	for (unsigned int x = 0; x < particlesPerside; x++) {
+		for (unsigned int y = 0; y < particlesPerside; y++) {
+			for (unsigned int z = 0; z < particlesPerside; z++) {
+				particles->push_back(FluidParticle(Vec3((float)x, (float)y, (float)z) * m_config.m_renderingRadius * 2.0f + aabb3Center, Vec3::ZERO));
 
 			}
 		}
 	}
 
+	//int particleIndex = 0;
 	/*for (float x = bounds.m_mins.x; x < bounds.m_maxs.x; x += distancePerParticle.x) {
 		for (float y = bounds.m_mins.y; y < bounds.m_maxs.y; y += distancePerParticle.y) {
 			for (float z = bounds.m_mins.z; z < bounds.m_maxs.z; z += distancePerParticle.z, particleIndex++) {
@@ -248,6 +248,7 @@ Vec3 FluidSolver::GetViscosity(FluidParticle const& particle)
 
 void FluidSolver::UpdatePositionDelta(float deltaSeconds)
 {
+	UNUSED(deltaSeconds)
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 		FluidParticle& particle = particles[particleIndex];
@@ -262,7 +263,7 @@ void FluidSolver::UpdatePositionDelta(float deltaSeconds)
 void FluidSolver::UpdateVelocity(float deltaSeconds)
 {
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
-	AABB3 const& bounds = m_config.m_simulationBounds;
+	//AABB3 const& bounds = m_config.m_simulationBounds;
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 
 		FluidParticle& particle = particles[particleIndex];
@@ -287,7 +288,7 @@ void FluidSolver::UpdateVelocity(float deltaSeconds)
 void FluidSolver::UpdateVorticityAndPosition()
 {
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
-	AABB3 const& bounds = m_config.m_simulationBounds;
+	//AABB3 const& bounds = m_config.m_simulationBounds;
 	//for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 
 	//	FluidParticle& particle = particles[particleIndex];

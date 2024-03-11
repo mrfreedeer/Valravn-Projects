@@ -140,6 +140,8 @@ class Renderer {
 	friend class Texture;
 	friend class DescriptorHeap;
 	friend class MaterialSystem;
+	unsigned int const IMMEDIATE_CTX_AMOUNT = 65536;
+
 public:
 	Renderer(RendererConfig const& config);
 	~Renderer();
@@ -293,6 +295,7 @@ private:
 	void DrawAllImmediateContexts();
 	void ClearAllImmediateContexts();
 	void DrawImmediateCtx(ImmediateContext& ctx);
+	void CopyCurrentDrawCtxToNext();
 	ComPtr<ID3D12GraphicsCommandList2> GetBufferCommandList();
 private:
 	RendererConfig m_config = {};
@@ -321,7 +324,7 @@ private:
 	std::vector<DescriptorHeap*> m_defaultDescriptorHeaps;
 	std::vector<DescriptorHeap*> m_defaultGPUDescriptorHeaps;
 
-	std::vector<ImmediateContext> m_immediateCtxs;
+	ImmediateContext* m_immediateCtxs = nullptr;
 	std::vector<FxContext> m_effectsCtxs;
 	std::vector<ConstantBuffer> m_cameraCBOArray;
 	std::vector<ConstantBuffer> m_modelCBOArray;
@@ -356,11 +359,12 @@ private:
 	unsigned int m_currentLightCBufferSlot = 0;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
+	unsigned int m_immediateCtxCount = IMMEDIATE_CTX_AMOUNT;
+	unsigned int m_currentDrawCtx = 0;
 
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};
 
-	ImmediateContext m_currentDrawCtx = {};
 	// Lighting
 	Light m_lights[MAX_LIGHTS];
 	Vec3 m_directionalLight = Vec3(0.0f, 0.0f, -1.0f);

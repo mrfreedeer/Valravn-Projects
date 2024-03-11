@@ -141,9 +141,7 @@ void World::Update(float deltaSeconds)
 
 	g_gameConstants.Time = static_cast<float>(GetCurrentTimeSeconds());
 
-	m_gameCBO->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants));
-	//g_theRenderer->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants), m_gameCBO);
-	g_theRenderer->BindConstantBuffer(m_gameCBO, 2);
+
 
 	m_vertexAmount = 0;
 	m_indexAmount = 0;
@@ -185,6 +183,10 @@ void World::Update(float deltaSeconds)
 
 void World::Render() const
 {
+	m_gameCBO->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants));
+	//g_theRenderer->CopyCPUToGPU(&g_gameConstants, sizeof(GameConstants), m_gameCBO);
+	g_theRenderer->BindConstantBuffer(m_gameCBO, 2);
+
 	if (m_disableWorldShader) {
 		g_theRenderer->BindMaterial(nullptr);
 	}
