@@ -52,7 +52,7 @@ void FluidSolver::InitializeParticles() const
 
 void FluidSolver::Update(float deltaSeconds)
 {
-	if(deltaSeconds >= 0.05f) deltaSeconds = 0.05f; 
+	if (deltaSeconds >= 0.05f) deltaSeconds = 0.05f;
 	m_forces += Vec3(0.0f, 0.0f, -9.8f);
 	ApplyForces(deltaSeconds);
 	UpdateNeighbors();
@@ -63,7 +63,7 @@ void FluidSolver::Update(float deltaSeconds)
 	}
 
 	UpdateVelocity(deltaSeconds);
-	UpdateVorticityAndPosition();
+	UpdateViscosityAndPosition(deltaSeconds);
 	m_forces = Vec3::ZERO;
 }
 
@@ -74,21 +74,43 @@ void FluidSolver::ApplyForces(float deltaSeconds) const
 		FluidParticle& particle = particles[particleIndex];
 		particle.m_velocity += deltaSeconds * m_forces;
 		particle.m_predictedPos = particle.m_position + deltaSeconds * particle.m_velocity;
+		Vec3 newPos = KeepParticleInBounds(particle.m_predictedPos);
+		particle.m_velocity += (newPos - particle.m_predictedPos) / deltaSeconds;
+		particle.m_predictedPos = newPos;
 	}
 }
 
 void FluidSolver::UpdateNeighbors()
 {
-	m_neighbors.clear();
+	m_neighborsHashmap.clear();
 
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 		FluidParticle& particle = particles[particleIndex];
+		particle.m_neighbors.clear();
 		unsigned int arrayIndex = GetIndexForPosition(particle.m_predictedPos);
-		std::vector<FluidParticle*>& neighborsArray = m_neighbors[arrayIndex];
+		std::vector<FluidParticle*>& neighborsArray = m_neighborsHashmap[arrayIndex];
 		neighborsArray.push_back(&particle);
 	}
 
+	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
+		FluidParticle& particle = particles[particleIndex];
+		IntVec3 baseCoords = GetCoordsForPos(particle.m_position);
+		for (int x = -1; x <= 1; x++) {
+			for (int y = -1; y <= 1; y++) {
+				for (int z = -1; z <= 1; z++) {
+					IntVec3 neighborCoords = baseCoords + IntVec3(x, y, z);
+					unsigned int accessIndex = GetIndexForCoords(neighborCoords);
+					auto const it = m_neighborsHashmap.find(accessIndex);
+					bool foundNeighbor = (it != m_neighborsHashmap.end());
+					if (!foundNeighbor) continue;
+
+					std::vector<FluidParticle*>& neighborParticles = m_neighborsHashmap[accessIndex];
+					particle.m_neighbors.insert(particle.m_neighbors.end(), neighborParticles.begin(), neighborParticles.end());
+				}
+			}
+		}
+	}
 }
 
 
@@ -173,7 +195,7 @@ Vec3 FluidSolver::SpikyKernelGradient(Vec3 const& displacement)
 	distanceSqr *= distanceSqr;
 	float kernelValue = (kernelCoefficient * distanceSqr);
 
-	Vec3 gradientValue = (distance != 0.0f) ? displacement.GetNormalized() * (kernelValue) : Vec3::ZERO;
+	Vec3 gradientValue = displacement.GetNormalized() * (kernelValue);
 
 	return gradientValue;
 }
@@ -181,66 +203,46 @@ Vec3 FluidSolver::SpikyKernelGradient(Vec3 const& displacement)
 DensityReturnStruct FluidSolver::SPHDensity(FluidParticle const& particle)
 {
 
-	IntVec3 baseCoords = GetCoordsForPos(particle.m_position);
 	float density = 0.0f;
 	float gradientLengthSum = 0.0f;
 	Vec3 gradientSum = Vec3::ZERO;
-	for (int x = -1; x <= 1; x++) {
-		for (int y = -1; y <= 1; y++) {
-			for (int z = -1; z <= 1; z++) {
-				IntVec3 neighborCoords = baseCoords + IntVec3(x, y, z);
-				unsigned int accessIndex = GetIndexForCoords(neighborCoords);
+	float oneOverRestDensity = 1.0f / m_config.m_restDensity;
 
-				auto const neighborIt = m_neighbors.find(accessIndex);
-				if (!(neighborIt != m_neighbors.end())) continue;
+	auto const& neighbors = particle.m_neighbors;
 
-				std::vector<FluidParticle*> const& neighbors = m_neighbors[accessIndex];
-				for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
-					FluidParticle const* const& neighbor = neighbors[neighborIndex];
+	for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
+		FluidParticle const* const& neighbor = neighbors[neighborIndex];
 
-					Vec3 displacement = particle.m_position - neighbor->m_position;
-					float d = displacement.GetLength();
-					//if (d == 0.0f) { continue; }; // ignoring self particle
-					density += Poly6Kernel(d);
-					Vec3 gradient = -SpikyKernelGradient(displacement) / m_config.m_restDensity;
-					gradientSum += gradient;
-					gradientLengthSum += gradient.GetLengthSquared();
-				}
-
-			}
-		}
+		Vec3 displacement = particle.m_predictedPos - neighbor->m_predictedPos;
+		float d = displacement.GetLength();
+		//if (d == 0.0f) { continue; }; // ignoring self particle
+		density += Poly6Kernel(d);
+		Vec3 gradient = -SpikyKernelGradient(displacement) * oneOverRestDensity;
+		gradientSum += gradient;
+		gradientLengthSum += gradient.GetLengthSquared();
 	}
+
+
 	return DensityReturnStruct{ density, gradientSum, gradientLengthSum };
 }
 
 Vec3 FluidSolver::GetViscosity(FluidParticle const& particle)
 {
+	std::vector<FluidParticle*> const& neighbors = particle.m_neighbors;
 
-	IntVec3 baseCoords = GetCoordsForPos(particle.m_position);
+
 	Vec3 viscosity = Vec3::ZERO;
-	for (int x = -1; x <= 1; x++) {
-		for (int y = -1; y <= 1; y++) {
-			for (int z = -1; z <= 1; z++) {
-				IntVec3 neighborCoords = baseCoords + IntVec3(x, y, z);
-				unsigned int accessIndex = GetIndexForCoords(neighborCoords);
 
-				auto const neighborIt = m_neighbors.find(accessIndex);
-				if (!(neighborIt != m_neighbors.end())) continue;
 
-				std::vector<FluidParticle*> const& neighbors = m_neighbors[accessIndex];
-				for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
-					FluidParticle const* const& neighbor = neighbors[neighborIndex];
+	for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
+		FluidParticle const* const& neighbor = neighbors[neighborIndex];
 
-					Vec3 displacement = particle.m_position - neighbor->m_position;
-					Vec3 diffVelocities = neighbor->m_velocity - particle.m_velocity;
-					float d = displacement.GetLength();
-					//if (d == 0.0f) { continue; }; // ignoring self particle
-					viscosity += diffVelocities * Poly6Kernel(d) ;
+		Vec3 displacement = particle.m_predictedPos - neighbor->m_predictedPos;
+		Vec3 diffVelocities = neighbor->m_velocity - particle.m_velocity;
+		float d = displacement.GetLength();
+		//if (d == 0.0f) { continue; }; // ignoring self particle
+		viscosity += diffVelocities * Poly6Kernel(d);
 
-				}
-
-			}
-		}
 	}
 
 	return viscosity * 0.01f;
@@ -249,7 +251,7 @@ Vec3 FluidSolver::GetViscosity(FluidParticle const& particle)
 void FluidSolver::UpdatePositionDelta(float deltaSeconds)
 {
 	UNUSED(deltaSeconds)
-	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
+		std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 		FluidParticle& particle = particles[particleIndex];
 		Vec3 deltaPos = CalculateDeltaPosition(particle);
@@ -268,38 +270,43 @@ void FluidSolver::UpdateVelocity(float deltaSeconds)
 
 		FluidParticle& particle = particles[particleIndex];
 
-		if (particle.m_predictedPos.z < 0.0f) particle.m_predictedPos.z = 0.0f;
-		Vec3 prevParticlePos = particle.m_predictedPos;
-		particle.m_predictedPos = KeepParticleInBounds(particle.m_predictedPos);
 		/*for (int otherParticle = particleIndex + 1; otherParticle < particles.size(); otherParticle++) {
 			PushSphereOutOfPoint(particle.m_predictedPos, 0.05f, particles[otherParticle].m_position);
 		}*/
 		particle.m_velocity = (particle.m_predictedPos - particle.m_position) / deltaSeconds;
+
+		if (particle.m_velocity.z > 9.8f) {
+			particle.m_velocity = particle.m_velocity;
+		}
 		/*if (particle.m_velocity.GetLengthSquared() > UNREASONABLE_LENGTH) {
 			particle.m_velocity = particle.m_velocity;
 			prevParticlePos = prevParticlePos;
 		}*/
 
-		
+
 
 	}
 }
 
-void FluidSolver::UpdateVorticityAndPosition()
+void FluidSolver::UpdateViscosityAndPosition(float deltaSeconds)
 {
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
-	//AABB3 const& bounds = m_config.m_simulationBounds;
-	//for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
+	AABB3 const& bounds = m_config.m_simulationBounds;
+	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 
-	//	FluidParticle& particle = particles[particleIndex];
-	//	particle.m_velocity += GetViscosity(particle);
-	//}
+		FluidParticle& particle = particles[particleIndex];
+		particle.m_velocity += GetViscosity(particle) / m_config.m_restDensity;
+	}
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 
 		FluidParticle& particle = particles[particleIndex];
 		Vec3 prevParticlePos = particle.m_predictedPos;
 		particle.m_prevPos = particle.m_position;
+		Vec3 positionBeforeCorrection = particle.m_predictedPos;
 		particle.m_predictedPos = KeepParticleInBounds(particle.m_predictedPos);
+		particle.m_velocity += (particle.m_predictedPos - positionBeforeCorrection) / deltaSeconds;
+
+
 		particle.m_position = particle.m_predictedPos;
 	}
 }
@@ -307,51 +314,43 @@ void FluidSolver::UpdateVorticityAndPosition()
 Vec3 FluidSolver::CalculateDeltaPosition(FluidParticle const& particle)
 {
 	if (particle.m_density < m_config.m_restDensity) return Vec3::ZERO;
-	IntVec3 baseCoords = GetCoordsForPos(particle.m_position);
+	std::vector<FluidParticle*> const& neighbors = particle.m_neighbors;
+
+
 	//std::vector<FluidParticle> debugNeighbors;
 	//std::vector<Vec3> deltaPosDebug;
 	Vec3 deltaPos = Vec3::ZERO;
-	for (int x = -1; x <= 1; x++) {
-		for (int y = -1; y <= 1; y++) {
-			for (int z = -1; z <= 1; z++) {
-				IntVec3 neighborCoords = baseCoords + IntVec3(x, y, z);
-				unsigned int accessIndex = GetIndexForCoords(neighborCoords);
-				auto const neighbortIt = m_neighbors.find(accessIndex);
-				if (!(neighbortIt != m_neighbors.end())) continue;
 
-				std::vector<FluidParticle*> const& neighbors = m_neighbors[accessIndex];
 
-				for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
-					FluidParticle const* const& neighbor = neighbors[neighborIndex];
-					float coefficient = neighbor->m_lambda + particle.m_lambda;
-					deltaPos += coefficient * particle.m_gradient;
-					//debugNeighbors.push_back(*neighbor);
-					//deltaPosDebug.push_back(coefficient * particle.m_gradient);
-				}
-
-			}
-		}
+	for (int neighborIndex = 0; neighborIndex < neighbors.size(); neighborIndex++) {
+		FluidParticle const* const& neighbor = neighbors[neighborIndex];
+		Vec3 displacement = particle.m_predictedPos - neighbor->m_predictedPos;
+		float coefficient = neighbor->m_lambda + particle.m_lambda;
+		Vec3 gradient = SpikyKernelGradient(displacement);
+		deltaPos += coefficient * gradient;
+		//debugNeighbors.push_back(*neighbor);
+		//deltaPosDebug.push_back(coefficient * particle.m_gradient);
 	}
-
 	return deltaPos / m_config.m_restDensity;
 }
 
-Vec3 FluidSolver::KeepParticleInBounds(Vec3 const& position)
+Vec3 FluidSolver::KeepParticleInBounds(Vec3 const& position) const
 {
 	AABB3 const& bounds = m_config.m_simulationBounds;
 
-	Vec3 correctedPosition = bounds.GetNearestPoint(position);
+	//Vec3 correctedPosition = bounds.GetNearestPoint(position);
+	Vec3 correctedPosition = position;
 
-	//if (position.z < bounds.m_mins.z) correctedPosition.z = bounds.m_mins.z;
-	////if (position.z > bounds.m_maxs.z) {
-	////	correctedPosition.z = bounds.m_maxs.z;
-	////}
+	if (position.z < bounds.m_mins.z) correctedPosition.z = bounds.m_mins.z;
+	//if (position.z > bounds.m_maxs.z) {
+	//	correctedPosition.z = bounds.m_maxs.z;
+	//}
 
-	//if (position.x < bounds.m_mins.x) correctedPosition.x = bounds.m_mins.x;
-	//if (position.x > bounds.m_maxs.x) correctedPosition.x = bounds.m_maxs.x;
+	if (position.x < bounds.m_mins.x) correctedPosition.x = bounds.m_mins.x;
+	if (position.x > bounds.m_maxs.x) correctedPosition.x = bounds.m_maxs.x;
 
-	//if (position.y < bounds.m_mins.y) correctedPosition.y = bounds.m_mins.y;
-	//if (position.y > bounds.m_maxs.y) correctedPosition.y = bounds.m_maxs.y;
+	if (position.y < bounds.m_mins.y) correctedPosition.y = bounds.m_mins.y;
+	if (position.y > bounds.m_maxs.y) correctedPosition.y = bounds.m_maxs.y;
 
 
 	return correctedPosition;

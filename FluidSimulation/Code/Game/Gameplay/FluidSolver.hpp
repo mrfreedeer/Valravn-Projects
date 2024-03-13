@@ -15,6 +15,7 @@ struct FluidParticle {
 	Vec3 m_gradient = Vec3::ZERO;
 	float m_lambda = 0.f;
 	float m_density = 0.0f;
+	std::vector<FluidParticle*> m_neighbors;
 };
 
 struct FluidSolverConfig {
@@ -53,10 +54,10 @@ private:
 	Vec3 GetViscosity(FluidParticle const& particle);
 	void UpdatePositionDelta(float deltaSeconds);
 	void UpdateVelocity(float deltaSeconds);
-	void UpdateVorticityAndPosition();
+	void UpdateViscosityAndPosition(float deltaSeconds);
 	Vec3 CalculateDeltaPosition(FluidParticle const& particle);
-	Vec3 KeepParticleInBounds(Vec3 const& position);
+	Vec3 KeepParticleInBounds(Vec3 const& position) const;
 	FluidSolverConfig m_config = {};
-	std::unordered_map<unsigned int, std::vector<FluidParticle*>> m_neighbors;
+	std::unordered_map<unsigned int, std::vector<FluidParticle*>> m_neighborsHashmap;
 	Vec3 m_forces = Vec3::ZERO;
 };

@@ -95,7 +95,7 @@ void Basic3DMode::Startup()
 	config.m_pointerToParticles = &m_particles;
 	config.m_simulationBounds = m_particlesBounds;
 	config.m_iterations = 5;
-	config.m_kernelRadius = 0.3f;
+	config.m_kernelRadius = 0.196f;
 	config.m_restDensity = 1000.0f;
 
 

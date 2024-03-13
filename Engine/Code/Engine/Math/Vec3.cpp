@@ -176,6 +176,8 @@ const Vec3 Vec3::GetClamped(float maxLength) const
 const Vec3 Vec3::GetNormalized() const
 {
 	float length = GetLength();
+	if(length == 0.0f) return Vec3::ZERO;
+
 	float normX = x / length;
 	float normY = y / length;
 	float normZ = z / length;
