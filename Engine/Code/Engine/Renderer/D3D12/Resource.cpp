@@ -16,7 +16,6 @@ void Resource::TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsComman
 
 Resource::Resource()
 {
-
 }
 
 Resource::~Resource()

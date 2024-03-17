@@ -337,6 +337,9 @@
     <ClCompile Include="Renderer\MaterialSystem.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="..\ThirdParty\ImGUI\imgui_impl_dx12.cpp">
+      <Filter>ThirdParty\ImGUI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math\Vec2.hpp">
@@ -686,6 +689,9 @@
     <ClInclude Include="Renderer\D3D12\Resource.hpp" />
     <ClInclude Include="Renderer\MaterialSystem.hpp">
       <Filter>Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\ImGUI\imgui_impl_dx12.h">
+      <Filter>ThirdParty\ImGUI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

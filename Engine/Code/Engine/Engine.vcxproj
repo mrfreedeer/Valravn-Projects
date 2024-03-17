@@ -307,7 +307,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <DisableSpecificWarnings>4369</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -345,7 +345,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <DisableSpecificWarnings>4369</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -384,7 +384,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12/</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <DisableSpecificWarnings>4369</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -426,7 +426,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <DisableSpecificWarnings>4369</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -461,6 +461,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_demo.cpp" />
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_draw.cpp" />
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_impl_dx11.cpp" />
+    <ClCompile Include="..\ThirdParty\ImGUI\imgui_impl_dx12.cpp" />
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_impl_win32.cpp" />
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_tables.cpp" />
     <ClCompile Include="..\ThirdParty\ImGUI\imgui_widgets.cpp" />
@@ -562,6 +563,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClInclude Include="..\ThirdParty\ImGUI\imconfig.h" />
     <ClInclude Include="..\ThirdParty\ImGUI\imgui.h" />
     <ClInclude Include="..\ThirdParty\ImGUI\imgui_impl_dx11.h" />
+    <ClInclude Include="..\ThirdParty\ImGUI\imgui_impl_dx12.h" />
     <ClInclude Include="..\ThirdParty\ImGUI\imgui_impl_win32.h" />
     <ClInclude Include="..\ThirdParty\ImGUI\imgui_internal.h" />
     <ClInclude Include="..\ThirdParty\ImGUI\imstb_rectpack.h" />

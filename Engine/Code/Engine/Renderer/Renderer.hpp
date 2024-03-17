@@ -223,10 +223,14 @@ public:
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
-
+	void TrackResource(Resource* newResource);
 private:
 
 	// DX12 Initialization & Render Initialization
+	void InitializeImGui();
+	void ShutdownImGui();
+	void BeginFrameImGui();
+	void EndFrameImGui();
 	void EnableDebugLayer() const;
 	void CreateDXGIFactory();
 	ComPtr<IDXGIAdapter4> GetAdapter();
@@ -297,6 +301,8 @@ private:
 	void DrawImmediateCtx(ImmediateContext& ctx);
 	void CopyCurrentDrawCtxToNext();
 	ComPtr<ID3D12GraphicsCommandList2> GetBufferCommandList();
+
+	void ResetResourcesState();
 private:
 	RendererConfig m_config = {};
 	// This object must be first ALWAYS!!!!!
@@ -318,11 +324,15 @@ private:
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	std::vector<Texture*> m_loadedTextures;
 	std::vector<BitmapFont*> m_loadedFonts;
+	std::vector<Resource*> m_resources;
 
 	std::vector<ID3D12Resource*> m_frameUploadHeaps;
 	//ID3D12DescriptorHeap* m_RTVdescriptorHeap;
 	std::vector<DescriptorHeap*> m_defaultDescriptorHeaps;
 	std::vector<DescriptorHeap*> m_defaultGPUDescriptorHeaps;
+	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
+
+
 
 	ImmediateContext* m_immediateCtxs = nullptr;
 	std::vector<FxContext> m_effectsCtxs;

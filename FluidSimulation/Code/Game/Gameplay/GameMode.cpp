@@ -49,7 +49,7 @@ void GameMode::Shutdown()
 	m_player = nullptr;
 
 	for (SoundPlaybackID playbackId : g_soundPlaybackIDs) {
-		if(playbackId == MISSING_SOUND_ID) continue;
+		if (playbackId == MISSING_SOUND_ID) continue;
 
 		g_theAudio->StopSound(playbackId);
 	}
@@ -75,8 +75,16 @@ void GameMode::UpdateDeveloperCheatCodes(float deltaSeconds)
 		sysClock.TogglePause();
 	}
 
+
 	if (g_theInput->WasKeyJustPressed(KEYCODE_F1)) {
-		g_drawDebug = !g_drawDebug;
+		if (g_theInput->IsKeyDown(KEYCODE_SHIFT)) {
+			m_isCursorHidden = !m_isCursorHidden;
+			m_isCursorRelative = !m_isCursorRelative;
+			m_isCursorClipped = !m_isCursorClipped;
+		}
+		else {
+			g_drawDebug = !g_drawDebug;
+		}
 	}
 
 

@@ -21,6 +21,9 @@
 #include <dxgidebug.h>
 #include <d3dx12.h> // Notice the X. These are the helper structures not the DX12 header
 #include <regex>
+#include <ThirdParty/ImGUI/imgui.h>
+#include <ThirdParty/ImGUI/imgui_impl_win32.h>
+#include <ThirdParty/ImGUI/imgui_impl_dx12.h>
 
 #pragma message("ENGINE_DIR == " ENGINE_DIR)
 
@@ -95,6 +98,78 @@ Renderer::Renderer(RendererConfig const& config) :
 Renderer::~Renderer()
 {
 
+}
+
+void Renderer::InitializeImGui()
+{
+#if defined(ENGINE_USE_IMGUI)
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	Window* window = Window::GetWindowContext();
+
+
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+		desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+		desc.NumDescriptors = 1;
+		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+		if (m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_ImGuiSrvDescHeap)) != S_OK)
+			ERROR_AND_DIE("COULD NOT CREATE IMGUI SRV HEAP");
+
+	}
+
+	HWND windowHandle = (HWND)window->m_osWindowHandle;
+	ImGui_ImplWin32_Init(windowHandle);
+	ImGui_ImplDX12_Init(m_device.Get(), m_config.m_backBuffersCount,
+		DXGI_FORMAT_R8G8B8A8_UNORM, m_ImGuiSrvDescHeap,
+		m_ImGuiSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+		m_ImGuiSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
+#endif
+}
+
+void Renderer::ShutdownImGui()
+{
+#if defined(ENGINE_USE_IMGUI)
+
+	ImGui_ImplDX12_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+
+	DX_SAFE_RELEASE(m_ImGuiSrvDescHeap);
+#endif
+}
+
+void Renderer::BeginFrameImGui()
+{
+#if defined(ENGINE_USE_IMGUI)
+	ImGui_ImplDX12_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
+	ImGui::ShowDemoWindow();
+#endif
+}
+
+void Renderer::EndFrameImGui()
+{
+#if defined(ENGINE_USE_IMGUI)
+	Texture* currentRt = GetActiveRenderTarget();
+	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+
+	ImGui::Render();
+	m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, nullptr);
+	m_commandList->SetDescriptorHeaps(1, &m_ImGuiSrvDescHeap);
+
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
+#endif
 }
 
 void Renderer::EnableDebugLayer() const
@@ -340,6 +415,7 @@ void Renderer::CreateRenderTargetViewsForBackBuffers()
 		backBufferTexInfo.m_name = Stringf("BackBuffer %d", frameBufferInd);
 		backBufferTexInfo.m_owner = this;
 		backBufferTexInfo.m_handle = new Resource();
+		TrackResource(backBufferTexInfo.m_handle);
 		backBufferTexInfo.m_handle->m_resource = bufferTex;
 
 		backBuffer = CreateTexture(backBufferTexInfo);
@@ -571,6 +647,8 @@ void Renderer::Startup()
 
 
 	m_commandAllocators.resize(m_config.m_backBuffersCount + 1);
+	// 2 for frames
+	// 1 for resources
 	for (unsigned int frameIndex = 0; frameIndex < m_config.m_backBuffersCount; frameIndex++) {
 		CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[frameIndex]);
 	}
@@ -694,6 +772,10 @@ void Renderer::Startup()
 	DebugRenderSystemStartup(debugSystemConfig);
 
 	m_immediateCtxs = new ImmediateContext[m_immediateCtxCount]{};
+
+
+	InitializeImGui();
+
 }
 
 
@@ -1377,6 +1459,17 @@ ComPtr<ID3D12GraphicsCommandList2> Renderer::GetBufferCommandList()
 	return m_ResourcesCommandList;
 }
 
+void Renderer::ResetResourcesState()
+{
+	for (Resource* currentResource : m_resources) {
+		if (!currentResource) {
+			ERROR_RECOVERABLE("RESORCE WAS DELETED SOMEWHERE");
+			continue;
+		}
+		currentResource->m_currentState = D3D12_RESOURCE_STATE_COMMON;
+	}
+}
+
 Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 {
 	Texture* existingTexture = GetTextureForFileName(imageFilePath);
@@ -1644,6 +1737,8 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 		}
 		handle = new Resource();
 		handle->m_currentState = initialResourceState;
+
+		TrackResource(handle);
 		D3D12_CLEAR_VALUE clearValueRT = {};
 		D3D12_CLEAR_VALUE clearValueDST = {};
 		D3D12_CLEAR_VALUE* clearValue = NULL;
@@ -2044,6 +2139,11 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	m_commandList->ClearState(defaultMat->m_PSO);
 }
 
+void Renderer::TrackResource(Resource* newResource)
+{
+	m_resources.push_back(newResource);
+}
+
 void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
 {
 
@@ -2162,7 +2262,7 @@ void Renderer::BindMaterial(Material* mat)
 void Renderer::BindMaterialByName(char const* materialName)
 {
 	Material* material = g_theMaterialSystem->GetMaterialForName(materialName);
-	if(!material) material = GetDefaultMaterial();
+	if (!material) material = GetDefaultMaterial();
 
 	BindMaterial(material);
 }
@@ -2296,7 +2396,7 @@ void Renderer::DrawAllImmediateContexts()
 	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
 
 	for (unsigned int ctxIndex = 0; ctxIndex < m_currentDrawCtx; ctxIndex++) {
-	//for (ImmediateContext& ctx : m_immediateCtxs) {
+		//for (ImmediateContext& ctx : m_immediateCtxs) {
 		ImmediateContext& ctx = m_immediateCtxs[ctxIndex];
 		DrawImmediateCtx(ctx);
 	}
@@ -2375,10 +2475,12 @@ void Renderer::BeginFrame()
   // fences to determine GPU execution progress.
 	ThrowIfFailed(m_commandAllocators[m_currentBackBuffer]->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
 
+
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	ThrowIfFailed(m_commandList->Reset(m_commandAllocators[m_currentBackBuffer].Get(), m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
+
 	m_isCommandListOpen = true;
 	BindTexture(nullptr);
 	activeRTResource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
@@ -2403,16 +2505,14 @@ void Renderer::BeginFrame()
 	m_immediateVertexes.clear();
 	m_immediateIndices.clear();
 
+	BeginFrameImGui();
 
-#if defined(ENGINE_USE_IMGUI)
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
-#endif
 }
 
 void Renderer::EndFrame()
 {
+
+
 	DebugRenderEndFrame();
 
 	DrawAllImmediateContexts();
@@ -2421,18 +2521,25 @@ void Renderer::EndFrame()
 		DrawAllEffects();
 	}
 
-	Resource* defaultRTResource = GetActiveRenderTarget()->GetResource();
+	Texture* currentRt = GetActiveRenderTarget();
+	Resource* defaultRTResource = currentRt->GetResource();
 	Resource* currentBackBuffer = GetActiveBackBuffer()->GetResource();
 
+
+	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+
+	EndFrameImGui();
+
+	// Copy draws from default texture to backbuffer
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, m_commandList.Get());
 	defaultRTResource->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, m_commandList.Get());
 	m_commandList->CopyResource(currentBackBuffer->m_resource, defaultRTResource->m_resource);
 
 
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
+
 	ThrowIfFailed(m_commandList->Close(), "COULD NOT CLOSE COMMAND LIST");
 	m_isCommandListOpen = false;
-
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
 	ExecuteCommandLists(ppCommandLists, 1);
 
@@ -2447,17 +2554,19 @@ void Renderer::EndFrame()
 	// Flush Command Queue getting ready for next Frame
 	WaitForGPU();
 
-	//ClearAllImmediateContexts();
 	m_effectsCtxs.clear();
 	m_effectsCtxs.resize(0);
 
 	m_currentFrame++;
 	g_theMaterialSystem->EndFrame();
+
 }
 
 void Renderer::Shutdown()
 {
 	Flush(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
+
+	ShutdownImGui();
 
 	for (auto& uploadHeap : m_frameUploadHeaps) {
 		DX_SAFE_RELEASE(uploadHeap);
@@ -2494,6 +2603,7 @@ void Renderer::Shutdown()
 		delete descriptorHeap;
 		descriptorHeap = nullptr;
 	}
+
 
 
 	//for (int constantBufferInd = 0; constantBufferInd < m_cameraCBOArray.size(); constantBufferInd++) {
@@ -2538,6 +2648,7 @@ void Renderer::Shutdown()
 	g_theMaterialSystem = nullptr;
 
 	delete[] m_immediateCtxs;
+	m_resources.clear();
 }
 
 void Renderer::BeginCamera(Camera const& camera)
@@ -2628,7 +2739,7 @@ LiveObjectReporter::~LiveObjectReporter()
 		debugController->Release();
 		debug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 		debug->Release();
-}
+	}
 	else {
 		ERROR_AND_DIE("COULD NOT ENABLE DX12 LIVE REPORTING");
 	}
