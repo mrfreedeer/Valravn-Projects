@@ -43,6 +43,7 @@ private:
 	void RenderParticles() const;
 
 private:
+	Material* m_prePassMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
 

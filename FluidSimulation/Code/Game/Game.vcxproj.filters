@@ -8,8 +8,14 @@
     <Filter Include="Gameplay">
       <UniqueIdentifier>{c92b0697-1d39-4a49-9035-494bc34c39c8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders">
-      <UniqueIdentifier>{d76e653c-8633-4c3d-bbe6-65d8f4e1d5c6}</UniqueIdentifier>
+    <Filter Include="Materials">
+      <UniqueIdentifier>{2c8c8e1c-71ec-4ea3-8838-fbe2bd97b8c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Materials\Shaders">
+      <UniqueIdentifier>{bad8ac4a-3e50-47dc-ad4f-2893c3f4998e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Materials\Shaders\Stages">
+      <UniqueIdentifier>{81296559-cae0-437d-91cc-98f08ed9478f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -82,37 +88,21 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
+    <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml">
+      <Filter>Materials</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\..\Run\Data\Shaders\Default.hlsl">
-      <Filter>Shaders</Filter>
+    <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_m.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\effect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\GrayScaleEffect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\InvertedColorEffect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\PixelizedEffect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\ColorBandEffect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\DistanceFogEffect.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\SSAO.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\DownsampleDepthBuffer.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Shaders\DefaultDiffuse.hlsl">
-      <Filter>Shaders</Filter>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_p.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

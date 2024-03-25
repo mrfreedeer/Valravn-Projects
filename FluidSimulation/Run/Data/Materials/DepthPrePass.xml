@@ -1,0 +1,14 @@
+<Material name="FluidDepthPrepass">
+	<MeshShader headerSrc="Shaders/" shaderName="FluidDepthPrePass_m" src="Data/Materials/Shaders/Stages/FluidDepthPrePass_m.hlsl" entryPoint="MeshMain"/>
+	<PixelShader  headerSrc="Shaders/" shaderName="FluidDepthPrePass_p" src="Data/Materials/Shaders/Stages/FluidDepthPrePass_p.hlsl" entryPoint="PixelMain"/>
+	<BlendMode value="Opaque"/>
+	<!-- CCW - CounterClockwise
+    CW - ClockWise -->
+	<WindingOrder value="CCW"/>
+	<CullMode value="BackFace"/>
+	<FillMode value="Solid"/>
+	<Topology value="PointList"/>
+	<DepthStencil depthFunction="LESSEQUAL" writeDepth="true"/>
+	<Antialiasing value="8"/>
+	<Metadata src="material.mtl"/>
+</Material>

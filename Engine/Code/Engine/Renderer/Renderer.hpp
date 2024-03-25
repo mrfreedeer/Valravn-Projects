@@ -32,6 +32,7 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 struct ShaderByteCode;
 struct ShaderLoadInfo;
+struct D3DX12_MESH_SHADER_PIPELINE_STATE_DESC;
 
 class Window;
 class Material;
@@ -301,6 +302,8 @@ private:
 	void DrawImmediateCtx(ImmediateContext& ctx);
 	void CopyCurrentDrawCtxToNext();
 	ComPtr<ID3D12GraphicsCommandList2> GetBufferCommandList();
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetGraphicsPSO(Material* material, std::vector<std::string>& nameStrings);
+	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC GetMeshShaderPSO(Material* material);
 
 	void ResetResourcesState();
 private:

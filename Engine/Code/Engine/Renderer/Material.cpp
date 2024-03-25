@@ -67,6 +67,10 @@ void Material::ParseShader(std::string const& attributeName, XMLElement const& x
 	else if (AreStringsEqualCaseInsensitive(attributeName, "domainshader")) {
 		shaderType = ShaderType::Domain;
 	}
+	else if (AreStringsEqualCaseInsensitive(attributeName, "meshshader")) {
+		shaderType = ShaderType::Mesh;
+		m_isMeshShader = true;
+	}
 
 	ShaderLoadInfo& loadInfo = m_config.m_shaders[shaderType];
 	loadInfo.m_shaderEntryPoint = ParseXmlAttribute(xmlElement, "entryPoint", "Unknown");
@@ -215,6 +219,8 @@ char const* Material::GetTargetForShader(ShaderType shaderType)
 		return "ps_6_5";
 	case Geometry:
 		return "gs_6_5";
+	case Mesh:
+		return "ms_6_5";
 	case Hull:
 		return "hs_6_5";
 	case Domain:

@@ -6,11 +6,12 @@
 #include <d3d12.h>
 #include "Engine/Renderer/GraphicsCommon.hpp"
 
-enum ShaderType: unsigned int {
+enum ShaderType : unsigned int {
 	InvalidShader = UINT_MAX,
 	Vertex = 0,
 	Pixel,
 	Geometry,
+	Mesh,
 	Hull,
 	Domain,
 	Compute,
@@ -75,6 +76,7 @@ public:
 	Material(const Material& copy) = delete;
 	const std::string& GetName() const;
 	const std::string& GetPath() const;
+	bool IsMeshShader() const { return m_isMeshShader; }
 private:
 	Material(const MaterialConfig& config);
 	Material() = default;
@@ -89,15 +91,16 @@ private:
 	void ParseFillMode(XMLElement const& xmlElement);
 	void ParseTopology(XMLElement const& xmlElement);
 	void ParseDepthStencil(XMLElement const& xmlElement);
-	
+
 	char const* GetEntryPoint(ShaderType shaderType) const;
 	static char const* GetTargetForShader(ShaderType shaderType);
 private:
 	MaterialConfig	m_config = {};
 	SiblingMaterials m_siblings = {};
-	ShaderByteCode* m_byteCodes[ShaderType::NUM_SHADER_TYPES]= {} ;
+	ShaderByteCode* m_byteCodes[ShaderType::NUM_SHADER_TYPES] = {};
 	std::vector<uint8_t> m_cachedPSO;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_inputLayout;
+	bool m_isMeshShader = false;
 
 	ID3D12PipelineState* m_PSO = nullptr;
 };

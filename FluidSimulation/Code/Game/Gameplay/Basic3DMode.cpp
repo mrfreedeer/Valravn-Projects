@@ -89,6 +89,9 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
 	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theMaterialSystem->GetMaterialForName("PixelizedFX");
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
+	
+	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
+	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 
 	FluidSolverConfig config = {};
 	config.m_particlePerSide = 10;

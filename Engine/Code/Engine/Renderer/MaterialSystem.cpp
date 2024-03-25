@@ -46,8 +46,6 @@ Material* MaterialSystem::CreateOrGetMaterial(std::filesystem::path& materialPat
 	return CreateMaterial(materialXMLPath);
 }
 
-
-
 Material* MaterialSystem::GetMaterialForName(std::string const& materialNameNoExt)
 {
 	for (int matIndex = 0; matIndex < m_loadedMaterials.size(); matIndex++) {

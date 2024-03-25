@@ -975,97 +975,28 @@ void Renderer::CreatePSOForMaterial(Material* material)
 		ShaderByteCode* shaderByteCode = CompileOrGetShaderBytes(loadInfo);
 		material->m_byteCodes[loadInfo.m_shaderType] = shaderByteCode;
 	}
-	ShaderByteCode* vsByteCode = material->m_byteCodes[ShaderType::Vertex];
-	std::vector<uint8_t>& vertexShaderByteCode = vsByteCode->m_byteCode;
-
-	std::vector<D3D12_SIGNATURE_PARAMETER_DESC> reflectInputDesc;
+	HRESULT psoCreation = {};
 	std::vector<std::string> nameStrings;
 
-	CreateInputLayoutFromVS(vertexShaderByteCode, reflectInputDesc, nameStrings);
+	if (material->IsMeshShader()) {
+		D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = GetMeshShaderPSO(material);
+		CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
 
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+		streamDesc.pPipelineStateSubobjectStream = &psoStream;
+		streamDesc.SizeInBytes = sizeof(psoStream);
 
-	// Const Char* copying from D3D12_SIGNATURE_PARAMETER_DESC is quite problematic
-	std::vector<D3D12_INPUT_ELEMENT_DESC>& inputLayoutDesc = material->m_inputLayout;
-	inputLayoutDesc.resize(reflectInputDesc.size());
+		psoCreation = m_device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&material->m_PSO));
+	}
+	else {
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = GetGraphicsPSO(material, nameStrings);
+		psoCreation = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&material->m_PSO));
 
-	for (int inputIndex = 0; inputIndex < reflectInputDesc.size(); inputIndex++) {
-		D3D12_INPUT_ELEMENT_DESC& elementDesc = inputLayoutDesc[inputIndex];
-		D3D12_SIGNATURE_PARAMETER_DESC& paramDesc = reflectInputDesc[inputIndex];
-		std::string& currentString = nameStrings[inputIndex];
-
-		paramDesc.SemanticName = currentString.c_str();
-		elementDesc.Format = GetFormatForComponent(paramDesc.ComponentType, currentString.c_str(), paramDesc.Mask);
-		elementDesc.SemanticName = currentString.c_str();
-		elementDesc.SemanticIndex = paramDesc.SemanticIndex;
-		elementDesc.InputSlot = 0;
-		elementDesc.AlignedByteOffset = (inputIndex == 0) ? 0 : D3D12_APPEND_ALIGNED_ELEMENT;
-		elementDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-		elementDesc.InstanceDataStepRate = 0;
 	}
 
-
-
-	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
-	ShaderByteCode* gsByteCode = material->m_byteCodes[ShaderType::Geometry];
-	ShaderByteCode* hsByteCode = material->m_byteCodes[ShaderType::Hull];
-	ShaderByteCode* dsByteCode = material->m_byteCodes[ShaderType::Domain];
-
-	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
-		LocalToD3D12(matConfig.m_fillMode),			// Fill mode
-		LocalToD3D12(matConfig.m_cullMode),			// Cull mode
-		LocalToD3D12(matConfig.m_windingOrder),		// Winding order
-		D3D12_DEFAULT_DEPTH_BIAS,					// Depth bias
-		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,				// Bias clamp
-		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,		// Slope scaled bias
-		TRUE,										// Depth Clip enable
-		FALSE,										// Multi sample (MSAA)
-		FALSE,										// Anti aliased line enable
-		0,											// Force sample count
-		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF	// Conservative Rasterization
-	);
-
-	D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	psoDesc.InputLayout.NumElements = (UINT)reflectInputDesc.size();
-	psoDesc.InputLayout.pInputElementDescs = inputLayoutDesc.data();
-	psoDesc.pRootSignature = m_rootSignature.Get();
-	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsByteCode->m_byteCode.data(), vsByteCode->m_byteCode.size());
-	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
-	if (gsByteCode) {
-		psoDesc.GS = CD3DX12_SHADER_BYTECODE(gsByteCode->m_byteCode.data(), gsByteCode->m_byteCode.size());
-	}
-
-	if (hsByteCode) {
-		psoDesc.HS = CD3DX12_SHADER_BYTECODE(hsByteCode->m_byteCode.data(), hsByteCode->m_byteCode.size());
-	}
-
-	if (dsByteCode) {
-		psoDesc.DS = CD3DX12_SHADER_BYTECODE(dsByteCode->m_byteCode.data(), dsByteCode->m_byteCode.size());
-	}
-
-	psoDesc.RasterizerState = rasterizerDesc;
-	psoDesc.BlendState = blendDesc;
-	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
-	psoDesc.DepthStencilState.DepthFunc = LocalToD3D12(matConfig.m_depthFunc);
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	psoDesc.DepthStencilState.StencilEnable = FALSE;
-	psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = // a stencil operation structure, does not really matter since stencil testing is turned off
-	{ D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
-	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
-	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
-	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
-	psoDesc.SampleDesc.Count = 1;
-
-	HRESULT psoCreation = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&material->m_PSO));
 	ThrowIfFailed(psoCreation, "COULD NOT CREATE PSO");
+
+
 	std::string shaderDebugName = "PSO:";
 	shaderDebugName += baseName;
 	SetDebugName(material->m_PSO, shaderDebugName.c_str());
@@ -1457,6 +1388,158 @@ void Renderer::CopyCurrentDrawCtxToNext()
 ComPtr<ID3D12GraphicsCommandList2> Renderer::GetBufferCommandList()
 {
 	return m_ResourcesCommandList;
+}
+
+/// <summary>
+/// Create PSO for usual graphics pipeline. Note: the nameStrings MUST live beyond this function's scope. Hence it's a parameter
+/// </summary>
+/// <param name="material"></param>
+/// <param name="nameStrings"></param>
+/// <returns></returns>
+D3D12_GRAPHICS_PIPELINE_STATE_DESC Renderer::GetGraphicsPSO(Material* material, std::vector<std::string>& nameStrings)
+{
+	std::vector<D3D12_SIGNATURE_PARAMETER_DESC> reflectInputDesc;
+
+	ShaderByteCode* vsByteCode = material->m_byteCodes[ShaderType::Vertex];
+	CreateInputLayoutFromVS(vsByteCode->m_byteCode, reflectInputDesc, nameStrings);
+
+	// Const Char* copying from D3D12_SIGNATURE_PARAMETER_DESC is quite problematic
+	std::vector<D3D12_INPUT_ELEMENT_DESC>& inputLayoutDesc = material->m_inputLayout;
+	inputLayoutDesc.resize(reflectInputDesc.size());
+
+	for (int inputIndex = 0; inputIndex < reflectInputDesc.size(); inputIndex++) {
+		D3D12_INPUT_ELEMENT_DESC& elementDesc = inputLayoutDesc[inputIndex];
+		D3D12_SIGNATURE_PARAMETER_DESC& paramDesc = reflectInputDesc[inputIndex];
+		std::string& currentString = nameStrings[inputIndex];
+
+		paramDesc.SemanticName = currentString.c_str();
+		elementDesc.Format = GetFormatForComponent(paramDesc.ComponentType, currentString.c_str(), paramDesc.Mask);
+		elementDesc.SemanticName = currentString.c_str();
+		elementDesc.SemanticIndex = paramDesc.SemanticIndex;
+		elementDesc.InputSlot = 0;
+		elementDesc.AlignedByteOffset = (inputIndex == 0) ? 0 : D3D12_APPEND_ALIGNED_ELEMENT;
+		elementDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		elementDesc.InstanceDataStepRate = 0;
+	}
+
+	MaterialConfig const& matConfig = material->m_config;
+
+	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
+		LocalToD3D12(matConfig.m_fillMode),			// Fill mode
+		LocalToD3D12(matConfig.m_cullMode),			// Cull mode
+		LocalToD3D12(matConfig.m_windingOrder),		// Winding order
+		D3D12_DEFAULT_DEPTH_BIAS,					// Depth bias
+		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,				// Bias clamp
+		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,		// Slope scaled bias
+		TRUE,										// Depth Clip enable
+		FALSE,										// Multi sample (MSAA)
+		FALSE,										// Anti aliased line enable
+		0,											// Force sample count
+		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF	// Conservative Rasterization
+	);
+
+	D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
+	ShaderByteCode* gsByteCode = material->m_byteCodes[ShaderType::Geometry];
+	ShaderByteCode* hsByteCode = material->m_byteCodes[ShaderType::Hull];
+	ShaderByteCode* dsByteCode = material->m_byteCodes[ShaderType::Domain];
+
+	psoDesc.InputLayout.NumElements = (UINT)reflectInputDesc.size();
+	psoDesc.InputLayout.pInputElementDescs = inputLayoutDesc.data();
+	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
+
+	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsByteCode->m_byteCode.data(), vsByteCode->m_byteCode.size());
+	if (gsByteCode) {
+		psoDesc.GS = CD3DX12_SHADER_BYTECODE(gsByteCode->m_byteCode.data(), gsByteCode->m_byteCode.size());
+	}
+
+	if (hsByteCode) {
+		psoDesc.HS = CD3DX12_SHADER_BYTECODE(hsByteCode->m_byteCode.data(), hsByteCode->m_byteCode.size());
+	}
+
+	if (dsByteCode) {
+		psoDesc.DS = CD3DX12_SHADER_BYTECODE(dsByteCode->m_byteCode.data(), dsByteCode->m_byteCode.size());
+	}
+
+	psoDesc.RasterizerState = rasterizerDesc;
+	psoDesc.BlendState = blendDesc;
+	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
+	psoDesc.DepthStencilState.DepthFunc = LocalToD3D12(matConfig.m_depthFunc);
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = // a stencil operation structure, does not really matter since stencil testing is turned off
+	{ D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
+	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
+	psoDesc.NumRenderTargets = 1;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
+	psoDesc.SampleDesc.Count = 1;
+
+	return psoDesc;
+}
+
+D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* material)
+{
+	std::vector<D3D12_SIGNATURE_PARAMETER_DESC> reflectInputDesc;
+	std::vector<std::string> nameStrings;
+
+
+	MaterialConfig const& matConfig = material->m_config;
+
+	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
+		LocalToD3D12(matConfig.m_fillMode),			// Fill mode
+		LocalToD3D12(matConfig.m_cullMode),			// Cull mode
+		LocalToD3D12(matConfig.m_windingOrder),		// Winding order
+		D3D12_DEFAULT_DEPTH_BIAS,					// Depth bias
+		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,				// Bias clamp
+		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,		// Slope scaled bias
+		TRUE,										// Depth Clip enable
+		FALSE,										// Multi sample (MSAA)
+		FALSE,										// Anti aliased line enable
+		0,											// Force sample count
+		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF	// Conservative Rasterization
+	);
+
+	D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
+
+	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = {};
+	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
+	ShaderByteCode* msByteCode = material->m_byteCodes[ShaderType::Mesh];
+
+	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
+	psoDesc.MS = CD3DX12_SHADER_BYTECODE(msByteCode->m_byteCode.data(), msByteCode->m_byteCode.size());
+
+	psoDesc.RasterizerState = rasterizerDesc;
+	psoDesc.BlendState = blendDesc;
+	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
+	psoDesc.DepthStencilState.DepthFunc = LocalToD3D12(matConfig.m_depthFunc);
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = // a stencil operation structure, does not really matter since stencil testing is turned off
+	{ D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
+	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
+	psoDesc.NumRenderTargets = 1;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
+	psoDesc.SampleDesc.Count = 1;
+
+	return psoDesc;
 }
 
 void Renderer::ResetResourcesState()
