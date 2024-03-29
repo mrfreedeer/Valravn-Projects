@@ -1,12 +1,36 @@
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/Buffer.hpp"
 #include "Engine/Renderer/DebugRendererSystem.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+#include "Engine/Renderer/ConstantBuffer.hpp"
+#include "Engine/Math/Vec4.hpp"
 #include "Game/Gameplay/Basic3DMode.hpp"
 #include "Game/Framework/GameCommon.hpp"
 #include "Game/Gameplay/Prop.hpp"
 #include "Game/Gameplay/Game.hpp"
 
 Basic3DMode* pointerToSelf = nullptr;
+struct Meshlet
+{
+	Meshlet(unsigned int vCount, unsigned int vOffset, unsigned int primCount, unsigned int primOffset) :
+		VertexCount(vCount),
+		VertexOffset(vOffset),
+		PrimCount(primCount),
+		PrimOffset(primOffset) {}
+
+	unsigned int VertexCount;
+	unsigned int VertexOffset;
+	unsigned int PrimCount;
+	unsigned int PrimOffset;
+};
+
+struct GameConstants
+{
+	Vec3 EyePosition;
+	float SpriteRadius;
+	Vec4 CameraUp;
+};
+
 
 Basic3DMode::Basic3DMode(Game* game, Vec2 const& UISize) :
 	GameMode(game, UISize)
@@ -89,7 +113,7 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
 	m_effectsMaterials[(int)MaterialEffect::Pixelized] = g_theMaterialSystem->GetMaterialForName("PixelizedFX");
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
-	
+
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 
@@ -107,14 +131,54 @@ void Basic3DMode::Startup()
 
 	m_verts.clear();
 	size_t lastIndex = 0;
-	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
-		FluidParticle const& particle = m_particles[particleIndex];
-		AddVertsForSphere(m_verts, config.m_renderingRadius, 4, 8, Rgba8(0, 0, 180, 100));
-		TransformVertexArray3D(int(m_verts.size() - lastIndex), &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
-		lastIndex = m_verts.size();
+	constexpr unsigned int meshletSize = 64;
+
+	std::vector<Meshlet> meshlets;
+	unsigned int meshletParticleCount = 0;
+	unsigned int meshletsParticleAccumulator = 0;
+	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++, meshletParticleCount++) {
+		if (meshletParticleCount + 1 >= meshletSize) {
+			meshlets.emplace_back(meshletParticleCount + 1, meshletsParticleAccumulator, meshletParticleCount + 1, meshletsParticleAccumulator);
+			meshletsParticleAccumulator += meshletParticleCount + 1;
+			meshletParticleCount = 0;
+		}
+
+		/*	FluidParticle const& particle = m_particles[particleIndex];
+			AddVertsForSphere(m_verts, config.m_renderingRadius, 4, 8, Rgba8(0, 0, 180, 100));
+			TransformVertexArray3D(int(m_verts.size() - lastIndex), &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
+			lastIndex = m_verts.size();*/
 	}
 	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
+	m_particlesMeshInfo = new FluidParticleMeshInfo[m_particles.size()];
 
+	BufferDesc bufferDesc = {};
+	bufferDesc.data = m_particlesMeshInfo;
+	bufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	bufferDesc.owner = g_theRenderer;
+	bufferDesc.size = sizeof(FluidParticleMeshInfo) * m_particles.size();
+	bufferDesc.stride = sizeof(FluidParticleMeshInfo);
+
+	m_meshVBuffer = new StructuredBuffer(bufferDesc);
+
+	bufferDesc.data = meshlets.data();
+	bufferDesc.size = sizeof(Meshlet) * meshlets.size();
+	bufferDesc.stride = sizeof(Meshlet);
+
+	m_meshletBuffer = new StructuredBuffer(bufferDesc);
+	m_meshletBuffer->CopyCPUToGPU(meshlets.data(), sizeof(Meshlet) * meshlets.size());
+
+	GameConstants dummyData = {};
+
+	BufferDesc cBufferDesc = {};
+	cBufferDesc.data = nullptr;
+	cBufferDesc.descriptorHeap = nullptr;
+	cBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	cBufferDesc.owner = g_theRenderer;
+	cBufferDesc.size = sizeof(GameConstants);
+	cBufferDesc.stride = sizeof(GameConstants);
+
+	m_gameConstants = new ConstantBuffer(cBufferDesc);
+	m_gameConstants->Initialize();
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -131,13 +195,14 @@ void Basic3DMode::Update(float deltaSeconds)
 	std::string gameInfoStr = Stringf("Delta: (%.2f, %.2f)", mouseClientDelta.x, mouseClientDelta.y);
 	DebugAddMessage(gameInfoStr, 0.0f, Rgba8::WHITE, Rgba8::WHITE);
 
-	DebugAddWorldWireBox(m_particlesBounds, 0.0f, Rgba8(255,0,0,20), Rgba8::RED, DebugRenderMode::USEDEPTH);
+	DebugAddWorldWireBox(m_particlesBounds, 0.0f, Rgba8(255, 0, 0, 20), Rgba8::RED, DebugRenderMode::USEDEPTH);
 
 	UpdateDeveloperCheatCodes(deltaSeconds);
 	UpdateEntities(deltaSeconds);
 	UpdateParticles(deltaSeconds);
 
 	DisplayClocksInfo();
+
 
 }
 
@@ -148,13 +213,14 @@ void Basic3DMode::Render() const
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
-		g_theRenderer->BindTexture(nullptr, 1);
+		g_theRenderer->BindTexture(nullptr);
 		RenderEntities();
 		RenderParticles();
+
 	}
-
-
 	g_theRenderer->EndCamera(m_worldCamera);
+
+
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
 		if (m_applyEffects[effectInd]) {
@@ -185,7 +251,17 @@ void Basic3DMode::Shutdown()
 	m_particles.clear();
 	m_verts.clear();
 
+	delete m_gameConstants;
+	m_gameConstants = nullptr;
 
+	delete m_particlesMeshInfo;
+	m_particlesMeshInfo = nullptr;
+
+	delete m_meshVBuffer;
+	m_meshVBuffer = nullptr;
+
+	delete m_meshletBuffer;
+	m_meshletBuffer = nullptr;
 }
 
 void Basic3DMode::UpdateDeveloperCheatCodes(float deltaSeconds)
@@ -405,12 +481,20 @@ void Basic3DMode::DisplayClocksInfo() const
 void Basic3DMode::UpdateParticles(float deltaSeconds)
 {
 	m_fluidSolver.Update(deltaSeconds);
-	for (int vertIndex = 0, particleIndex = 0; vertIndex < m_verts.size(); vertIndex+= m_vertsPerParticle, particleIndex++) {
+	//for (int vertIndex = 0, particleIndex = 0; vertIndex < m_verts.size(); vertIndex += m_vertsPerParticle, particleIndex++) {
+	//	FluidParticle const& particle = m_particles[particleIndex];
+	//	//Vertex_PCU* vertices = &m_verts[vertIndex];
+	//	//TransformVertexArray3D(m_vertsPerParticle, vertices, Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position - particle.m_prevPos));
+	//}
+
+	for (int particleIndex = 0; particleIndex < m_particles.size(); particleIndex++) {
 		FluidParticle const& particle = m_particles[particleIndex];
-		Vertex_PCU* vertices = &m_verts[vertIndex];
-		TransformVertexArray3D(m_vertsPerParticle, vertices, Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position - particle.m_prevPos));
+		FluidParticleMeshInfo& particleMesh = m_particlesMeshInfo[particleIndex];
+		particleMesh.Position = particle.m_position;
+		Rgba8::LIGHTBLUE.GetAsFloats(particleMesh.Color);
 	}
 
+	m_meshVBuffer->CopyCPUToGPU(m_particlesMeshInfo, sizeof(FluidParticleMeshInfo) * m_particles.size());
 }
 
 void Basic3DMode::RenderParticles() const
@@ -419,9 +503,26 @@ void Basic3DMode::RenderParticles() const
 	//	FluidParticle const& particle = m_particles[particleIndex];
 	//	AddVertsForSphere(verts, 0.15f, 2, 4);
 	//}
+	unsigned int dispatchThreadAmount = static_cast<unsigned int>(ceilf(static_cast<float>(m_particles.size()) / 64.0f));
+
+	GameConstants gameConstants = {};
+	gameConstants.CameraUp = Vec4(m_worldCamera.GetViewOrientation().GetKUp(), 0.0f);
+	gameConstants.EyePosition = m_worldCamera.GetViewPosition();
+	gameConstants.SpriteRadius = m_fluidSolver.GetRenderingRadius();
+
+	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
+
+	g_theRenderer->BindMaterial(m_prePassMaterial);
+	g_theRenderer->BindTexture(nullptr);
+	g_theRenderer->BindStructuredBuffer(m_meshVBuffer, 1);
+	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
-	g_theRenderer->BindTexture(nullptr);
-	g_theRenderer->DrawVertexArray(m_verts);
+	g_theRenderer->SetModelColor(Rgba8::CYAN);
+
+	g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
+	//g_theRenderer->DrawVertexArray(m_verts);
+
 }

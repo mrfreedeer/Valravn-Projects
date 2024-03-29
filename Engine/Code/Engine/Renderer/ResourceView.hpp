@@ -29,6 +29,7 @@ struct ResourceViewInfo {
 
 class ResourceView {
 	friend class Texture;
+	friend class Buffer;
 	friend class Renderer;
 
 public:

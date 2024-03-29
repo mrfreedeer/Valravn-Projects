@@ -438,7 +438,7 @@ void Renderer::CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D1
 	}
 }
 
-void Renderer::CreateCommandList(ComPtr<ID3D12GraphicsCommandList2>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>const& commandAllocator)
+void Renderer::CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>const& commandAllocator)
 {
 	HRESULT commListCreation = m_device->CreateCommandList(0, type, commandAllocator.Get(), nullptr, IID_PPV_ARGS(&commList));
 	SetDebugName(commList, "COMMANDLIST");
@@ -1219,19 +1219,7 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	if (!m_hasUsedModelSlot) {
 		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
@@ -1251,19 +1239,8 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 	currentDrawCtx.m_isIndexedDraw = true;
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	if (!m_hasUsedModelSlot) {
 		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
@@ -1297,6 +1274,11 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
 		CopyTextureToHeap(texture, ctx.m_srvHandleStart, slot);
 	}
+
+	for (auto& [slot, pBuffer] : ctx.m_boundBuffers) {
+		CopyBufferToHeap(pBuffer, ctx.m_srvHandleStart, slot);
+	}
+
 
 	CopyCBufferToHeap(ctx.m_cameraCBO, ctx.m_cbvHandleStart, g_cameraBufferSlot);
 	CopyCBufferToHeap(ctx.m_modelCBO, ctx.m_cbvHandleStart, g_modelBufferSlot);
@@ -1338,38 +1320,43 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), m_currentBackBuffer, m_RTVdescriptorSize);
 	m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, &dsvHandle);
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	VertexBuffer* usedBuffer = (ctx.m_immediateVBO) ? *ctx.m_immediateVBO : m_immediateVBO;
-	IndexBuffer* usedIndexedBuffer = nullptr;
-
-
-
-
-	D3D12_VERTEX_BUFFER_VIEW D3DbufferView = {};
-	BufferView vBufferView = usedBuffer->GetBufferView();
-	// Initialize the vertex buffer view.
-	D3DbufferView.BufferLocation = vBufferView.m_bufferLocation;
-	D3DbufferView.StrideInBytes = (UINT)vBufferView.m_strideInBytes;
-	D3DbufferView.SizeInBytes = (UINT)vBufferView.m_sizeInBytes;
-
-	m_commandList->IASetVertexBuffers(0, 1, &D3DbufferView);
-
-	if (ctx.m_isIndexedDraw) {
-		usedIndexedBuffer = (ctx.m_immediateIBO) ? *ctx.m_immediateIBO : m_immediateIBO;
-		D3D12_INDEX_BUFFER_VIEW D3DindexedBufferView = {};
-		BufferView iBufferView = usedIndexedBuffer->GetBufferView();
-		D3DindexedBufferView.BufferLocation = iBufferView.m_bufferLocation;
-		D3DindexedBufferView.Format = DXGI_FORMAT_R32_UINT;
-		D3DindexedBufferView.SizeInBytes = (UINT)iBufferView.m_sizeInBytes;
-
-		m_commandList->IASetIndexBuffer(&D3DindexedBufferView);
-		m_commandList->DrawIndexedInstanced((UINT)ctx.m_indexCount, 1, (UINT)ctx.m_indexStart, (INT)ctx.m_vertexStart, 0);
+	if (ctx.m_isMeshDraw) {
+		unsigned int threadX = ctx.m_meshThreads.x;
+		unsigned int threadY = ctx.m_meshThreads.y;
+		unsigned int threadZ = ctx.m_meshThreads.z;
+		m_commandList->DispatchMesh(threadX, threadY, threadZ);
 	}
 	else {
-		m_commandList->DrawInstanced((UINT)ctx.m_vertexCount, 1, (UINT)ctx.m_vertexStart, 0);
-	}
+		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+		VertexBuffer* usedBuffer = (ctx.m_immediateVBO) ? *ctx.m_immediateVBO : m_immediateVBO;
+		IndexBuffer* usedIndexedBuffer = nullptr;
+
+
+		D3D12_VERTEX_BUFFER_VIEW D3DbufferView = {};
+		BufferView vBufferView = usedBuffer->GetBufferView();
+		// Initialize the vertex buffer view.
+		D3DbufferView.BufferLocation = vBufferView.m_bufferLocation;
+		D3DbufferView.StrideInBytes = (UINT)vBufferView.m_strideInBytes;
+		D3DbufferView.SizeInBytes = (UINT)vBufferView.m_sizeInBytes;
+
+		m_commandList->IASetVertexBuffers(0, 1, &D3DbufferView);
+		if (ctx.m_isIndexedDraw) {
+			usedIndexedBuffer = (ctx.m_immediateIBO) ? *ctx.m_immediateIBO : m_immediateIBO;
+			D3D12_INDEX_BUFFER_VIEW D3DindexedBufferView = {};
+			BufferView iBufferView = usedIndexedBuffer->GetBufferView();
+			D3DindexedBufferView.BufferLocation = iBufferView.m_bufferLocation;
+			D3DindexedBufferView.Format = DXGI_FORMAT_R32_UINT;
+			D3DindexedBufferView.SizeInBytes = (UINT)iBufferView.m_sizeInBytes;
+
+			m_commandList->IASetIndexBuffer(&D3DindexedBufferView);
+			m_commandList->DrawIndexedInstanced((UINT)ctx.m_indexCount, 1, (UINT)ctx.m_indexStart, (INT)ctx.m_vertexStart, 0);
+		}
+		else {
+			m_commandList->DrawInstanced((UINT)ctx.m_vertexCount, 1, (UINT)ctx.m_vertexStart, 0);
+		}
+	}
 }
 
 void Renderer::CopyCurrentDrawCtxToNext()
@@ -1381,11 +1368,43 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx.m_immediateIBO = nullptr;
 		nextCtx.m_immediateVBO = nullptr;
 		nextCtx.m_isIndexedDraw = false;
+		nextCtx.m_isMeshDraw = false;
 	}
 	m_currentDrawCtx++;
 }
 
-ComPtr<ID3D12GraphicsCommandList2> Renderer::GetBufferCommandList()
+void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
+{
+	static auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValSRVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
+
+
+	// Find the max value to skip that amount of slots
+	// Empty slots must be respected even if wasteful
+	// Buffers bound as SRV share handle start with textures
+	auto texMaxIt = std::max_element(ctx.m_boundTextures.begin(), ctx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(ctx.m_boundCBuffers.begin(), ctx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto SRVBufferMaxIt = std::max_element(ctx.m_boundBuffers.begin(), ctx.m_boundBuffers.end(), findHighestValSRVBuffer);
+
+	unsigned int texMax = (texMaxIt != ctx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int srvBufferMax = (SRVBufferMaxIt != ctx.m_boundBuffers.end()) ? SRVBufferMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != ctx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+
+	unsigned int SRVMax = (srvBufferMax > texMax) ? srvBufferMax : texMax;
+
+	// This is accounting for the Engine's constant buffers
+	// slot 0: Camera
+	// slot 1: Model
+	// slot 2: Light
+	if(cBufferMax < 2) cBufferMax = 2;
+
+	m_srvHandleStart += SRVMax + 1;
+	m_cbvHandleStart += cBufferMax + 1;
+
+}
+
+ComPtr<ID3D12GraphicsCommandList6> Renderer::GetBufferCommandList()
 {
 	return m_ResourcesCommandList;
 }
@@ -1566,6 +1585,25 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 	return newTexture;
 }
 
+void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
+{
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+	currentDrawCtx.m_isMeshDraw = true;
+	currentDrawCtx.m_meshThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
+	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
+	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
+
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
+
+	if (!m_hasUsedModelSlot) {
+		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
+		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
+	}
+	CopyCurrentDrawCtxToNext();
+
+	m_hasUsedModelSlot = true;
+}
+
 void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
 {
 	DrawVertexArray((unsigned int)vertexes.size(), vertexes.data());
@@ -1578,19 +1616,7 @@ void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* verte
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
 	currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
@@ -1654,19 +1680,7 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 	currentDrawCtx.m_isIndexedDraw = true;
 
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
 	currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
@@ -1697,19 +1711,7 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNC
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 	currentDrawCtx.m_isIndexedDraw = true;
 
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
 	currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
@@ -2282,7 +2284,7 @@ void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
 
 void Renderer::ResetGPUDescriptorHeaps()
 {
-	//#TODO
+	//#TODO       
 }
 
 ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewInfo, DescriptorHeap* descriptorHeap) const
@@ -2377,6 +2379,13 @@ void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCoun
 	currentDrawCtx.m_indexCount = indexCount;
 }
 
+void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
+{
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+
+	currentDrawCtx.m_boundBuffers[slot] = buffer;
+}
+
 void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot)
 {
 	Texture* usedTex = const_cast<Texture*>(textureToBind);
@@ -2385,31 +2394,58 @@ void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int hand
 	}
 
 	ResourceView* rsv = usedTex->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
-	DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	unsigned int resultingSlot = handleStart + slot;
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(resultingSlot);
-	D3D12_CPU_DESCRIPTOR_HANDLE textureHandle = rsv->GetHandle();
+	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+	CopyResourceToHeap(usedTex->GetResource(), rsv, handleStart, slot, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-	usedTex->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, m_commandList.Get());
-
-	//if (srvHandle.ptr != textureHandle.ptr) {
-	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	//}
 }
+
+//	unsigned int resultingSlot = handleStart + slot;
+//	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(resultingSlot);
+//	D3D12_CPU_DESCRIPTOR_HANDLE textureHandle = rsv->GetHandle();
+//
+//	usedTex->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, m_commandList.Get());
+//
+//	//if (srvHandle.ptr != textureHandle.ptr) {
+//	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+//	//}
+//}
 
 void Renderer::CopyCBufferToHeap(ConstantBuffer* bufferToBind, unsigned int handleStart, unsigned int slot /*= 0*/)
 {
 	if (!bufferToBind) return;
 
 	ResourceView* rsv = bufferToBind->GetOrCreateView();
-	DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(handleStart + slot);
+	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+
+	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	/*D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(handleStart + slot);
 	D3D12_CPU_DESCRIPTOR_HANDLE cBufferHandle = rsv->GetHandle();
 
 
 	bufferToBind->m_buffer->TransitionTo(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, m_commandList.Get());
-	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);*/
 
+}
+
+void Renderer::CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, unsigned int slot /*= 0*/)
+{
+
+	ResourceView* rsv = bufferToBind->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
+
+	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+}
+
+void Renderer::CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState)
+{
+	unsigned int accessSlot = handleStart + slot;
+	DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(accessSlot);
+	D3D12_CPU_DESCRIPTOR_HANDLE cBufferHandle = rsv->GetHandle();
+
+	rsc->TransitionTo(endState, m_commandList.Get());
+	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 ConstantBuffer& Renderer::GetNextCameraBuffer()

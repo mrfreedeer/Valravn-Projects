@@ -1,5 +1,6 @@
 #include "Engine/Core/Buffer.hpp"
 #include "Engine/Renderer/D3D12/Resource.hpp"
+#include "Engine/Renderer/D3D12/D3D12TypeConversions.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Engine/Renderer/GraphicsCommon.hpp"
 #include <d3d12.h>
@@ -52,6 +53,29 @@ BufferView Buffer::GetBufferView() const
 	};
 
 	return bView;
+}
+
+ResourceView* Buffer::GetOrCreateView(ResourceBindFlagBit viewType)
+{
+	for (ResourceView*& currentView : m_views) {
+		if (currentView->m_viewInfo.m_viewType == viewType) {
+			return currentView;
+		}
+	}
+
+	switch (viewType)
+	{
+	case RESOURCE_BIND_SHADER_RESOURCE_BIT:
+		return CreateShaderResourceView();
+	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
+		ERROR_AND_DIE("HAVENT DONE UAV TEXTURE VIEW");
+	case RESOURCE_BIND_DEPTH_STENCIL_BIT:
+	case RESOURCE_BIND_RENDER_TARGET_BIT:
+	case RESOURCE_BIND_NONE:
+	default:
+		ERROR_AND_DIE(Stringf("UNSUPPORTED VIEW %d", viewType));
+		break;
+	}
 }
 
 Buffer::~Buffer()
@@ -135,4 +159,45 @@ void Buffer::CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void co
 	}
 
 	m_buffer->m_currentState = (int)D3D12_RESOURCE_STATE_GENERIC_READ;
+}
+
+ResourceView* Buffer::CreateShaderResourceView()
+{
+	D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc = new D3D12_SHADER_RESOURCE_VIEW_DESC();
+	/*
+	* SHADER COMPONENT MAPPING RGBA = 0,1,2,3
+	* 4 Force a value of 0
+	* 5 Force a value of 1
+	*/
+	srvDesc->Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 1, 2, 3);
+	srvDesc->Format = LocalToD3D12(TextureFormat::UNKNOWN);
+	srvDesc->ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+
+	ResourceViewInfo viewInfo = {};
+	viewInfo.m_srvDesc = srvDesc;
+	viewInfo.m_viewType = RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	viewInfo.m_source = m_buffer;
+
+
+	srvDesc->Buffer.FirstElement = 0;
+	srvDesc->Buffer.NumElements = UINT(m_size / m_stride);
+	srvDesc->Buffer.StructureByteStride = UINT(m_stride);
+	srvDesc->Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+
+	ResourceView* newView = m_owner->CreateResourceView(viewInfo);
+	m_views.push_back(newView);
+
+	return newView;
+}
+
+StructuredBuffer::StructuredBuffer(BufferDesc const& bufDesc):
+	Buffer(bufDesc)
+{
+	Buffer::Initialize();
+}
+
+StructuredBuffer::~StructuredBuffer()
+{
+
 }

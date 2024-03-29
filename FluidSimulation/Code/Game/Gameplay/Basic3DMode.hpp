@@ -14,6 +14,7 @@ enum class MaterialEffect {
 };
 
 class Material;
+class StructuredBuffer;
 
 class Basic3DMode : public GameMode {
 public:
@@ -45,11 +46,15 @@ private:
 private:
 	Material* m_prePassMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
+	StructuredBuffer* m_meshVBuffer = nullptr;
+	StructuredBuffer* m_meshletBuffer = nullptr;
+	ConstantBuffer* m_gameConstants = nullptr;
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
 
 	AABB3 m_particlesBounds = g_gameConfigBlackboard.GetValue("BOX_BOUNDS", AABB3::ZERO_TO_ONE);
 	FluidSolver m_fluidSolver = {};
 	std::vector<FluidParticle> m_particles = {};
+	FluidParticleMeshInfo* m_particlesMeshInfo =nullptr;
 	std::vector<Vertex_PCU> m_verts = {};
 	float m_fps = 0.0f;
 	unsigned int m_vertsPerParticle = 0;

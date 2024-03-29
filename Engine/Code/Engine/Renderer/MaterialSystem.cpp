@@ -114,6 +114,7 @@ Material* MaterialSystem::GetSiblingMaterial(Material* material, SiblingMatTypes
 {
 	Material* siblingMat = nullptr;
 	MaterialConfig newConfig = material->m_config;
+
 	switch (siblingType)
 	{
 	case SiblingMatTypes::BLEND_MODE_SIBLING:
@@ -158,6 +159,8 @@ Material* MaterialSystem::GetSiblingMaterial(Material* material, SiblingMatTypes
 
 	if (!siblingMat) {
 		siblingMat = new Material(newConfig);
+		siblingMat->m_isMeshShader = material->IsMeshShader();
+
 		m_config.m_renderer->CreatePSOForMaterial(siblingMat);
 
 		m_loadedMaterials.push_back(siblingMat);

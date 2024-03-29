@@ -18,6 +18,11 @@ struct FluidParticle {
 	std::vector<FluidParticle*> m_neighbors;
 };
 
+struct FluidParticleMeshInfo {
+	Vec3 Position = Vec3::ZERO;
+	float Color[4] = {};
+};
+
 struct FluidSolverConfig {
 	AABB3 m_simulationBounds = AABB3::ZERO_TO_ONE;
 	std::vector<FluidParticle>* m_pointerToParticles = nullptr;
@@ -41,6 +46,7 @@ public:
 	void InitializeParticles() const;
 	void Update(float deltaSeconds);
 	void AddForce(Vec3 force);
+	float GetRenderingRadius() const { return m_config.m_renderingRadius; }
 private:
 	void ApplyForces(float deltaSeconds) const;
 	void UpdateNeighbors();

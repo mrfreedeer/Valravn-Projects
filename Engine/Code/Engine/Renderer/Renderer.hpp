@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Math/Vec3.hpp"
+#include "Engine/Math/IntVec3.hpp"
 #include "Engine/Math/Mat44.hpp"
 #include "Engine/Renderer/D3D12/DescriptorHeap.hpp"
 #include "Engine/Renderer/ResourceView.hpp"
@@ -36,6 +37,7 @@ struct D3DX12_MESH_SHADER_PIPELINE_STATE_DESC;
 
 class Window;
 class Material;
+class Buffer;
 class VertexBuffer;
 class IndexBuffer;
 struct Rgba8;
@@ -71,16 +73,19 @@ struct CameraConstants {
 struct ImmediateContext {
 	ModelConstants m_modelConstants = {};
 	bool m_isIndexedDraw = false;
+	bool m_isMeshDraw = false;
 	VertexBuffer* const* m_immediateVBO = nullptr;
 	IndexBuffer* const* m_immediateIBO = nullptr;
 	ConstantBuffer* m_cameraCBO = nullptr;
 	ConstantBuffer* m_modelCBO = nullptr;
 	std::map<unsigned int, Texture const*> m_boundTextures;
 	std::map<unsigned int, ConstantBuffer*> m_boundCBuffers;
+	std::map<unsigned int, Buffer*> m_boundBuffers;
 	size_t m_vertexStart = 0;
 	size_t m_vertexCount = 0;
 	size_t m_indexStart = 0; 
 	size_t m_indexCount = 0;
+	IntVec3 m_meshThreads = IntVec3::ZERO;
 	//VertexBuffer* m_immediateBuffer = nullptr;
 	Material* m_material = nullptr;
 	Texture* m_renderTargets[8] = {};
@@ -159,6 +164,9 @@ public:
 	Material* CreateOrGetMaterial(std::filesystem::path materialPathNoExt);
 	Texture* CreateOrGetTextureFromFile(char const* imageFilePath);
 
+	// Mesh Shaders
+	void DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ);
+
 	// Unlit vertex array
 	void DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes);
 	void DrawVertexArray(std::vector<Vertex_PCU> const& vertexes);
@@ -192,6 +200,7 @@ public:
 	void BindMaterialByPath(std::filesystem::path materialPath);
 	void BindVertexBuffer(VertexBuffer* const& vertexBuffer);
 	void BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount);
+	void BindStructuredBuffer(Buffer* const& buffer, unsigned int slot);
 
 	// Setters
 	void SetMaterialPSO(Material* mat);
@@ -242,7 +251,7 @@ private:
 	void CreateDescriptorHeap(ID3D12DescriptorHeap*& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, unsigned int numDescriptors, bool visibleFromGPU = false);
 	void CreateRenderTargetViewsForBackBuffers();
 	void CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>& commandAllocator);
-	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList2>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
+	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
 	void CreateFence();
 	void CreateFenceEvent();
 	void CreateDefaultRootSignature();
@@ -284,6 +293,8 @@ private:
 	void ResetGPUDescriptorHeaps();
 	void CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot = 0);
 	void CopyCBufferToHeap(ConstantBuffer* bufferToBind, unsigned int handleStart, unsigned int slot = 0);
+	void CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, unsigned int slot = 0);
+	void CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState);
 
 	// Handling of pre-allocated engine buffers
 	ConstantBuffer& GetNextCameraBuffer();
@@ -301,7 +312,11 @@ private:
 	void ClearAllImmediateContexts();
 	void DrawImmediateCtx(ImmediateContext& ctx);
 	void CopyCurrentDrawCtxToNext();
-	ComPtr<ID3D12GraphicsCommandList2> GetBufferCommandList();
+	/// <summary>
+	/// Update where SRV and CBV handles will start
+	/// </summary>
+	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
+	ComPtr<ID3D12GraphicsCommandList6> GetBufferCommandList();
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetGraphicsPSO(Material* material, std::vector<std::string>& nameStrings);
 	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC GetMeshShaderPSO(Material* material);
 
@@ -315,8 +330,8 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain4> m_swapChain;
-	ComPtr<ID3D12GraphicsCommandList2> m_commandList;
-	ComPtr<ID3D12GraphicsCommandList2> m_ResourcesCommandList;
+	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
+	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
 	ComPtr<ID3D12Fence1> m_fence;
 	ComPtr<IDXGIFactory4> m_dxgiFactory;
 	ComPtr<ID3D12PipelineState> m_pipelineState;

@@ -1,6 +1,7 @@
 #pragma once
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Renderer/D3D12/DescriptorHeap.hpp"
+#include "Engine/Renderer/ResourceView.hpp"
 #include <stdint.h>
 
 class Resource;
@@ -36,7 +37,8 @@ public:
 	size_t GetStride() const { return m_stride; }
 
 	BufferView GetBufferView() const;
-	~Buffer();
+	ResourceView* GetOrCreateView(ResourceBindFlagBit viewType);
+	virtual ~Buffer();
 
 	virtual void CopyCPUToGPU(void const* data, size_t sizeInBytes);
 	size_t GetSize() const { return m_size; }
@@ -45,7 +47,7 @@ protected:
 	virtual void CreateDynamicBuffer(void const* data);
 	virtual void CreateDefaultBuffer(void const* data);
 	void CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data);
-
+	ResourceView* CreateShaderResourceView();
 protected:
 	Renderer* m_owner = nullptr;
 	size_t m_size = 0;
@@ -54,5 +56,14 @@ protected:
 	void const* m_data = nullptr;
 	DescriptorHeap* m_descriptorHeap = nullptr;
 	Resource* m_buffer = nullptr;
+	std::vector<ResourceView*> m_views;
+
+};
+
+// Helper class to automatically initialize buffers. We don't want to expose Initialize()
+class StructuredBuffer:public Buffer {
+public:
+	StructuredBuffer(BufferDesc const& bufDesc);
+	~StructuredBuffer();
 };
 
