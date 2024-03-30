@@ -88,7 +88,26 @@ Vec3 const EulerAngles::GetXForward() const
 	return out_forwardIBasis.GetNormalized();
 }
 
-Vec3 const EulerAngles::GetKUp() const
+Vec3 const EulerAngles::GetYLeft() const
+{
+	float cosYaw = CosDegrees(m_yawDegrees);
+	float sinYaw = SinDegrees(m_yawDegrees);
+
+	float cosPitch = CosDegrees(m_pitchDegrees);
+	float sinPitch = SinDegrees(m_pitchDegrees);
+
+	float cosRoll = CosDegrees(m_rollDegrees);
+	float sinRoll = SinDegrees(m_rollDegrees);
+
+	Vec3 out_leftJBasis = {};
+	out_leftJBasis.x = (-sinYaw * cosRoll) + (cosYaw * sinPitch * sinRoll);
+	out_leftJBasis.y = (cosYaw * cosRoll) + (sinYaw * sinPitch * sinRoll);
+	out_leftJBasis.z = cosPitch * sinRoll;
+
+	return out_leftJBasis;
+}
+
+Vec3 const EulerAngles::GetZUp() const
 {
 	float cosYaw = CosDegrees(m_yawDegrees);
 	float sinYaw = SinDegrees(m_yawDegrees);

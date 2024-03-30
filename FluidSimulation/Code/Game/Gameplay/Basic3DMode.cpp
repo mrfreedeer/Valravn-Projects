@@ -29,6 +29,7 @@ struct GameConstants
 	Vec3 EyePosition;
 	float SpriteRadius;
 	Vec4 CameraUp;
+	Vec4 CameraLeft;
 };
 
 
@@ -506,13 +507,15 @@ void Basic3DMode::RenderParticles() const
 	unsigned int dispatchThreadAmount = static_cast<unsigned int>(ceilf(static_cast<float>(m_particles.size()) / 64.0f));
 
 	GameConstants gameConstants = {};
-	gameConstants.CameraUp = Vec4(m_worldCamera.GetViewOrientation().GetKUp(), 0.0f);
+	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();
+	gameConstants.CameraUp = Vec4(cameraOrientation.GetZUp(), 0.0f);
+	gameConstants.CameraLeft = Vec4(cameraOrientation.GetYLeft(), 0.0f);
 	gameConstants.EyePosition = m_worldCamera.GetViewPosition();
 	gameConstants.SpriteRadius = m_fluidSolver.GetRenderingRadius();
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
-
 	g_theRenderer->BindMaterial(m_prePassMaterial);
+	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->BindStructuredBuffer(m_meshVBuffer, 1);
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);

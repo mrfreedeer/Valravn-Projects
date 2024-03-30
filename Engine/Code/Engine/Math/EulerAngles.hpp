@@ -10,7 +10,8 @@ public:
 	void GetVectors_XFwd_YLeft_ZUp(Vec3& out_forwardIBasis, Vec3& out_leftJBasis, Vec3& out_upKBasis) const;
 	Mat44 GetMatrix_XFwd_YLeft_ZUp() const;
 	Vec3 const GetXForward() const;
-	Vec3 const GetKUp() const;
+	Vec3 const GetYLeft() const;
+	Vec3 const GetZUp() const;
 
 	// Operators const
 	EulerAngles const operator*(float multiplier) const;

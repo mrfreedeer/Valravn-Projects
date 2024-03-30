@@ -68,58 +68,70 @@ cbuffer GameConstants : register(b3)
     float3 EyePosition;
     float SpriteRadius;
     float4 CameraUp;
+    float4 CameraLeft;
 }
 
 Texture2D diffuseTexture : register(t0);
-StructuredBuffer<ms_input_t> vertices: register(t1);
-StructuredBuffer<Meshlet> meshlets: register(t2);
+StructuredBuffer<ms_input_t> vertices : register(t1);
+StructuredBuffer<Meshlet> meshlets : register(t2);
 SamplerState diffuseSampler : register(s0);
 
 [outputtopology("triangle")]
 [numthreads(64, 1, 1)]
 void MeshMain(
-    in uint tid : SV_DispatchThreadID,
-    in uint tig : SV_GroupIndex,
+    in uint gtid : SV_GroupThreadID,
+    in uint dtid: SV_DispatchThreadID,
+    in uint gid: SV_GroupID,
     out vertices ps_input_t out_verts[256],
     out indices uint3 out_triangles[128])
 {
-    Meshlet meshlet = meshlets[tig];
-    uint vertCount = meshlet.VertexCount;
-    uint primCount = meshlet.PrimCount;
+    Meshlet meshlet = meshlets[gid];
+    uint vertCount = meshlet.VertexCount * 4;
+    uint primCount = meshlet.PrimCount * 2;
     
     SetMeshOutputCounts(vertCount, primCount);
     
-    uint accessIndex = meshlet.VertexOffset + tid;
+    uint accessIndex = meshlet.VertexOffset + gtid;
     float3 position = vertices[accessIndex].localPosition;
     
-    float3 iBasis = position - EyePosition.xyz;
+    float3 jBasis = CameraLeft.xyz;
     float3 kBasis = CameraUp.xyz;
-    
-    iBasis = normalize(iBasis);
-    
-    float3 jBasis = normalize(cross(kBasis, iBasis));
-    
-    uint genIndex = tid * 4;
-    
-    float3 vertexPositions[4];
-    vertexPositions[0] = position + SpriteRadius * (jBasis + kBasis);   // Top Left
-    vertexPositions[1] = position + SpriteRadius * (-jBasis + kBasis);  // Top Right
-    vertexPositions[2] = position + SpriteRadius * (jBasis - kBasis);   // Bottom Left
-    vertexPositions[3] = position + SpriteRadius * -(jBasis + kBasis);  // BottomRight
-    for (int i = 0; i < 4; i++)
-    {
-        ps_input_t outVert = (ps_input_t)0;
-        outVert.position = float4(vertexPositions[i], 1.0f);
-        outVert.normal = -iBasis; // poiting towards camera
-        outVert.color = vertices[accessIndex].color;
-        outVert.uv = 0.0f.xx;
-        
-        out_verts[genIndex + i] = outVert;
+    float3 iBasis = normalize(EyePosition - position);
 
+    uint genIndex = gtid * 4;
+    
+    if (genIndex < vertCount)
+    {
+        float3 vertexPositions[4];
+        vertexPositions[0] = position + SpriteRadius * (jBasis - kBasis); // Bottom Left
+        vertexPositions[1] = position + SpriteRadius * -(jBasis + kBasis); // BottomRight
+        vertexPositions[2] = position + SpriteRadius * (jBasis + kBasis); // Top Left
+        vertexPositions[3] = position + SpriteRadius * (-jBasis + kBasis); // Top Right
+        for (int i = 0; i < 4; i++)
+        {
+            ps_input_t outVert = (ps_input_t) 0;
+            float4 position = float4(vertexPositions[i], 1.0f);
+            float4 viewPosition = mul(ViewMatrix, position);
+            outVert.position = mul(ProjectionMatrix, viewPosition);
+            outVert.normal = iBasis; // poiting towards camera
+            outVert.color = vertices[accessIndex].color;
+            outVert.uv = 0.0f.xx;
+        
+            out_verts[genIndex + i] = outVert;
+
+        }
+    }
+   
+    if ((gtid * 2) < primCount)
+    {
+        out_triangles[gtid * 2] = uint3(genIndex, genIndex + 3, genIndex + 2);
+        out_triangles[gtid * 2 + 1] = uint3(genIndex, genIndex + 1, genIndex + 3);
     }
     
-    out_triangles[tid * 2] = uint3(genIndex + 2, genIndex + 1, genIndex);
-    out_triangles[tid * 2 + 1] = uint3(genIndex + 2, genIndex + 3, genIndex + 1);
+    
+        //out_triangles[tid * 2] = uint3(genIndex, genIndex + 1, genIndex + 2);
+        //out_triangles[tid * 2 + 1] = uint3(genIndex, genIndex + 2, genIndex + 3);
+        
     
 }
 
