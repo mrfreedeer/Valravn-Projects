@@ -731,6 +731,9 @@
     <None Include="Renderer\Materials\Shaders\Common\Math.hlsli">
       <Filter>Renderer\Materials\Shaders\Common</Filter>
     </None>
+    <None Include="Renderer\Materials\Shaders\LinearDepthVisualizer.hlsli">
+      <Filter>Renderer\Materials\Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Xml Include="Renderer\Materials\Default2DMaterial.xml">
@@ -764,6 +767,9 @@
       <Filter>Renderer\Materials</Filter>
     </Xml>
     <Xml Include="Renderer\Materials\Default3DDiffuseMaterial.xml">
+      <Filter>Renderer\Materials</Filter>
+    </Xml>
+    <Xml Include="Renderer\Materials\LinearDepthVisualizer.xml">
       <Filter>Renderer\Materials</Filter>
     </Xml>
   </ItemGroup>
@@ -808,6 +814,12 @@
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
     <FxCompile Include="Renderer\Materials\Shaders\Stages\DefaultDiffuse_v.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\LinearDepthVisualizer_p.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\LinearDepthVisualizer_v.hlsl">
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>

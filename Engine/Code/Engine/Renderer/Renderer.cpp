@@ -447,13 +447,19 @@ void Renderer::CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D
 	}
 }
 
-void Renderer::CreateFence()
+void Renderer::CreateFences()
 {
 	HRESULT fenceCreation = m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
-	SetDebugName(m_fence, "FENCE");
+	SetDebugName(m_fence, "END_FRAME_FENCE");
 	if (!SUCCEEDED(fenceCreation)) {
-		ERROR_AND_DIE("COULD NOT CREATE FENCE");
+		ERROR_AND_DIE("COULD NOT CREATE END_FRAME_FENCE");
 	}
+
+	//fenceCreation = m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_syncFence));
+	//SetDebugName(m_syncFence, "END_FRAME_FENCE");
+	//if (!SUCCEEDED(fenceCreation)) {
+	//	ERROR_AND_DIE("COULD NOT CREATE SYNC_FENCE");
+	//}
 }
 
 void Renderer::CreateFenceEvent()
@@ -673,7 +679,7 @@ void Renderer::Startup()
 	ThrowIfFailed(m_ResourcesCommandList->Close(), "COULT NOT CLOSE INTERNAL BUFFER COMMAND LIST");
 
 
-	CreateFence();
+	CreateFences();
 
 	m_fenceValues[m_currentBackBuffer]++;
 	CreateFenceEvent();
@@ -1602,6 +1608,7 @@ void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int
 	CopyCurrentDrawCtxToNext();
 
 	m_hasUsedModelSlot = true;
+
 }
 
 void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
@@ -2561,6 +2568,7 @@ void Renderer::SetFillMode(FillMode newFillMode)
 
 void Renderer::BeginFrame()
 {
+	WaitForGPU();
 	g_theMaterialSystem->BeginFrame();
 	DebugRenderBeginFrame();
 
@@ -2660,8 +2668,8 @@ void Renderer::EndFrame()
 	ThrowIfFailed(m_commandList->Close(), "COULD NOT CLOSE COMMAND LIST");
 	m_isCommandListOpen = false;
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	
 	ExecuteCommandLists(ppCommandLists, 1);
-
 
 #if defined(ENGINE_DISABLE_VSYNC)
 	m_swapChain->Present(0, 0);
@@ -2671,7 +2679,7 @@ void Renderer::EndFrame()
 
 	Flush(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
 	// Flush Command Queue getting ready for next Frame
-	WaitForGPU();
+	//WaitForGPU();
 
 	m_effectsCtxs.clear();
 	m_effectsCtxs.resize(0);

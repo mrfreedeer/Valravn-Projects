@@ -46,10 +46,12 @@ private:
 private:
 	Material* m_prePassMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
-	StructuredBuffer* m_meshVBuffer = nullptr;
+	StructuredBuffer* m_meshVBuffer[2] = {} ;
 	StructuredBuffer* m_meshletBuffer = nullptr;
 	ConstantBuffer* m_gameConstants = nullptr;
+	Texture* m_depthTexture = nullptr;
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
+	unsigned int m_currentVBuffer = 0;
 
 	AABB3 m_particlesBounds = g_gameConfigBlackboard.GetValue("BOX_BOUNDS", AABB3::ZERO_TO_ONE);
 	FluidSolver m_fluidSolver = {};

@@ -1,0 +1,14 @@
+<Material name="LinearDepthVisualizer">
+    <VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="LinearDepthVisualizer_v" src="Shaders/Stages/LinearDepthVisualizer_v.hlsl" entryPoint="VertexMain"/>
+	<PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="LinearDepthVisualizer_p" src="Shaders/Stages/LinearDepthVisualizer_p.hlsl" entryPoint="PixelMain"/>
+    <BlendMode value="Alpha"/>
+    <!-- CCW - CounterClockwise
+    CW - ClockWise -->
+    <WindingOrder value="CCW"/> 
+    <CullMode value="None"/>
+    <FillMode value="Solid"/>
+    <Topology value="TriangleList"/>
+    <DepthStencil depthFunction="ALWAYS" writeDepth="false"/>
+    <Antialiasing value="8"/>
+    <Metadata src="material.mtl"/>
+</Material>

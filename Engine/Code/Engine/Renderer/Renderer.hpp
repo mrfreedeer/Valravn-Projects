@@ -163,6 +163,7 @@ public:
 	void ClearDepth(float clearDepth = 1.0f);
 	Material* CreateOrGetMaterial(std::filesystem::path materialPathNoExt);
 	Texture* CreateOrGetTextureFromFile(char const* imageFilePath);
+	Texture* CreateTexture(TextureCreateInfo& creationInfo);
 
 	// Mesh Shaders
 	void DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ);
@@ -234,6 +235,8 @@ public:
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
 	void TrackResource(Resource* newResource);
+	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
+
 private:
 
 	// DX12 Initialization & Render Initialization
@@ -252,7 +255,7 @@ private:
 	void CreateRenderTargetViewsForBackBuffers();
 	void CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>& commandAllocator);
 	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
-	void CreateFence();
+	void CreateFences();
 	void CreateFenceEvent();
 	void CreateDefaultRootSignature();
 	void CreateDefaultTextureTargets();
@@ -277,7 +280,6 @@ private:
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
 	void CreateViewport();	
-	Texture* CreateTexture(TextureCreateInfo& creationInfo);
 	void DestroyTexture(Texture* textureToDestroy);
 	Texture* GetTextureForFileName(char const* imageFilePath);
 	Texture* CreateTextureFromFile(char const* imageFilePath);
@@ -330,7 +332,6 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain4> m_swapChain;
-	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
 	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
 	ComPtr<ID3D12Fence1> m_fence;
 	ComPtr<IDXGIFactory4> m_dxgiFactory;

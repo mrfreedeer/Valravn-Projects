@@ -4,6 +4,7 @@
 #include "Engine/Renderer/Renderer.hpp"
 #include "Engine/Renderer/ConstantBuffer.hpp"
 #include "Engine/Math/Vec4.hpp"
+#include "Engine/Renderer/D3D12/Resource.hpp"
 #include "Game/Gameplay/Basic3DMode.hpp"
 #include "Game/Framework/GameCommon.hpp"
 #include "Game/Gameplay/Prop.hpp"
@@ -108,7 +109,7 @@ void Basic3DMode::Startup()
 	//colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
-
+		
 	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theMaterialSystem->GetMaterialForName("ColorBandFX");
 	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theMaterialSystem->GetMaterialForName("GrayScaleFX");
 	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
@@ -149,6 +150,12 @@ void Basic3DMode::Startup()
 			TransformVertexArray3D(int(m_verts.size() - lastIndex), &m_verts[lastIndex], Mat44(Vec3(1.0f, 0.0f, 0.0f), Vec3(0.0f, 1.0f, 0.0f), Vec3(0.0f, 0.0f, 1.0f), particle.m_position));
 			lastIndex = m_verts.size();*/
 	}
+
+	if (meshletParticleCount> 0) {
+		meshlets.emplace_back(meshletParticleCount + 1, meshletsParticleAccumulator, meshletParticleCount + 1, meshletsParticleAccumulator);
+		meshletsParticleAccumulator += meshletParticleCount + 1;
+		meshletParticleCount = 0;
+	}
 	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
 	m_particlesMeshInfo = new FluidParticleMeshInfo[m_particles.size()];
 
@@ -159,7 +166,8 @@ void Basic3DMode::Startup()
 	bufferDesc.size = sizeof(FluidParticleMeshInfo) * m_particles.size();
 	bufferDesc.stride = sizeof(FluidParticleMeshInfo);
 
-	m_meshVBuffer = new StructuredBuffer(bufferDesc);
+	m_meshVBuffer[0] = new StructuredBuffer(bufferDesc);
+	m_meshVBuffer[1] = new StructuredBuffer(bufferDesc);
 
 	bufferDesc.data = meshlets.data();
 	bufferDesc.size = sizeof(Meshlet) * meshlets.size();
@@ -180,10 +188,13 @@ void Basic3DMode::Startup()
 
 	m_gameConstants = new ConstantBuffer(cBufferDesc);
 	m_gameConstants->Initialize();
+	
 }
 
 void Basic3DMode::Update(float deltaSeconds)
 {
+	m_currentVBuffer = (m_currentVBuffer + 1) % 2;
+
 	m_fps = 1.0f / deltaSeconds;
 	GameMode::Update(deltaSeconds);
 
@@ -221,6 +232,21 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
+	Texture* dpt = g_theRenderer->GetCurrentDepthTarget();
+	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, g_theRenderer->m_commandList.Get());
+	g_theRenderer->BeginCamera(m_UICamera);
+	{
+		AABB2 quad(Vec2::ZERO, m_UISize* 0.25f);
+		std::vector<Vertex_PCU> verts;
+		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
+		g_theRenderer->BindTexture(dpt);
+		g_theRenderer->DrawVertexArray(verts);
+
+	}
+	g_theRenderer->EndCamera(m_UICamera);
+
+	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, g_theRenderer->m_commandList.Get());
 
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
@@ -258,8 +284,10 @@ void Basic3DMode::Shutdown()
 	delete m_particlesMeshInfo;
 	m_particlesMeshInfo = nullptr;
 
-	delete m_meshVBuffer;
-	m_meshVBuffer = nullptr;
+	delete m_meshVBuffer[0];
+	delete m_meshVBuffer[1];
+	m_meshVBuffer[0] = nullptr;
+	m_meshVBuffer[1] = nullptr;
 
 	delete m_meshletBuffer;
 	m_meshletBuffer = nullptr;
@@ -495,7 +523,9 @@ void Basic3DMode::UpdateParticles(float deltaSeconds)
 		Rgba8::LIGHTBLUE.GetAsFloats(particleMesh.Color);
 	}
 
-	m_meshVBuffer->CopyCPUToGPU(m_particlesMeshInfo, sizeof(FluidParticleMeshInfo) * m_particles.size());
+	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
+	currentVBuffer->CopyCPUToGPU(m_particlesMeshInfo, sizeof(FluidParticleMeshInfo) * m_particles.size());
+
 }
 
 void Basic3DMode::RenderParticles() const
@@ -505,6 +535,7 @@ void Basic3DMode::RenderParticles() const
 	//	AddVertsForSphere(verts, 0.15f, 2, 4);
 	//}
 	unsigned int dispatchThreadAmount = static_cast<unsigned int>(ceilf(static_cast<float>(m_particles.size()) / 64.0f));
+	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
 
 	GameConstants gameConstants = {};
 	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();
@@ -517,7 +548,7 @@ void Basic3DMode::RenderParticles() const
 	g_theRenderer->BindMaterial(m_prePassMaterial);
 	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 	g_theRenderer->BindTexture(nullptr);
-	g_theRenderer->BindStructuredBuffer(m_meshVBuffer, 1);
+	g_theRenderer->BindStructuredBuffer(currentVBuffer, 1);
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 

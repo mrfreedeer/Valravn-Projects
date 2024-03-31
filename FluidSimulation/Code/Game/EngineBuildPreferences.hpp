@@ -16,7 +16,7 @@
 #endif // _DEBUG
 
 
-//#define ENGINE_DISABLE_VSYNC
+#define ENGINE_DISABLE_VSYNC
 
 //#define ENGINE_ANTIALIASING
 #define ENGINE_USE_IMGUI
