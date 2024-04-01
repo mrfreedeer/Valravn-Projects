@@ -447,12 +447,12 @@ void Renderer::CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D
 	}
 }
 
-void Renderer::CreateFences()
+void Renderer::CreateFence(ComPtr<ID3D12Fence1>& fence, char const* debugName)
 {
-	HRESULT fenceCreation = m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
-	SetDebugName(m_fence, "END_FRAME_FENCE");
+	HRESULT fenceCreation = m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+	SetDebugName(fence, debugName);
 	if (!SUCCEEDED(fenceCreation)) {
-		ERROR_AND_DIE("COULD NOT CREATE END_FRAME_FENCE");
+		ERROR_AND_DIE(Stringf("COULD NOT CREATE FENCE: %s", debugName).c_str());
 	}
 
 	//fenceCreation = m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_syncFence));
@@ -549,6 +549,11 @@ unsigned int Renderer::SignalFence(ComPtr<ID3D12CommandQueue>& commandQueue, Com
 
 	return fenceValue + 1;
 
+}
+
+void Renderer::SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue)
+{
+	SignalFence(m_commandQueue, fence, fenceValue);
 }
 
 void Renderer::WaitForFenceValue(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue, HANDLE fenceEvent)
@@ -651,15 +656,24 @@ void Renderer::Startup()
 	CreateRenderTargetViewsForBackBuffers();
 	CreateDefaultTextureTargets();
 
+	size_t numCommandLists = (size_t)CommandListType::NUM_COMMAND_LISTS;
 
-	m_commandAllocators.resize(m_config.m_backBuffersCount + 1);
-	// 2 for frames
-	// 1 for resources
+	m_commandLists.resize(numCommandLists);
+
 	for (unsigned int frameIndex = 0; frameIndex < m_config.m_backBuffersCount; frameIndex++) {
-		CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[frameIndex]);
+		auto& commandAllocators = m_commandAllocators[frameIndex];
+		commandAllocators.resize(numCommandLists);
+		// 2 for frames
+		// 1 for resources
+		for (unsigned int rscIndex = 0; rscIndex < numCommandLists; rscIndex++) {
+			CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocators[rscIndex]);
+		}
 	}
-	CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_commandAllocators.size() - 1]);
-	CreateCommandList(m_ResourcesCommandList, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_commandAllocators.size() - 1]);
+	auto& currentCommandAllocs = m_commandAllocators[m_currentBackBuffer];
+
+	for (unsigned int rscIndex = 0; rscIndex < m_commandLists.size(); rscIndex++) {
+		CreateCommandList(m_commandLists[rscIndex], D3D12_COMMAND_LIST_TYPE_DIRECT, currentCommandAllocs[rscIndex]);
+	}
 
 	CreateDefaultRootSignature();
 
@@ -669,24 +683,21 @@ void Renderer::Startup()
 
 	//std::string default3DMatPath = ENGINE_MAT_DIR;
 	//default3DMatPath += "Default3DMaterial.xml";
-	//m_default3DMaterial = CreateMaterial(default3DMatPath);
+	//m_default3DMaterial = CreateMaterial(default3DMatPath);	
 
-
-
-	CreateCommandList(m_commandList, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_currentBackBuffer]);
+	m_commandList = m_commandLists[(unsigned int)CommandListType::DefaultCommandList];
+	m_ResourcesCommandList = m_commandLists[(unsigned int)CommandListType::ResourcesCommandList];
 
 	ThrowIfFailed(m_commandList->Close(), "COULD NOT CLOSE DEFAULT COMMAND LIST");
 	ThrowIfFailed(m_ResourcesCommandList->Close(), "COULT NOT CLOSE INTERNAL BUFFER COMMAND LIST");
 
-
-	CreateFences();
+	CreateFence(m_fence, "END_FRAME_FENCE");
 
 	m_fenceValues[m_currentBackBuffer]++;
 	CreateFenceEvent();
 	SetSamplerMode(SamplerMode::POINTCLAMP);
 
-	m_ResourcesCommandList->Reset(m_commandAllocators[m_commandAllocators.size() - 1].Get(), nullptr);
-	m_commandList->Reset(m_commandAllocators[m_currentBackBuffer].Get(), nullptr);
+	m_commandList->Reset(GetCommandAllocForCmdList(CommandListType::DefaultCommandList), nullptr);
 
 	m_defaultTexture = new Texture();
 	Image whiteTexelImg(IntVec2(1, 1), Rgba8::WHITE);
@@ -900,7 +911,7 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	memcpy(outByteCode.data(), pShader->GetBufferPointer(), pShader->GetBufferSize());
 
 	return true;
-}
+	}
 
 void Renderer::LoadEngineShaderBinaries()
 {
@@ -1245,7 +1256,7 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 	currentDrawCtx.m_isIndexedDraw = true;
-	
+
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	if (!m_hasUsedModelSlot) {
@@ -1370,7 +1381,7 @@ void Renderer::CopyCurrentDrawCtxToNext()
 	if (m_currentDrawCtx <= IMMEDIATE_CTX_AMOUNT - 1) {
 		ImmediateContext& nextCtx = m_immediateCtxs[m_currentDrawCtx + 1];
 
-		nextCtx = m_immediateCtxs[m_currentDrawCtx];
+		nextCtx = ImmediateContext(m_immediateCtxs[m_currentDrawCtx]);
 		nextCtx.m_immediateIBO = nullptr;
 		nextCtx.m_immediateVBO = nullptr;
 		nextCtx.m_isIndexedDraw = false;
@@ -1403,7 +1414,7 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 	// slot 0: Camera
 	// slot 1: Model
 	// slot 2: Light
-	if(cBufferMax < 2) cBufferMax = 2;
+	if (cBufferMax < 2) cBufferMax = 2;
 
 	m_srvHandleStart += SRVMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
@@ -1558,7 +1569,7 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
 	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
 	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
 	psoDesc.NumRenderTargets = 1;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
@@ -2236,6 +2247,13 @@ void Renderer::TrackResource(Resource* newResource)
 	m_resources.push_back(newResource);
 }
 
+ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
+{
+	auto commandAllocators = m_commandAllocators[m_currentBackBuffer];
+
+	return commandAllocators[(unsigned int) cmdListType].Get();
+}
+
 void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
 {
 
@@ -2441,7 +2459,7 @@ void Renderer::CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, 
 	ResourceView* rsv = bufferToBind->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
 
 	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 }
 
 void Renderer::CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState)
@@ -2600,13 +2618,16 @@ void Renderer::BeginFrame()
 	// Command list allocators can only be reset when the associated 
   // command lists have finished execution on the GPU; apps should use 
   // fences to determine GPU execution progress.
-	ThrowIfFailed(m_commandAllocators[m_currentBackBuffer]->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
+	
+	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DefaultCommandList);
+
+	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
 
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	ThrowIfFailed(m_commandList->Reset(m_commandAllocators[m_currentBackBuffer].Get(), m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
+	ThrowIfFailed(m_commandList->Reset(cmdAllocator, m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
 
 	m_isCommandListOpen = true;
 	BindTexture(nullptr);
@@ -2651,16 +2672,16 @@ void Renderer::EndFrame()
 	Texture* currentRt = GetActiveRenderTarget();
 	Resource* defaultRTResource = currentRt->GetResource();
 	Resource* currentBackBuffer = GetActiveBackBuffer()->GetResource();
+	UNUSED(defaultRTResource)
 
-
-	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+		D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 
 	EndFrameImGui();
 
-	// Copy draws from default texture to backbuffer
-	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, m_commandList.Get());
-	defaultRTResource->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, m_commandList.Get());
-	m_commandList->CopyResource(currentBackBuffer->m_resource, defaultRTResource->m_resource);
+	//// Copy draws from default texture to backbuffer
+	//currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, m_commandList.Get());
+	//defaultRTResource->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, m_commandList.Get());
+	//m_commandList->CopyResource(currentBackBuffer->m_resource, defaultRTResource->m_resource);
 
 
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
@@ -2668,7 +2689,7 @@ void Renderer::EndFrame()
 	ThrowIfFailed(m_commandList->Close(), "COULD NOT CLOSE COMMAND LIST");
 	m_isCommandListOpen = false;
 	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
-	
+
 	ExecuteCommandLists(ppCommandLists, 1);
 
 #if defined(ENGINE_DISABLE_VSYNC)
@@ -2709,10 +2730,16 @@ void Renderer::Shutdown()
 		shaderByteCode = nullptr;
 	}
 
-	for (auto commandAlloc : m_commandAllocators) {
-
-		commandAlloc.Reset();
+	for (auto commandAllocList : m_commandAllocators) {
+		for (auto cmdAllocator : commandAllocList) {
+			cmdAllocator.Reset();
+		}
 	}
+
+	for (auto commandList : m_commandLists) {
+		commandList.Reset();
+	}
+
 
 	//ClearAllImmediateContexts();
 
@@ -2781,7 +2808,7 @@ void Renderer::Shutdown()
 void Renderer::BeginCamera(Camera const& camera)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
-	currentDrawCtx = ImmediateContext();
+	currentDrawCtx.Reset();
 
 	m_currentCamera = &camera;
 	if (camera.GetCameraMode() == CameraMode::Orthographic) {
@@ -2794,7 +2821,7 @@ void Renderer::BeginCamera(Camera const& camera)
 	BindTexture(m_defaultTexture);
 	SetSamplerMode(SamplerMode::POINTCLAMP);
 
-	currentDrawCtx.m_renderTargets[0] = GetActiveRenderTarget();
+	currentDrawCtx.m_renderTargets[0] = GetActiveBackBuffer();
 	currentDrawCtx.m_depthTarget = m_defaultDepthTarget;
 
 	CameraConstants cameraConstants = {};
@@ -2832,14 +2859,14 @@ void Renderer::EndCamera(Camera const& camera)
 	}
 
 	m_currentCamera = nullptr;
-	currentDrawCtx = ImmediateContext();
+	currentDrawCtx.Reset();
 	Material* defaultMat = GetDefaultMaterial();
 	m_commandList->ClearState(defaultMat->m_PSO);
 }
 
 void Renderer::ClearScreen(Rgba8 const& color)
 {
-	Texture* currentRt = GetActiveRenderTarget();
+	Texture* currentRt = GetActiveBackBuffer();
 	ClearTexture(color, currentRt);
 }
 
@@ -2872,4 +2899,61 @@ LiveObjectReporter::~LiveObjectReporter()
 	}
 
 #endif
+}
+
+ImmediateContext::ImmediateContext(ImmediateContext const& otherCtx)
+{
+	m_modelConstants = otherCtx.m_modelConstants;
+	m_isIndexedDraw = otherCtx.m_isIndexedDraw;
+	m_isMeshDraw = otherCtx.m_isMeshDraw;
+	m_immediateIBO = otherCtx.m_immediateIBO;
+	m_cameraCBO = otherCtx.m_cameraCBO;
+	m_modelCBO = otherCtx.m_modelCBO;
+	m_boundTextures.clear();
+	m_boundCBuffers.clear();
+	m_boundBuffers.clear();
+
+	m_boundTextures.insert(otherCtx.m_boundTextures.begin(), otherCtx.m_boundTextures.end());
+	m_boundCBuffers.insert(otherCtx.m_boundCBuffers.begin(), otherCtx.m_boundCBuffers.end());
+	m_boundBuffers.insert(otherCtx.m_boundBuffers.begin(), otherCtx.m_boundBuffers.end());
+
+	m_vertexStart = otherCtx.m_vertexStart;
+	m_vertexCount = otherCtx.m_vertexCount;
+	m_indexStart = otherCtx.m_indexStart;
+	m_indexCount = otherCtx.m_indexCount;
+	m_meshThreads = otherCtx.m_meshThreads;
+	//VertexBuffer* m_immediateBuffer = nullptr;
+	m_material = otherCtx.m_material;
+	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		m_renderTargets[rtIndex] = otherCtx.m_renderTargets[rtIndex];
+	}
+	m_depthTarget = otherCtx.m_depthTarget;
+	m_srvHandleStart = otherCtx.m_srvHandleStart;
+	m_cbvHandleStart = otherCtx.m_cbvHandleStart;
+}
+
+void ImmediateContext::Reset()
+{
+	m_modelConstants = {};
+	m_isIndexedDraw = false;
+	m_isMeshDraw = false;
+	m_immediateIBO = nullptr;
+	m_cameraCBO = nullptr;
+	m_modelCBO = nullptr;
+	m_boundTextures.clear();
+	m_boundCBuffers.clear();
+	m_boundBuffers.clear();
+	m_vertexStart = 0;
+	m_vertexCount = 0;
+	m_indexStart = 0;
+	m_indexCount = 0;
+	m_meshThreads = IntVec3::ZERO;
+	//VertexBuffer* m_immediateBuffer = nullptr;
+	m_material = nullptr;
+	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		m_renderTargets[8] = nullptr;
+	}
+	m_depthTarget = nullptr;
+	m_srvHandleStart = 0;
+	m_cbvHandleStart = 0;
 }

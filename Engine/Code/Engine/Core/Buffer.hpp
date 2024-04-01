@@ -27,6 +27,7 @@ class Buffer {
 	friend class Renderer;
 public:
 	Buffer(BufferDesc const& bufferDesc);
+	virtual ~Buffer();
 
 	/// <summary>
 	/// Only works for dynamic buffers
@@ -38,14 +39,13 @@ public:
 
 	BufferView GetBufferView() const;
 	ResourceView* GetOrCreateView(ResourceBindFlagBit viewType);
-	virtual ~Buffer();
 
 	virtual void CopyCPUToGPU(void const* data, size_t sizeInBytes);
 	size_t GetSize() const { return m_size; }
 protected:
 	virtual void Initialize();
 	virtual void CreateDynamicBuffer(void const* data);
-	virtual void CreateDefaultBuffer(void const* data);
+	virtual void CreateBuffer(Resource*& buffer, bool isUpload = false);
 	void CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data);
 	ResourceView* CreateShaderResourceView();
 protected:
@@ -56,6 +56,7 @@ protected:
 	void const* m_data = nullptr;
 	DescriptorHeap* m_descriptorHeap = nullptr;
 	Resource* m_buffer = nullptr;
+	Resource* m_uploadResource = nullptr;
 	std::vector<ResourceView*> m_views;
 
 };

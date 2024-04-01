@@ -14,17 +14,26 @@ Buffer::Buffer(BufferDesc const& bufferDesc) :
 	m_descriptorHeap(bufferDesc.descriptorHeap),
 	m_data(bufferDesc.data)
 {
-	
+
+}
+
+
+Buffer::~Buffer()
+{
+	delete m_buffer;
+	m_buffer = nullptr;
+
+	delete m_uploadResource;
+	m_uploadResource = nullptr;
 }
 
 void Buffer::Initialize()
 {
 	m_buffer = new Resource();
+	m_uploadResource = new Resource();
 	switch (m_memoryUsage)
 	{
 	case MemoryUsage::Default:
-		CreateDefaultBuffer(m_data);
-		break;
 	case MemoryUsage::Dynamic:
 		CreateDynamicBuffer(m_data);
 		break;
@@ -78,11 +87,6 @@ ResourceView* Buffer::GetOrCreateView(ResourceBindFlagBit viewType)
 	}
 }
 
-Buffer::~Buffer()
-{
-	delete m_buffer;
-	m_buffer = nullptr;
-}
 
 void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 {
@@ -90,46 +94,73 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	//ComPtr<ID3D12Device2>& device = m_owner->m_device;
 
 	//m_buffer->TransitionTo(D3D12_RESOURCE_STATE_GENERIC_READ, m_ow);
-	ID3D12Resource2*& resource = m_buffer->m_resource;
+	ID3D12Resource2*& resource = m_uploadResource->m_resource;
+	ID3D12GraphicsCommandList6* rscCommandList = m_owner->m_ResourcesCommandList.Get();
 
+	auto cmdAlloc = m_owner->GetCommandAllocForCmdList(CommandListType::ResourcesCommandList);
+	cmdAlloc->Reset();
+	rscCommandList->Reset(cmdAlloc, nullptr);
 
+	m_uploadResource->TransitionTo(D3D12_RESOURCE_STATE_GENERIC_READ, rscCommandList);
+	m_buffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, rscCommandList);
 
 	UINT8* dataBegin;
 	CD3DX12_RANGE readRange(0, sizeInBytes);        // We do not intend to read from this resource on the CPU.
 	ThrowIfFailed(resource->Map(0, &readRange, reinterpret_cast<void**>(&dataBegin)), "COULD NOT MAP BUFFER");
 	memcpy(dataBegin, data, sizeInBytes);
 	resource->Unmap(0, nullptr);
+
+
+
+	rscCommandList->CopyResource(m_buffer->m_resource, m_uploadResource->m_resource);
+	m_buffer->TransitionTo(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, rscCommandList);
+	rscCommandList->Close();
+
+	ID3D12CommandList* ppCommandLists[] = { rscCommandList };
+	m_owner->ExecuteCommandLists(ppCommandLists, 1);
+
+	ComPtr<ID3D12Fence1> fence;
+	m_owner->CreateFence(fence, "Rsc Fence");
+	m_owner->SignalFence(fence, 1);
+	if (fence->GetCompletedValue() != 1)
+	{
+		HANDLE event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		fence->SetEventOnCompletion(1, event);
+
+		WaitForSingleObjectEx(event, INFINITE, false);
+		CloseHandle(event);
+	}
 }
 
 void Buffer::CreateDynamicBuffer(void const* data)
 {
 	DX_SAFE_RELEASE(m_buffer->m_resource);
-	CreateAndCopyToUploadBuffer(m_buffer->m_resource, data);
+	DX_SAFE_RELEASE(m_uploadResource->m_resource);
+	CreateBuffer(m_buffer);
+	CreateBuffer(m_uploadResource, true);
+	if (data) {
+		CopyCPUToGPU(data, m_size);
+	}
+
 }
 
-void Buffer::CreateDefaultBuffer(void const* data)
+void Buffer::CreateBuffer(Resource*& buffer, bool isUpload)
 {
-	ID3D12Resource2*& resource = m_buffer->m_resource;
+	ID3D12Resource2*& resource = buffer->m_resource;
 
-	CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	CD3DX12_HEAP_PROPERTIES heapProperties = (isUpload) ? CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD) : CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	D3D12_RESOURCE_STATES initialState = (isUpload) ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
+	buffer->m_currentState = initialState;
 	CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m_size);
 	ThrowIfFailed(m_owner->m_device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
+		initialState,
 		nullptr,
 		IID_PPV_ARGS(&resource)), "COULD NOT CREATE GPU BUFFER");
-	m_owner->SetDebugName(resource, "BUFFER");
-
-	ID3D12Resource2* intermediateBuffer = nullptr;
-	CreateAndCopyToUploadBuffer(intermediateBuffer, data);
-	ComPtr<ID3D12GraphicsCommandList2> bufferCommList = m_owner->GetBufferCommandList();
-	ID3D12CommandList* ppCommandList[] = { bufferCommList.Get() };
-	// Copy to final buffer destination
-	bufferCommList->CopyBufferRegion(resource, 0, intermediateBuffer, 0, m_size);
-	m_owner->ExecuteCommandLists(ppCommandList, 1);
-	DX_SAFE_RELEASE(intermediateBuffer);
+	char const* debugName = (isUpload) ? "UPLOAD BUFFER" : "GPU BUFFER";
+	m_owner->SetDebugName(resource, debugName);
 }
 
 
@@ -191,7 +222,7 @@ ResourceView* Buffer::CreateShaderResourceView()
 	return newView;
 }
 
-StructuredBuffer::StructuredBuffer(BufferDesc const& bufDesc):
+StructuredBuffer::StructuredBuffer(BufferDesc const& bufDesc) :
 	Buffer(bufDesc)
 {
 	Buffer::Initialize();

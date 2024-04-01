@@ -71,6 +71,8 @@ struct CameraConstants {
 
 
 struct ImmediateContext {
+	ImmediateContext() = default;
+	ImmediateContext(ImmediateContext const& otherCtx);
 	ModelConstants m_modelConstants = {};
 	bool m_isIndexedDraw = false;
 	bool m_isMeshDraw = false;
@@ -92,6 +94,9 @@ struct ImmediateContext {
 	Texture* m_depthTarget = nullptr;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
+
+	void Reset();
+
 };
 
 struct FxContext {
@@ -235,7 +240,10 @@ public:
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
 	void TrackResource(Resource* newResource);
+	void SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue);
+	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
 	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
+	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
 
 private:
 
@@ -255,7 +263,7 @@ private:
 	void CreateRenderTargetViewsForBackBuffers();
 	void CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>& commandAllocator);
 	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
-	void CreateFences();
+	void CreateFence(ComPtr<ID3D12Fence1>& fence, char const* debugName);
 	void CreateFenceEvent();
 	void CreateDefaultRootSignature();
 	void CreateDefaultTextureTargets();
@@ -332,12 +340,11 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain4> m_swapChain;
-	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
 	ComPtr<ID3D12Fence1> m_fence;
 	ComPtr<IDXGIFactory4> m_dxgiFactory;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
-	std::vector<ComPtr<ID3D12CommandAllocator>> m_commandAllocators;
+	std::vector<ComPtr<ID3D12CommandAllocator>> m_commandAllocators[2];
 	std::vector<Texture*> m_backBuffers;
 	std::vector<Texture*> m_defaultRenderTargets;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
@@ -350,8 +357,7 @@ private:
 	std::vector<DescriptorHeap*> m_defaultDescriptorHeaps;
 	std::vector<DescriptorHeap*> m_defaultGPUDescriptorHeaps;
 	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
-
-
+	std::vector<ComPtr<ID3D12GraphicsCommandList6>> m_commandLists;
 
 	ImmediateContext* m_immediateCtxs = nullptr;
 	std::vector<FxContext> m_effectsCtxs;

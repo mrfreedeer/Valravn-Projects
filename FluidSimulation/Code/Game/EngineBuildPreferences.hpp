@@ -19,7 +19,7 @@
 #define ENGINE_DISABLE_VSYNC
 
 //#define ENGINE_ANTIALIASING
-#define ENGINE_USE_IMGUI
+//#define ENGINE_USE_IMGUI
 #if defined(ENGINE_ANTIALIASING)
 constexpr unsigned int ANTIALIASING_LEVEL = 8;
 #endif

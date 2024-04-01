@@ -17,12 +17,16 @@ struct Meshlet
 		VertexCount(vCount),
 		VertexOffset(vOffset),
 		PrimCount(primCount),
-		PrimOffset(primOffset) {}
+		PrimOffset(primOffset)
+		{  
+			Rgba8::WHITE.GetAsFloats(Color);
+		}
 
 	unsigned int VertexCount;
 	unsigned int VertexOffset;
 	unsigned int PrimCount;
 	unsigned int PrimOffset;
+	float Color[4]; 
 };
 
 struct GameConstants
@@ -520,7 +524,7 @@ void Basic3DMode::UpdateParticles(float deltaSeconds)
 		FluidParticle const& particle = m_particles[particleIndex];
 		FluidParticleMeshInfo& particleMesh = m_particlesMeshInfo[particleIndex];
 		particleMesh.Position = particle.m_position;
-		Rgba8::LIGHTBLUE.GetAsFloats(particleMesh.Color);
+		Rgba8::WHITE.GetAsFloats(particleMesh.Color);
 	}
 
 	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
@@ -554,7 +558,7 @@ void Basic3DMode::RenderParticles() const
 
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
-	g_theRenderer->SetModelColor(Rgba8::CYAN);
+	g_theRenderer->SetModelColor(Rgba8::WHITE);
 
 	g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
 	//g_theRenderer->DrawVertexArray(m_verts);
