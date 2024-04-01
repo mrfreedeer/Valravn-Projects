@@ -97,9 +97,7 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	ID3D12Resource2*& resource = m_uploadResource->m_resource;
 	ID3D12GraphicsCommandList6* rscCommandList = m_owner->m_ResourcesCommandList.Get();
 
-	auto cmdAlloc = m_owner->GetCommandAllocForCmdList(CommandListType::ResourcesCommandList);
-	cmdAlloc->Reset();
-	rscCommandList->Reset(cmdAlloc, nullptr);
+	
 
 	m_uploadResource->TransitionTo(D3D12_RESOURCE_STATE_GENERIC_READ, rscCommandList);
 	m_buffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, rscCommandList);
@@ -109,27 +107,8 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	ThrowIfFailed(resource->Map(0, &readRange, reinterpret_cast<void**>(&dataBegin)), "COULD NOT MAP BUFFER");
 	memcpy(dataBegin, data, sizeInBytes);
 	resource->Unmap(0, nullptr);
-
-
-
 	rscCommandList->CopyResource(m_buffer->m_resource, m_uploadResource->m_resource);
 	m_buffer->TransitionTo(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, rscCommandList);
-	rscCommandList->Close();
-
-	ID3D12CommandList* ppCommandLists[] = { rscCommandList };
-	m_owner->ExecuteCommandLists(ppCommandLists, 1);
-
-	ComPtr<ID3D12Fence1> fence;
-	m_owner->CreateFence(fence, "Rsc Fence");
-	m_owner->SignalFence(fence, 1);
-	if (fence->GetCompletedValue() != 1)
-	{
-		HANDLE event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		fence->SetEventOnCompletion(1, event);
-
-		WaitForSingleObjectEx(event, INFINITE, false);
-		CloseHandle(event);
-	}
 }
 
 void Buffer::CreateDynamicBuffer(void const* data)

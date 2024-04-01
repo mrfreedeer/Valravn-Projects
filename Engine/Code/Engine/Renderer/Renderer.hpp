@@ -316,6 +316,7 @@ private:
 
 	void SetColorTarget(Texture* dst);
 
+	void UploadAllPendingResources();
 	void DrawAllEffects();
 	void DrawEffect(FxContext& ctx);
 	void DrawAllImmediateContexts();

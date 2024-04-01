@@ -2124,6 +2124,40 @@ void Renderer::SetColorTarget(Texture* dst)
 
 }
 
+void Renderer::UploadAllPendingResources()
+{
+	// Unlit
+	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
+	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
+	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
+
+	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
+	m_immediateIBO->GuaranteeBufferSize(indexSize);
+	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
+
+	// Lit
+	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
+	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
+	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
+
+	/// Uploading all vertex and constant buffers
+	m_ResourcesCommandList->Close();
+	ID3D12CommandList* ppCommandLists[] = { m_ResourcesCommandList.Get() };
+	ExecuteCommandLists(ppCommandLists, 1);
+
+	ComPtr<ID3D12Fence1> fence;
+	CreateFence(fence, "Rsc Fence");
+	SignalFence(fence, 1);
+	if (fence->GetCompletedValue() != 1)
+	{
+		HANDLE event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		fence->SetEventOnCompletion(1, event);
+
+		WaitForSingleObjectEx(event, INFINITE, false);
+		CloseHandle(event);
+	}
+}
+
 void Renderer::DrawAllEffects()
 {
 	for (FxContext& ctx : m_effectsCtxs) {
@@ -2524,21 +2558,6 @@ ConstantBuffer& Renderer::GetCurrentLightBuffer()
 
 void Renderer::DrawAllImmediateContexts()
 {
-
-	// Unlit
-	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
-	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
-	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
-
-	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
-	m_immediateIBO->GuaranteeBufferSize(indexSize);
-	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
-
-	// Lit
-	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
-	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
-	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
-
 	for (unsigned int ctxIndex = 0; ctxIndex < m_currentDrawCtx; ctxIndex++) {
 		//for (ImmediateContext& ctx : m_immediateCtxs) {
 		ImmediateContext& ctx = m_immediateCtxs[ctxIndex];
@@ -2623,6 +2642,10 @@ void Renderer::BeginFrame()
 
 	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
 
+	auto rscCmdAlloc = GetCommandAllocForCmdList(CommandListType::ResourcesCommandList);
+	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
+	rscCmdAlloc->Reset();
+	ThrowIfFailed(m_ResourcesCommandList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
@@ -2660,8 +2683,9 @@ void Renderer::BeginFrame()
 void Renderer::EndFrame()
 {
 
-
 	DebugRenderEndFrame();
+
+	UploadAllPendingResources();
 
 	DrawAllImmediateContexts();
 
