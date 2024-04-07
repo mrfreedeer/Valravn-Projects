@@ -169,16 +169,19 @@ void Basic3DMode::Startup()
 	bufferDesc.owner = g_theRenderer;
 	bufferDesc.size = sizeof(FluidParticleMeshInfo) * m_particles.size();
 	bufferDesc.stride = sizeof(FluidParticleMeshInfo);
-
+	bufferDesc.debugName = "Mesh VBuffer 0";
 	m_meshVBuffer[0] = new StructuredBuffer(bufferDesc);
+
+	bufferDesc.debugName = "Mesh VBuffer 1";
 	m_meshVBuffer[1] = new StructuredBuffer(bufferDesc);
 
 	bufferDesc.data = meshlets.data();
 	bufferDesc.size = sizeof(Meshlet) * meshlets.size();
 	bufferDesc.stride = sizeof(Meshlet);
 
+	bufferDesc.debugName = "Meshlet Buffer";
 	m_meshletBuffer = new StructuredBuffer(bufferDesc);
-	m_meshletBuffer->CopyCPUToGPU(meshlets.data(), sizeof(Meshlet) * meshlets.size());
+	//m_meshletBuffer->CopyCPUToGPU(meshlets.data(), sizeof(Meshlet) * meshlets.size());
 
 	GameConstants dummyData = {};
 
@@ -236,11 +239,11 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
-	Texture* dpt = g_theRenderer->GetCurrentDepthTarget();
+	/*Texture* dpt = g_theRenderer->GetCurrentDepthTarget();
 	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, g_theRenderer->m_commandList.Get());
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
-		AABB2 quad(Vec2::ZERO, m_UISize* 0.25f);
+		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
@@ -250,7 +253,7 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_UICamera);
 
-	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, g_theRenderer->m_commandList.Get());
+	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, g_theRenderer->m_commandList.Get());*/
 
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
@@ -550,13 +553,13 @@ void Basic3DMode::RenderParticles() const
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
 	g_theRenderer->BindMaterial(m_prePassMaterial);
-	g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
+	//g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->BindStructuredBuffer(currentVBuffer, 1);
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
-	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
+	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
 	g_theRenderer->SetModelColor(Rgba8::WHITE);
 

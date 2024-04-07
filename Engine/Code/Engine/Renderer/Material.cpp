@@ -228,7 +228,7 @@ char const* Material::GetTargetForShader(ShaderType shaderType)
 	case Compute:
 		return "cs_6_5";
 	default:
-		ERROR_AND_DIE("UNSUPPORTED SHADER TYPE FOR TARGET");
+		ERROR_AND_DIE("UNSUPPORTED SHADER TYPE");
 	}
 }
 

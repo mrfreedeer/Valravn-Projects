@@ -180,7 +180,6 @@ void Renderer::EnableDebugLayer() const
 	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
 		debugController->EnableDebugLayer();
 		debugController->SetEnableGPUBasedValidation(TRUE);
-
 		debugController->Release();
 	}
 	else {
@@ -377,6 +376,7 @@ void Renderer::CreateSwapChain()
 void Renderer::CreateDescriptorHeap(ID3D12DescriptorHeap*& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, unsigned int numDescriptors, bool visibleFromGPU /*=false*/)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	ZeroMemory(&desc, sizeof(D3D12_DESCRIPTOR_HEAP_DESC));
 	desc.NumDescriptors = numDescriptors;
 	desc.Type = type;
 	if (visibleFromGPU) {
@@ -465,6 +465,7 @@ void Renderer::CreateFence(ComPtr<ID3D12Fence1>& fence, char const* debugName)
 void Renderer::CreateFenceEvent()
 {
 	m_fenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
+	m_rscFenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
 void Renderer::CreateDefaultRootSignature()
@@ -479,6 +480,7 @@ void Renderer::CreateDefaultRootSignature()
 
 
 	D3D12_DESCRIPTOR_RANGE1 descriptorRanges[4] = {};
+	ZeroMemory(descriptorRanges, sizeof(D3D12_DESCRIPTOR_RANGE1) * 4);
 	descriptorRanges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, CBV_DESCRIPTORS_AMOUNT, 0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0 };
 	descriptorRanges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
 	descriptorRanges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, UAV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
@@ -493,22 +495,32 @@ void Renderer::CreateDefaultRootSignature()
 	rootParameters[0].InitAsDescriptorTable(1, &descriptorRanges[0], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[1].InitAsDescriptorTable(1, &descriptorRanges[1], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[2].InitAsDescriptorTable(1, &descriptorRanges[2], D3D12_SHADER_VISIBILITY_ALL);
-	rootParameters[3].InitAsDescriptorTable(1, &descriptorRanges[3], D3D12_SHADER_VISIBILITY_PIXEL);
+	rootParameters[3].InitAsDescriptorTable(1, &descriptorRanges[3], D3D12_SHADER_VISIBILITY_ALL);
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignature(_countof(descriptorRanges), rootParameters);
-	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC MSRootSignature(_countof(descriptorRanges), rootParameters);
 	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
 	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+	MSRootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
+	MSRootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+
+	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
 	//rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 	//ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error), "COULD NOT SERIALIZE ROOT SIGNATURE");
 	ComPtr<ID3DBlob> signature;
+	ComPtr<ID3DBlob> MSsignature;
 	ComPtr<ID3DBlob> error;
 
 	HRESULT rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&rootSignature, signature.GetAddressOf(), error.GetAddressOf());
 	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
 	ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
 	SetDebugName(m_rootSignature, "DEFAULTROOTSIGNATURE");
+
+	rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&MSRootSignature, MSsignature.GetAddressOf(), error.GetAddressOf());
+	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
+	ThrowIfFailed(m_device->CreateRootSignature(0, MSsignature->GetBufferPointer(), MSsignature->GetBufferSize(), IID_PPV_ARGS(&m_MSRootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
+	SetDebugName(m_MSRootSignature, "DEFAULTROOTSIGNATURE");
 }
 
 void Renderer::CreateDefaultTextureTargets()
@@ -692,6 +704,7 @@ void Renderer::Startup()
 	ThrowIfFailed(m_ResourcesCommandList->Close(), "COULT NOT CLOSE INTERNAL BUFFER COMMAND LIST");
 
 	CreateFence(m_fence, "END_FRAME_FENCE");
+	CreateFence(m_rscFence, "RSC_FENCE");
 
 	m_fenceValues[m_currentBackBuffer]++;
 	CreateFenceEvent();
@@ -821,7 +834,11 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	std::wstring wSrc = std::wstring(loadInfo.m_shaderSrc.begin(), loadInfo.m_shaderSrc.end());
 
 	ComPtr<IDxcCompilerArgs> compilerArgs;
+	LPCWSTR additionalArgs[]{
+			DXC_ARG_ALL_RESOURCES_BOUND,
+	};
 	pUtils->BuildArguments(wSrc.c_str(), wEntryPoint.c_str(), wTarget.c_str(), NULL, 0, NULL, 0, &compilerArgs);
+	compilerArgs->AddArguments(additionalArgs, _countof(additionalArgs));
 
 	//LPCWSTR pszArgs[] =
 	//{
@@ -836,6 +853,7 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	//								 // or the autogenerated file name must be used.
 	//	L"-Qstrip_reflect",          // Strip reflection into a separate blob. 
 	//};
+
 #if defined(ENGINE_DEBUG_RENDER)
 	LPCWSTR debugArg[]{
 		DXC_ARG_SKIP_OPTIMIZATIONS,
@@ -911,7 +929,7 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	memcpy(outByteCode.data(), pShader->GetBufferPointer(), pShader->GetBufferSize());
 
 	return true;
-	}
+}
 
 void Renderer::LoadEngineShaderBinaries()
 {
@@ -1000,6 +1018,7 @@ void Renderer::CreatePSOForMaterial(Material* material)
 		CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
 
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+		ZeroMemory(&streamDesc, sizeof(D3D12_PIPELINE_STATE_STREAM_DESC));
 		streamDesc.pPipelineStateSubobjectStream = &psoStream;
 		streamDesc.SizeInBytes = sizeof(psoStream);
 
@@ -1312,7 +1331,12 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	};
 
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
-	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	if (ctx.m_isMeshDraw) {
+		m_commandList->SetGraphicsRootSignature(m_MSRootSignature.Get());
+	}
+	else {
+		m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+	}
 	m_commandList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
 
 
@@ -1519,15 +1543,15 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Renderer::GetGraphicsPSO(Material* material, 
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
+	//#if defined ENGINE_DEBUG_RENDER
+	//	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+	//#endif
 
 	return psoDesc;
 }
 
 D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* material)
 {
-	std::vector<D3D12_SIGNATURE_PARAMETER_DESC> reflectInputDesc;
-	std::vector<std::string> nameStrings;
-
 
 	MaterialConfig const& matConfig = material->m_config;
 
@@ -1549,10 +1573,11 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
 
 	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = {};
+	ZeroMemory(&psoDesc, sizeof(D3DX12_MESH_SHADER_PIPELINE_STATE_DESC));
 	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
 	ShaderByteCode* msByteCode = material->m_byteCodes[ShaderType::Mesh];
 
-	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.pRootSignature = m_MSRootSignature.Get();
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 	psoDesc.MS = CD3DX12_SHADER_BYTECODE(msByteCode->m_byteCode.data(), msByteCode->m_byteCode.size());
 
@@ -1574,6 +1599,10 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
+	//#if defined ENGINE_DEBUG_RENDER
+	//psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+	//#endif
+
 
 	return psoDesc;
 }
@@ -1655,19 +1684,7 @@ void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vert
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
-	auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
-	auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-
-	auto texMaxIt = std::max_element(currentDrawCtx.m_boundTextures.begin(), currentDrawCtx.m_boundTextures.end(), findHighestValTex);
-	auto cBufferMaxIt = std::max_element(currentDrawCtx.m_boundCBuffers.begin(), currentDrawCtx.m_boundCBuffers.end(), findHighestValCbuffer);
-
-	unsigned int texMax = (texMaxIt != currentDrawCtx.m_boundTextures.end()) ? texMaxIt->first : 0;
-	unsigned int cBufferMax = (cBufferMaxIt != currentDrawCtx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
-
-	m_srvHandleStart += texMax + 1;
-	m_cbvHandleStart += cBufferMax + 1;
-
-	m_cbvHandleStart += 2;
+	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
 	currentDrawCtx.m_vertexCount = (size_t)numVertexes;
 	currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
@@ -1970,6 +1987,7 @@ ResourceView* Renderer::CreateShaderResourceView(ResourceViewInfo const& viewInf
 
 	ResourceView* newResourceView = new ResourceView(viewInfo);
 	newResourceView->m_descriptorHandle = cpuHandle;
+	newResourceView->m_source = viewInfo.m_source;
 
 	return newResourceView;
 }
@@ -2084,6 +2102,12 @@ void Renderer::SetSamplerMode(SamplerMode samplerMode)
 	//}
 }
 
+void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
+{
+	if (bufferToUpdate->IsMarkedForUpdate()) return;
+	m_bufferUpdateQueue.push_back(bufferToUpdate);
+}
+
 Texture* Renderer::GetCurrentRenderTarget() const
 {
 	if (!m_currentCamera) GetActiveRenderTarget();
@@ -2130,32 +2154,85 @@ void Renderer::UploadAllPendingResources()
 	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
 	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
 	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
+	m_immediateVBO->m_buffer->MarkForBinding();
 
 	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
 	m_immediateIBO->GuaranteeBufferSize(indexSize);
 	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
+	m_immediateIBO->m_buffer->MarkForBinding();
 
 	// Lit
 	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
 	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
 	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
+	m_immediateDiffuseVBO->m_buffer->MarkForBinding();
 
+	std::vector<D3D12_RESOURCE_BARRIER> copyBarriers;
+	for (int bufferIndex = 0; bufferIndex < m_bufferUpdateQueue.size(); bufferIndex++) {
+		Buffer* buffer = m_bufferUpdateQueue[bufferIndex];
+		Resource* defaultBuffer = buffer->m_buffer;
+		Resource* uploadBuffer = buffer->m_uploadResource;
+
+
+		defaultBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, copyBarriers);
+		uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, copyBarriers);
+	}
+	if (copyBarriers.size() > 0) {
+		m_ResourcesCommandList->ResourceBarrier((UINT)copyBarriers.size(), copyBarriers.data());
+	}
+
+	for (int bufferIndex = 0; bufferIndex < m_bufferUpdateQueue.size(); bufferIndex++) {
+		Buffer* buffer = m_bufferUpdateQueue[bufferIndex];
+		Resource* defaultBuffer = buffer->m_buffer;
+		Resource* uploadBuffer = buffer->m_uploadResource;
+
+		buffer->m_markedForUpdate = false;
+		m_ResourcesCommandList->CopyResource(defaultBuffer->m_resource, uploadBuffer->m_resource);
+	}
+
+	std::vector<D3D12_RESOURCE_BARRIER> resourceBindingBarriers;
+	for (int resourceIndex = 0; resourceIndex < m_resources.size(); resourceIndex++) {
+		Resource* resource = m_resources[resourceIndex];
+		if (!resource->m_isBound) continue;
+
+		resource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, resourceBindingBarriers);
+		resource->m_isBound = false;
+	}
+
+	for (unsigned int cBufferInd = 0; cBufferInd < m_currentCameraCBufferSlot; cBufferInd++) {
+		ConstantBuffer& cbo = m_cameraCBOArray[cBufferInd];
+		if(!cbo.m_buffer) continue;
+		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
+	}
+
+	for (unsigned int cBufferInd = 0; cBufferInd < m_currentModelCBufferSlot; cBufferInd++) {
+		ConstantBuffer& cbo = m_modelCBOArray[cBufferInd];
+		if (!cbo.m_buffer) continue;
+
+		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
+	}
+
+	for (unsigned int cBufferInd = 0; cBufferInd < m_currentLightCBufferSlot; cBufferInd++) {
+		ConstantBuffer& cbo = m_lightCBOArray[cBufferInd];
+		if (!cbo.m_buffer) continue;
+
+		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
+	}
+
+	if (resourceBindingBarriers.size() > 0) {
+		m_ResourcesCommandList->ResourceBarrier((UINT)resourceBindingBarriers.size(), resourceBindingBarriers.data());
+	}
+
+	m_bufferUpdateQueue.clear();
 	/// Uploading all vertex and constant buffers
 	m_ResourcesCommandList->Close();
 	ID3D12CommandList* ppCommandLists[] = { m_ResourcesCommandList.Get() };
 	ExecuteCommandLists(ppCommandLists, 1);
 
-	ComPtr<ID3D12Fence1> fence;
-	CreateFence(fence, "Rsc Fence");
-	SignalFence(fence, 1);
-	if (fence->GetCompletedValue() != 1)
-	{
-		HANDLE event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		fence->SetEventOnCompletion(1, event);
-
-		WaitForSingleObjectEx(event, INFINITE, false);
-		CloseHandle(event);
-	}
+	SignalFence(m_rscFence, ++m_rscFenceValue);
+	m_commandQueue->Wait(m_rscFence.Get(), m_rscFenceValue);
+	WaitForFenceValue(m_rscFence, m_rscFenceValue, m_rscFenceEvent);
+	WaitForGPU();
 }
 
 void Renderer::DrawAllEffects()
@@ -2285,7 +2362,7 @@ ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdL
 {
 	auto commandAllocators = m_commandAllocators[m_currentBackBuffer];
 
-	return commandAllocators[(unsigned int) cmdListType].Get();
+	return commandAllocators[(unsigned int)cmdListType].Get();
 }
 
 void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
@@ -2386,6 +2463,7 @@ void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*=
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_boundCBuffers[slot] = cBuffer;
+	cBuffer->m_buffer->MarkForBinding();
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
@@ -2393,6 +2471,9 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_boundTextures[slot] = texture;
+	if (texture) {
+		texture->m_handle->MarkForBinding();
+	}
 }
 
 void Renderer::BindMaterial(Material* mat)
@@ -2427,6 +2508,7 @@ void Renderer::BindVertexBuffer(VertexBuffer* const& vertexBuffer)
 	currentDrawCtx.m_immediateVBO = &vertexBuffer;
 	currentDrawCtx.m_vertexStart = 0;
 	currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
+	vertexBuffer->m_buffer->MarkForBinding();
 }
 
 void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount)
@@ -2436,6 +2518,7 @@ void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCoun
 	currentDrawCtx.m_immediateIBO = &indexBuffer;
 	currentDrawCtx.m_indexStart = 0;
 	currentDrawCtx.m_indexCount = indexCount;
+	indexBuffer->m_buffer->MarkForBinding();
 }
 
 void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
@@ -2443,6 +2526,7 @@ void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_boundBuffers[slot] = buffer;
+	buffer->m_buffer->MarkForBinding();
 }
 
 void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot)
@@ -2476,6 +2560,7 @@ void Renderer::CopyCBufferToHeap(ConstantBuffer* bufferToBind, unsigned int hand
 	ResourceView* rsv = bufferToBind->GetOrCreateView();
 	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
 
+
 	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
 	/*D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(handleStart + slot);
@@ -2493,17 +2578,19 @@ void Renderer::CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, 
 	ResourceView* rsv = bufferToBind->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
 
 	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void Renderer::CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState)
 {
+	UNUSED(rsc);
+	UNUSED(endState);
 	unsigned int accessSlot = handleStart + slot;
 	DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(accessSlot);
 	D3D12_CPU_DESCRIPTOR_HANDLE cBufferHandle = rsv->GetHandle();
 
-	rsc->TransitionTo(endState, m_commandList.Get());
+	//rsc->TransitionTo(endState, m_commandList.Get());
 	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
@@ -2637,7 +2724,7 @@ void Renderer::BeginFrame()
 	// Command list allocators can only be reset when the associated 
   // command lists have finished execution on the GPU; apps should use 
   // fences to determine GPU execution progress.
-	
+
 	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DefaultCommandList);
 
 	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
@@ -2688,6 +2775,8 @@ void Renderer::EndFrame()
 	UploadAllPendingResources();
 
 	DrawAllImmediateContexts();
+
+
 
 	if (m_effectsCtxs.size() > 0) {
 		DrawAllEffects();
@@ -2812,6 +2901,7 @@ void Renderer::Shutdown()
 	m_commandList.Reset();
 	m_ResourcesCommandList.Reset();
 	m_rootSignature.Reset();
+	m_MSRootSignature.Reset();
 
 	m_commandQueue.Reset();
 	m_swapChain.Reset();

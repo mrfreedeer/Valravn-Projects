@@ -16,6 +16,7 @@ struct BufferView {
 
 struct BufferDesc {
 	Renderer* owner = nullptr;
+	char const* debugName = "GPU Buffer";
 	size_t size = 0;
 	size_t stride = 0;
 	MemoryUsage memoryUsage = MemoryUsage::Dynamic;
@@ -42,6 +43,7 @@ public:
 
 	virtual void CopyCPUToGPU(void const* data, size_t sizeInBytes);
 	size_t GetSize() const { return m_size; }
+	bool IsMarkedForUpdate() const { return m_markedForUpdate; }
 protected:
 	virtual void Initialize();
 	virtual void CreateDynamicBuffer(void const* data);
@@ -51,18 +53,21 @@ protected:
 protected:
 	Renderer* m_owner = nullptr;
 	size_t m_size = 0;
+	bool m_markedForUpdate = false;
 	size_t m_stride = 0;
+	UINT8* m_dataMap = nullptr;
 	MemoryUsage m_memoryUsage = MemoryUsage::Dynamic;
 	void const* m_data = nullptr;
 	DescriptorHeap* m_descriptorHeap = nullptr;
 	Resource* m_buffer = nullptr;
 	Resource* m_uploadResource = nullptr;
 	std::vector<ResourceView*> m_views;
+	std::string m_name = "";
 
 };
 
 // Helper class to automatically initialize buffers. We don't want to expose Initialize()
-class StructuredBuffer:public Buffer {
+class StructuredBuffer :public Buffer {
 public:
 	StructuredBuffer(BufferDesc const& bufDesc);
 	~StructuredBuffer();

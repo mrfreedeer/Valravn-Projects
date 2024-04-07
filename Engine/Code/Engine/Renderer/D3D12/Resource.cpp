@@ -14,6 +14,19 @@ void Resource::TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsComman
 
 }
 
+bool Resource::AddResourceBarrierToList(D3D12_RESOURCE_STATES newState, std::vector< D3D12_RESOURCE_BARRIER>& rscBarriers)
+{
+	D3D12_RESOURCE_STATES currentState = (D3D12_RESOURCE_STATES)m_currentState;
+	if (currentState == newState)return false;
+
+	CD3DX12_RESOURCE_BARRIER resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_resource, currentState, newState);
+	m_currentState = (int) newState;
+
+	rscBarriers.push_back(resourceBarrier);
+
+	return true;
+}
+
 Resource::Resource()
 {
 }

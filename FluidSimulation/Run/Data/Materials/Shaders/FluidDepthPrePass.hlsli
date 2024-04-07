@@ -8,9 +8,9 @@ struct ms_input_t
 struct ps_input_t
 {
     float4 position : SV_Position;
-    float3 normal : normal;
-    float4 color : COLOR;
-    float2 uv : TEXCOORD;
+    float3 normal : NORMAL0;
+    float4 color : COLOR0;
+    float2 uv : TEXCOORD0;
 };
 
 struct Meshlet
@@ -129,15 +129,30 @@ void MeshMain(
     //    out_triangles[gtid * 2 + 1] = uint3(genIndex, genIndex + 1, genIndex + 3);
     //}
     
+    SetMeshOutputCounts(4, 2);
     if (gtid < 1)
     {
-        SetMeshOutputCounts(4, 2);
         
         ps_input_t outVert = (ps_input_t) 0;
         Meshlet firstMeshlet = meshlets[0];
         outVert.position = float4(-1.0f, -1.0f, 1.0f, 1.0f);
         outVert.normal = float3(1.0f, 0.0f, .0f); // poiting towards camera
-        outVert.color = firstMeshlet.Color;
+        if (length(firstMeshlet.Color) == 0.0f)
+        {
+            if (length(ModelColor) == 0.0f)
+            {
+                
+                outVert.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+            }
+            else
+            {
+                outVert.color = float4(0.0f, 1.0f, 0.0f, 1.0f);
+            }
+        }
+        else
+        {
+            outVert.color = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
         //outVert.color = 0.0f.xxxx;
         outVert.uv = 0.0f.xx;
         
@@ -153,7 +168,7 @@ void MeshMain(
         out_verts[3] = outVert;
         
         out_triangles[0] = uint3(0, 2, 3);
-        out_triangles[1] = uint3(0, 1,2);
+        out_triangles[1] = uint3(0, 1, 2);
     }
        
         

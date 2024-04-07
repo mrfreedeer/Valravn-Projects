@@ -281,11 +281,13 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12/</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3d12.dll</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>

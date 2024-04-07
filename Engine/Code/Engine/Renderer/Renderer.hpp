@@ -235,6 +235,7 @@ public:
 	void SetDebugName(ComPtr<T_Object> object, char const* name);
 	void SetSamplerMode(SamplerMode samplerMode);
 
+	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
@@ -339,9 +340,11 @@ private:
 
 	ComPtr<ID3D12Device2> m_device;
 	ComPtr<ID3D12RootSignature> m_rootSignature;
+	ComPtr<ID3D12RootSignature> m_MSRootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain4> m_swapChain;
 	ComPtr<ID3D12Fence1> m_fence;
+	ComPtr<ID3D12Fence1> m_rscFence;
 	ComPtr<IDXGIFactory4> m_dxgiFactory;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
@@ -369,6 +372,8 @@ private:
 	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
 	std::vector<unsigned int> m_immediateIndices;
 	std::vector<unsigned int> m_fenceValues;
+	std::vector<Buffer*> m_bufferUpdateQueue;
+	unsigned int m_rscFenceValue = 0;
 
 	Material* m_default2DMaterial = nullptr;
 	Material* m_default3DMaterial = nullptr;
@@ -379,6 +384,7 @@ private:
 	VertexBuffer* m_immediateDiffuseVBO = nullptr;
 	IndexBuffer* m_immediateIBO = nullptr;
 	HANDLE m_fenceEvent; // void*
+	HANDLE m_rscFenceEvent;
 
 	bool m_useWARP = false;
 	bool m_uploadRequested = false;
