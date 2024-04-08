@@ -42,6 +42,7 @@ public:
 	/// Checks if view has been created, or creates it otherwise
 	/// </summary>
 	ResourceView* GetOrCreateView(ResourceBindFlagBit viewType);
+	bool IsDSVCompatible() const {return (m_creationInfo.m_bindFlags & ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT); }
 	IntVec2 GetDimensions() const;
 	Resource* GetResource() const;
 	ID3D12Resource* GetRawResource() const;

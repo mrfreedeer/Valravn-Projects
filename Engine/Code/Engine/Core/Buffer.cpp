@@ -187,6 +187,10 @@ ResourceView* Buffer::CreateShaderResourceView()
 	srvDesc->Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 1, 2, 3);
 	srvDesc->Format = LocalToD3D12(TextureFormat::UNKNOWN);
 	srvDesc->ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc->Buffer.FirstElement = 0;
+	srvDesc->Buffer.NumElements = UINT(m_size / m_stride);
+	srvDesc->Buffer.StructureByteStride = UINT(m_stride);
+	srvDesc->Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 	ResourceViewInfo viewInfo = {};
 	viewInfo.m_srvDesc = srvDesc;
@@ -194,10 +198,6 @@ ResourceView* Buffer::CreateShaderResourceView()
 	viewInfo.m_source = m_buffer;
 
 
-	srvDesc->Buffer.FirstElement = 0;
-	srvDesc->Buffer.NumElements = UINT(m_size / m_stride);
-	srvDesc->Buffer.StructureByteStride = UINT(m_stride);
-	srvDesc->Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 
 	ResourceView* newView = m_owner->CreateResourceView(viewInfo);

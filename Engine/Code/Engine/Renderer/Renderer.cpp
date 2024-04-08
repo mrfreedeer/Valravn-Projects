@@ -277,6 +277,22 @@ void Renderer::CreateDevice(ComPtr<IDXGIAdapter4> adapter)
 	if (!SUCCEEDED(deviceCreationResult)) {
 		ERROR_AND_DIE("COULD NOT CREATE DIRECTX12 DEVICE");
 	}
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = { D3D_SHADER_MODEL_6_5 };
+	if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel)))
+		|| (shaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_5))
+	{
+		OutputDebugStringA("ERROR: Shader Model 6.5 is not supported\n");
+		throw std::exception("Shader Model 6.5 is not supported");
+	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS7 features = {};
+	if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &features, sizeof(features)))
+		|| (features.MeshShaderTier == D3D12_MESH_SHADER_TIER_NOT_SUPPORTED))
+	{
+		OutputDebugStringA("ERROR: Mesh Shaders aren't supported!\n");
+		throw std::exception("Mesh Shaders aren't supported!");
+	}
+
 
 #if defined(_DEBUG)
 	ComPtr<ID3D12InfoQueue> infoQueue;
@@ -824,6 +840,7 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	ComPtr<IDxcIncludeHandler> pIncludeHandler;
 	pUtils->CreateDefaultIncludeHandler(&pIncludeHandler);
 
+
 	std::filesystem::path filenamePath = std::filesystem::path(sourceName);
 	std::string filenameStr = filenamePath.filename().string();
 	std::string filenamePDB = filenamePath.filename().replace_extension(".pdb").string();
@@ -1015,8 +1032,7 @@ void Renderer::CreatePSOForMaterial(Material* material)
 
 	if (material->IsMeshShader()) {
 		D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = GetMeshShaderPSO(material);
-		CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
-
+		CD3DX12_PIPELINE_STATE_STREAM2 psoStream = CD3DX12_PIPELINE_STATE_STREAM2(psoDesc);
 		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
 		ZeroMemory(&streamDesc, sizeof(D3D12_PIPELINE_STATE_STREAM_DESC));
 		streamDesc.pPipelineStateSubobjectStream = &psoStream;
@@ -1304,7 +1320,17 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 
 	Texture* depthTarget = ctx.m_depthTarget;
 	Resource* depthTargetRsc = depthTarget->GetResource();
-	depthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_commandList.Get());
+	Texture* srvDepthTarget = ctx.m_depthTargetSRV;
+
+	bool transitionDefaultDepth = (ctx.m_depthTarget != srvDepthTarget) || (!ctx.m_usingDepthAsTexture);
+	if (transitionDefaultDepth) {
+		depthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_commandList.Get());
+	}
+	else {
+		Resource* srvDepthTargetRsc = ctx.m_depthTargetSRV->GetResource();
+		srvDepthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_commandList.Get());
+		ctx.m_boundTextures[0] = srvDepthTarget;
+	}
 
 	SetMaterialPSO(ctx.m_material);
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
@@ -1410,6 +1436,7 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx.m_immediateVBO = nullptr;
 		nextCtx.m_isIndexedDraw = false;
 		nextCtx.m_isMeshDraw = false;
+		nextCtx.m_usingDepthAsTexture = false;
 	}
 	m_currentDrawCtx++;
 }
@@ -1578,9 +1605,8 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	ShaderByteCode* msByteCode = material->m_byteCodes[ShaderType::Mesh];
 
 	psoDesc.pRootSignature = m_MSRootSignature.Get();
-	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 	psoDesc.MS = CD3DX12_SHADER_BYTECODE(msByteCode->m_byteCode.data(), msByteCode->m_byteCode.size());
-
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 	psoDesc.RasterizerState = rasterizerDesc;
 	psoDesc.BlendState = blendDesc;
 	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
@@ -1594,7 +1620,7 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
 	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
 	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psoDesc.NumRenderTargets = 1;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
@@ -1769,6 +1795,13 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNC
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices)
 {
 	DrawIndexedVertexArray((unsigned int)vertexes.size(), vertexes.data(), (unsigned int)indices.size(), indices.data());
+}
+
+void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/)
+{
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+	currentDrawCtx.m_depthTargetSRV = (depthTarget) ? depthTarget : currentDrawCtx.m_depthTarget;
+	currentDrawCtx.m_usingDepthAsTexture = true;
 }
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
@@ -2201,7 +2234,7 @@ void Renderer::UploadAllPendingResources()
 
 	for (unsigned int cBufferInd = 0; cBufferInd < m_currentCameraCBufferSlot; cBufferInd++) {
 		ConstantBuffer& cbo = m_cameraCBOArray[cBufferInd];
-		if(!cbo.m_buffer) continue;
+		if (!cbo.m_buffer) continue;
 		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
 	}
 
@@ -2472,6 +2505,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 
 	currentDrawCtx.m_boundTextures[slot] = texture;
 	if (texture) {
+		if (texture->IsDSVCompatible()) return;
 		texture->m_handle->MarkForBinding();
 	}
 }

@@ -18,15 +18,15 @@ struct Meshlet
 		VertexOffset(vOffset),
 		PrimCount(primCount),
 		PrimOffset(primOffset)
-		{  
-			Rgba8::WHITE.GetAsFloats(Color);
-		}
+	{
+		Rgba8::WHITE.GetAsFloats(Color);
+	}
 
 	unsigned int VertexCount;
 	unsigned int VertexOffset;
 	unsigned int PrimCount;
 	unsigned int PrimOffset;
-	float Color[4]; 
+	float Color[4];
 };
 
 struct GameConstants
@@ -113,7 +113,7 @@ void Basic3DMode::Startup()
 	//colorInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
-		
+
 	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theMaterialSystem->GetMaterialForName("ColorBandFX");
 	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theMaterialSystem->GetMaterialForName("GrayScaleFX");
 	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
@@ -155,7 +155,7 @@ void Basic3DMode::Startup()
 			lastIndex = m_verts.size();*/
 	}
 
-	if (meshletParticleCount> 0) {
+	if (meshletParticleCount > 0) {
 		meshlets.emplace_back(meshletParticleCount + 1, meshletsParticleAccumulator, meshletParticleCount + 1, meshletsParticleAccumulator);
 		meshletsParticleAccumulator += meshletParticleCount + 1;
 		meshletParticleCount = 0;
@@ -195,7 +195,7 @@ void Basic3DMode::Startup()
 
 	m_gameConstants = new ConstantBuffer(cBufferDesc);
 	m_gameConstants->Initialize();
-	
+
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -239,21 +239,18 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
-	/*Texture* dpt = g_theRenderer->GetCurrentDepthTarget();
-	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, g_theRenderer->m_commandList.Get());
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
 		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
-		g_theRenderer->BindTexture(dpt);
+		g_theRenderer->BindDepthAsTexture();
 		g_theRenderer->DrawVertexArray(verts);
 
 	}
 	g_theRenderer->EndCamera(m_UICamera);
 
-	dpt->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, g_theRenderer->m_commandList.Get());*/
 
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {

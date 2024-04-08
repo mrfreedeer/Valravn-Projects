@@ -76,6 +76,7 @@ struct ImmediateContext {
 	ModelConstants m_modelConstants = {};
 	bool m_isIndexedDraw = false;
 	bool m_isMeshDraw = false;
+	bool m_usingDepthAsTexture =false;
 	VertexBuffer* const* m_immediateVBO = nullptr;
 	IndexBuffer* const* m_immediateIBO = nullptr;
 	ConstantBuffer* m_cameraCBO = nullptr;
@@ -92,6 +93,7 @@ struct ImmediateContext {
 	Material* m_material = nullptr;
 	Texture* m_renderTargets[8] = {};
 	Texture* m_depthTarget = nullptr;
+	Texture* m_depthTargetSRV = nullptr;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
 
@@ -184,6 +186,7 @@ public:
 	void DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes);
 	void DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices);
 	void DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices);
+	void BindDepthAsTexture(Texture* depthTarget = nullptr);
 
 	void SetModelMatrix(Mat44 const& modelMat);
 	void SetModelColor(Rgba8 const& modelColor);
