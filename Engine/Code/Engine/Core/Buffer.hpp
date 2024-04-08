@@ -50,6 +50,7 @@ protected:
 	virtual void CreateBuffer(Resource*& buffer, bool isUpload = false);
 	void CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data);
 	ResourceView* CreateShaderResourceView();
+	ResourceView* CreateConstantBufferView();
 protected:
 	Renderer* m_owner = nullptr;
 	size_t m_size = 0;

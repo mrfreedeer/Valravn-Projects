@@ -84,6 +84,8 @@ ResourceView* Buffer::GetOrCreateView(ResourceBindFlagBit viewType)
 		return CreateShaderResourceView();
 	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
 		ERROR_AND_DIE("HAVENT DONE UAV TEXTURE VIEW");
+	case RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT:
+		return CreateConstantBufferView();
 	case RESOURCE_BIND_DEPTH_STENCIL_BIT:
 	case RESOURCE_BIND_RENDER_TARGET_BIT:
 	case RESOURCE_BIND_NONE:
@@ -197,10 +199,25 @@ ResourceView* Buffer::CreateShaderResourceView()
 	viewInfo.m_viewType = RESOURCE_BIND_SHADER_RESOURCE_BIT;
 	viewInfo.m_source = m_buffer;
 
-
-
-
 	ResourceView* newView = m_owner->CreateResourceView(viewInfo);
+	m_views.push_back(newView);
+
+	return newView;
+}
+
+ResourceView* Buffer::CreateConstantBufferView()
+{
+	BufferView bufferV = GetBufferView();
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC* cBufferView = new D3D12_CONSTANT_BUFFER_VIEW_DESC();
+	cBufferView->BufferLocation = bufferV.m_bufferLocation;
+	cBufferView->SizeInBytes = (UINT)bufferV.m_sizeInBytes;
+
+	ResourceViewInfo bufferViewInfo = {};
+	bufferViewInfo.m_cbvDesc = cBufferView;
+	bufferViewInfo.m_viewType = RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT;
+
+	ResourceView* newView = m_owner->CreateResourceView(bufferViewInfo, m_descriptorHeap);
 	m_views.push_back(newView);
 
 	return newView;

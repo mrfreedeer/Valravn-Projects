@@ -1312,8 +1312,13 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 #endif
 }
 
+/// <summary>
+/// Each context sets state and inserts draw commands into the command list here
+/// </summary>
+/// <param name="ctx"></param>
 void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 {
+	// Resource barrier for RT and DRT 
 	Texture* currentRt = ctx.m_renderTargets[0];
 	Resource* currentRtResc = currentRt->GetResource();
 	currentRtResc->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
@@ -1333,20 +1338,22 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	}
 
 	SetMaterialPSO(ctx.m_material);
+
+	// Copy Descriptors into the GPU Descriptor heap
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
 		CopyTextureToHeap(texture, ctx.m_srvHandleStart, slot);
 	}
 
 	for (auto& [slot, pBuffer] : ctx.m_boundBuffers) {
-		CopyBufferToHeap(pBuffer, ctx.m_srvHandleStart, slot);
+		CopyBufferToGPUHeap(pBuffer, RESOURCE_BIND_SHADER_RESOURCE_BIT, ctx.m_srvHandleStart, slot);
 	}
 
-
-	CopyCBufferToHeap(ctx.m_cameraCBO, ctx.m_cbvHandleStart, g_cameraBufferSlot);
-	CopyCBufferToHeap(ctx.m_modelCBO, ctx.m_cbvHandleStart, g_modelBufferSlot);
+	// Copy Descriptors into the GPU Descriptor heap
+	CopyBufferToGPUHeap(ctx.m_cameraCBO, RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT, ctx.m_cbvHandleStart, g_cameraBufferSlot);
+	CopyBufferToGPUHeap(ctx.m_modelCBO, RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT, ctx.m_cbvHandleStart, g_modelBufferSlot);
 
 	for (auto& [slot, cbuffer] : ctx.m_boundCBuffers) {
-		CopyCBufferToHeap(cbuffer, ctx.m_cbvHandleStart, slot);
+		CopyBufferToGPUHeap(cbuffer, RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT, ctx.m_cbvHandleStart, slot);
 	}
 
 	DescriptorHeap* srvUAVCBVHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
@@ -1358,6 +1365,7 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
 	if (ctx.m_isMeshDraw) {
+		// Mesh shaders get root signature with no IA
 		m_commandList->SetGraphicsRootSignature(m_MSRootSignature.Get());
 	}
 	else {
@@ -1366,21 +1374,19 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	m_commandList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
 
 
+	// 0 -> CBV
+	// 1 -> SRV
+	// 2 -> UAV
+	// 3 -> Samplers
 	m_commandList->SetGraphicsRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_cbvHandleStart));
 	m_commandList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
 	m_commandList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(UAV_HANDLE_START));
 	m_commandList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
 
-	//for (int heapIndex = 0; heapIndex < allDescriptorHeaps.size(); heapIndex++) {
-	//	ID3D12DescriptorHeap* currentDescriptorHeap = allDescriptorHeaps[heapIndex];
-	//	m_commandList->SetGraphicsRootDescriptorTable(heapIndex, currentDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-	//}
 
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	// Later, each texture has its handle
-	//ResourceView* rtv =  m_defaultRenderTarget->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT);
 	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 	ResourceView* dsvView = ctx.m_depthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
@@ -1426,8 +1432,13 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	}
 }
 
+/// <summary>
+/// Through copying the context onto the next, we can keep resources bound between render passes
+/// </summary>
 void Renderer::CopyCurrentDrawCtxToNext()
 {
+	// Copy relevant information into the next context
+
 	if (m_currentDrawCtx <= IMMEDIATE_CTX_AMOUNT - 1) {
 		ImmediateContext& nextCtx = m_immediateCtxs[m_currentDrawCtx + 1];
 
@@ -1441,6 +1452,10 @@ void Renderer::CopyCurrentDrawCtxToNext()
 	m_currentDrawCtx++;
 }
 
+/// <summary>
+/// Update the descriptor handle starts for CBV, SRV
+/// </summary>
+/// <param name="ctx"></param>
 void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 {
 	static auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
@@ -1577,6 +1592,12 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Renderer::GetGraphicsPSO(Material* material, 
 	return psoDesc;
 }
 
+/// <summary>
+/// Get the PSO for the mesh shaders. Very similar to the normal graphics one, but since they 
+/// are created slightly differently, it warrants another function
+/// </summary>
+/// <param name="material"></param>
+/// <returns></returns>
 D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* material)
 {
 
@@ -1657,6 +1678,12 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 	return newTexture;
 }
 
+/// <summary>
+///	Save dispatch args, and set off cbuffers and srv info for keeping state between render passes
+/// </summary>
+/// <param name="threadX"></param>
+/// <param name="threadY"></param>
+/// <param name="threadZ"></param>
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
@@ -1797,6 +1824,10 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, 
 	DrawIndexedVertexArray((unsigned int)vertexes.size(), vertexes.data(), (unsigned int)indices.size(), indices.data());
 }
 
+/// <summary>
+/// First approach for enabling reading from depth target as textures
+/// </summary>
+/// <param name="depthTarget"></param>
 void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
@@ -1857,12 +1888,15 @@ DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeap
 
 void Renderer::CreateViewport()
 {
-
 	m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_config.m_window->GetClientDimensions().x), static_cast<float>(m_config.m_window->GetClientDimensions().y), 0, 1);
 	m_scissorRect = CD3DX12_RECT(0, 0, static_cast<long>(m_config.m_window->GetClientDimensions().x), static_cast<long>(m_config.m_window->GetClientDimensions().y));
-
 }
 
+/// <summary>
+/// Only function allowed to create textures
+/// </summary>
+/// <param name="creationInfo"></param>
+/// <returns></returns>
 Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 {
 	Resource*& handle = creationInfo.m_handle;
@@ -2135,6 +2169,11 @@ void Renderer::SetSamplerMode(SamplerMode samplerMode)
 	//}
 }
 
+/// <summary>
+/// Add buffer to a queue to copy to appropriate GPU buffer and do resource barriers at the end of frame
+/// before executing command lists
+/// </summary>
+/// <param name="bufferToUpdate"></param>
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
 {
 	if (bufferToUpdate->IsMarkedForUpdate()) return;
@@ -2181,39 +2220,45 @@ void Renderer::SetColorTarget(Texture* dst)
 
 }
 
+/// <summary>
+/// Execute any CopyResource and ResourceBarriers before the main command list with draw calls
+/// </summary>
 void Renderer::UploadAllPendingResources()
 {
-	// Unlit
+	// Unlit vertexes. This is a giant buffer with all vertexes for better performance
 	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
 	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
 	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
 	m_immediateVBO->m_buffer->MarkForBinding();
 
+	// Single buffer for any indexed draw calls
 	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
 	m_immediateIBO->GuaranteeBufferSize(indexSize);
 	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
 	m_immediateIBO->m_buffer->MarkForBinding();
 
-	// Lit
+	// Lit vertexes also get their own buffer
 	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
 	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
 	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
 	m_immediateDiffuseVBO->m_buffer->MarkForBinding();
 
 	std::vector<D3D12_RESOURCE_BARRIER> copyBarriers;
+	// Resource barriers to get all buffer resources ready for copying
 	for (int bufferIndex = 0; bufferIndex < m_bufferUpdateQueue.size(); bufferIndex++) {
 		Buffer* buffer = m_bufferUpdateQueue[bufferIndex];
 		Resource* defaultBuffer = buffer->m_buffer;
 		Resource* uploadBuffer = buffer->m_uploadResource;
 
-
 		defaultBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, copyBarriers);
 		uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, copyBarriers);
 	}
+
 	if (copyBarriers.size() > 0) {
 		m_ResourcesCommandList->ResourceBarrier((UINT)copyBarriers.size(), copyBarriers.data());
 	}
 
+	// Insert the copy resources commands
 	for (int bufferIndex = 0; bufferIndex < m_bufferUpdateQueue.size(); bufferIndex++) {
 		Buffer* buffer = m_bufferUpdateQueue[bufferIndex];
 		Resource* defaultBuffer = buffer->m_buffer;
@@ -2223,6 +2268,9 @@ void Renderer::UploadAllPendingResources()
 		m_ResourcesCommandList->CopyResource(defaultBuffer->m_resource, uploadBuffer->m_resource);
 	}
 
+	/// <summary>
+	/// The next are for ensuring all constant buffers are in the correct state before the main draw calls
+	/// </summary>
 	std::vector<D3D12_RESOURCE_BARRIER> resourceBindingBarriers;
 	for (int resourceIndex = 0; resourceIndex < m_resources.size(); resourceIndex++) {
 		Resource* resource = m_resources[resourceIndex];
@@ -2256,12 +2304,14 @@ void Renderer::UploadAllPendingResources()
 		m_ResourcesCommandList->ResourceBarrier((UINT)resourceBindingBarriers.size(), resourceBindingBarriers.data());
 	}
 
+
 	m_bufferUpdateQueue.clear();
 	/// Uploading all vertex and constant buffers
 	m_ResourcesCommandList->Close();
 	ID3D12CommandList* ppCommandLists[] = { m_ResourcesCommandList.Get() };
 	ExecuteCommandLists(ppCommandLists, 1);
 
+	// Wait for all resources to finish uploading, copying and for resource barriers
 	SignalFence(m_rscFence, ++m_rscFenceValue);
 	m_commandQueue->Wait(m_rscFence.Get(), m_rscFenceValue);
 	WaitForFenceValue(m_rscFence, m_rscFenceValue, m_rscFenceEvent);
@@ -2304,7 +2354,6 @@ void Renderer::DrawEffect(FxContext& ctx)
 	CopyTextureWithMaterial(backTarget, activeTarget, ctx.m_depthTarget, ctx.m_fx, ctx.m_cameraConstants);
 	//}
 
-
 	m_currentRenderTarget = (m_currentRenderTarget + 1) % 2;
 }
 
@@ -2327,7 +2376,7 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	m_currentCameraCBufferSlot++;
 
 	cBuffer.CopyCPUToGPU(&cameraConstants, sizeof(cameraConstants));
-	CopyCBufferToHeap(&cBuffer, m_cbvHandleStart, 0);
+	CopyBufferToGPUHeap(&cBuffer, RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT, m_cbvHandleStart, 0);
 
 	m_commandList->SetPipelineState(effect->m_PSO);
 	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
@@ -2472,6 +2521,7 @@ ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewI
 	case RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT:
 		return CreateConstantBufferView(resourceViewInfo, descriptorHeap);
 	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
+		// TODO
 		break;
 	}
 
@@ -2505,6 +2555,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 
 	currentDrawCtx.m_boundTextures[slot] = texture;
 	if (texture) {
+		// if it is depth texture, special code handles resource barries at DrawImmediateCtx
 		if (texture->IsDSVCompatible()) return;
 		texture->m_handle->MarkForBinding();
 	}
@@ -2572,53 +2623,26 @@ void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int hand
 
 	ResourceView* rsv = usedTex->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
 	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	CopyResourceToHeap(usedTex->GetResource(), rsv, handleStart, slot, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	CopyResourceToGPUHeap(rsv, handleStart, slot);
 
 }
 
-//	unsigned int resultingSlot = handleStart + slot;
-//	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(resultingSlot);
-//	D3D12_CPU_DESCRIPTOR_HANDLE textureHandle = rsv->GetHandle();
-//
-//	usedTex->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, m_commandList.Get());
-//
-//	//if (srvHandle.ptr != textureHandle.ptr) {
-//	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-//	//}
-//}
-
-void Renderer::CopyCBufferToHeap(ConstantBuffer* bufferToBind, unsigned int handleStart, unsigned int slot /*= 0*/)
+/// <summary>
+/// Copy descriptors from the CPU heap to the GPU heap
+/// A CPU heap was necessary to be able to dynamically set descriptors and then send them to GPU for draw calls
+/// </summary>
+/// <param name="bufferToBind"></param>
+/// <param name="handleStart"></param>
+/// <param name="slot"></param>
+void Renderer::CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag,unsigned int handleStart, unsigned int slot /*= 0*/)
 {
-	if (!bufferToBind) return;
-
-	ResourceView* rsv = bufferToBind->GetOrCreateView();
-	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-
-
-	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-
-	/*D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(handleStart + slot);
-	D3D12_CPU_DESCRIPTOR_HANDLE cBufferHandle = rsv->GetHandle();
-
-
-	bufferToBind->m_buffer->TransitionTo(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, m_commandList.Get());
-	m_device->CopyDescriptorsSimple(1, srvHandle, rsv->GetHandle(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);*/
-
+	ResourceView* rsv = bufferToBind->GetOrCreateView(bindFlag);
+	CopyResourceToGPUHeap(rsv, handleStart, slot);
 }
 
-void Renderer::CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, unsigned int slot /*= 0*/)
+// Copy the descriptor handle onto the GPU descriptor heap
+void Renderer::CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot)
 {
-
-	ResourceView* rsv = bufferToBind->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
-
-	//DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
-	CopyResourceToHeap(bufferToBind->m_buffer, rsv, handleStart, slot, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-}
-
-void Renderer::CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState)
-{
-	UNUSED(rsc);
-	UNUSED(endState);
 	unsigned int accessSlot = handleStart + slot;
 	DescriptorHeap* srvHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap->GetHandleAtOffset(accessSlot);

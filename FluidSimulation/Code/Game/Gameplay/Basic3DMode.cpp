@@ -524,7 +524,7 @@ void Basic3DMode::UpdateParticles(float deltaSeconds)
 		FluidParticle const& particle = m_particles[particleIndex];
 		FluidParticleMeshInfo& particleMesh = m_particlesMeshInfo[particleIndex];
 		particleMesh.Position = particle.m_position;
-		Rgba8::WHITE.GetAsFloats(particleMesh.Color);
+		Rgba8(0,0,160,120).GetAsFloats(particleMesh.Color);
 	}
 
 	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
@@ -556,7 +556,7 @@ void Basic3DMode::RenderParticles() const
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
-	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
+	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
 	g_theRenderer->SetModelColor(Rgba8::WHITE);
 

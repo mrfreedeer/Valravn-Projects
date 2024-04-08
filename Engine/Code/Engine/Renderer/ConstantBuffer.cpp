@@ -37,26 +37,4 @@ size_t ConstantBuffer::AlignToCBufferStride(size_t size) const
 
 ConstantBuffer::~ConstantBuffer()
 {
-	if (m_bufferView) {
-		delete m_bufferView;
-	}
-}
-
-ResourceView* ConstantBuffer::GetOrCreateView()
-{
-	if (m_bufferView) return m_bufferView;
-
-	BufferView bufferV = GetBufferView();
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC* cBufferView = new D3D12_CONSTANT_BUFFER_VIEW_DESC();
-	cBufferView->BufferLocation = bufferV.m_bufferLocation;
-	cBufferView->SizeInBytes = (UINT)bufferV.m_sizeInBytes;
-
-	ResourceViewInfo bufferViewInfo = {};
-	bufferViewInfo.m_cbvDesc = cBufferView;
-	bufferViewInfo.m_viewType = RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT;
-
-	m_bufferView = m_owner->CreateResourceView(bufferViewInfo, m_descriptorHeap);
-
-	return m_bufferView;
 }

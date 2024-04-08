@@ -306,9 +306,8 @@ private:
 	void ClearTexture(Rgba8 const& color, Texture* tex);
 	void ResetGPUDescriptorHeaps();
 	void CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot = 0);
-	void CopyCBufferToHeap(ConstantBuffer* bufferToBind, unsigned int handleStart, unsigned int slot = 0);
-	void CopyBufferToHeap(Buffer* bufferToBind, unsigned int handleStart, unsigned int slot = 0);
-	void CopyResourceToHeap(Resource* rsc, ResourceView* rsv, unsigned int handleStart, unsigned int slot, D3D12_RESOURCE_STATES endState);
+	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot = 0);
+	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);
 
 	// Handling of pre-allocated engine buffers
 	ConstantBuffer& GetNextCameraBuffer();
