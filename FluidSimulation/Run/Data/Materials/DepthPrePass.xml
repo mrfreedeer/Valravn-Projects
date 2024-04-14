@@ -11,4 +11,7 @@
 	<DepthStencil depthFunction="ALWAYS" writeDepth="true"/>
 	<Antialiasing value="8"/>
 	<Metadata src="material.mtl"/>
+	<RenderTargets count="2"> <!-- Default 0 and RT 1-->
+		<RenderTarget index="1" format="R32_FLOAT"/>
+	</RenderTargets>
 </Material>

@@ -216,7 +216,7 @@ ComPtr<IDXGIAdapter4> Renderer::GetAdapter()
 
 	if (m_useWARP) {
 
-		HRESULT enumWarpAdapter = m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&adapter));
+		HRESULT enumWarpAdapter = m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&adapter1));
 
 		if (!SUCCEEDED(enumWarpAdapter)) {
 			ERROR_AND_DIE("COULD NOT GET WARP ADAPTER");
@@ -678,7 +678,7 @@ void Renderer::Startup()
 	m_defaultDescriptorHeaps[(size_t)DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE);
 	m_defaultDescriptorHeaps[(size_t)DescriptorHeapType::SAMPLER] = new DescriptorHeap(this, DescriptorHeapType::SAMPLER, 64);
 	m_defaultDescriptorHeaps[(size_t)DescriptorHeapType::RTV] = new DescriptorHeap(this, DescriptorHeapType::RTV, 1024);
-	m_defaultDescriptorHeaps[(size_t)DescriptorHeapType::DSV] = new DescriptorHeap(this, DescriptorHeapType::DSV, 8);
+	m_defaultDescriptorHeaps[(size_t)DescriptorHeapType::DSV] = new DescriptorHeap(this, DescriptorHeapType::DSV, 32);
 
 
 	CreateRenderTargetViewsForBackBuffers();
@@ -1581,13 +1581,21 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Renderer::GetGraphicsPSO(Material* material, 
 	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
 	psoDesc.SampleMask = UINT_MAX;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
-	psoDesc.NumRenderTargets = 1;
+	psoDesc.NumRenderTargets = (UINT)matConfig.m_numRenderTargets;
+
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		TextureFormat const& format = matConfig.m_renderTargetFormats[rtIndex];
+		if (format == TextureFormat::INVALID) continue;
+		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
+	}
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
-	//#if defined ENGINE_DEBUG_RENDER
-	//	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
-	//#endif
+#if defined ENGINE_DEBUG_RENDER
+	if (m_useWARP) {
+		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+	}
+#endif
 
 	return psoDesc;
 }
@@ -1642,13 +1650,21 @@ D3DX12_MESH_SHADER_PIPELINE_STATE_DESC Renderer::GetMeshShaderPSO(Material* mate
 	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
 	psoDesc.SampleMask = UINT_MAX;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.NumRenderTargets = (UINT)matConfig.m_numRenderTargets;
+
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		TextureFormat const& format = matConfig.m_renderTargetFormats[rtIndex];
+		if (format == TextureFormat::INVALID) continue;
+		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
+	}
+
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
-	//#if defined ENGINE_DEBUG_RENDER
-	//psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
-	//#endif
+#if defined ENGINE_DEBUG_RENDER
+	if (m_useWARP) {
+		psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+	}
+#endif
 
 
 	return psoDesc;
@@ -2207,17 +2223,19 @@ void Renderer::ApplyEffect(Material* effect, Camera const* camera, Texture* cust
 	m_effectsCtxs.push_back(newFxCtx);
 }
 
-void Renderer::SetColorTarget(Texture* dst)
+void Renderer::SetRenderTarget(Texture* dst, unsigned int slot)
 {
-	if (dst) {
-		ResourceView* renderTargetView = dst->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT);
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = renderTargetView->GetHandle();
-		m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+	if (slot > 7) {
+		ERROR_RECOVERABLE("TRYING TO SET RENDER TARGET INDEX > 8");
+		return;
 	}
-	else {
-		m_commandList->OMSetRenderTargets(0, NULL, FALSE, NULL);
+	else if (slot < 0) {
+		ERROR_RECOVERABLE("TRYING TO SET RENDER TARGET INDEX < 0");
+		return;
 	}
 
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+	currentDrawCtx.m_renderTargets[slot] = dst;
 }
 
 /// <summary>
@@ -2368,7 +2386,7 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	dsvResource->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_READ, m_commandList.Get());
 	dstResource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
 	BindMaterial(effect);
-	SetColorTarget(dst);
+	SetRenderTarget(dst);
 
 	SetSamplerMode(SamplerMode::BILINEARCLAMP);
 
@@ -2634,7 +2652,7 @@ void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int hand
 /// <param name="bufferToBind"></param>
 /// <param name="handleStart"></param>
 /// <param name="slot"></param>
-void Renderer::CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag,unsigned int handleStart, unsigned int slot /*= 0*/)
+void Renderer::CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot /*= 0*/)
 {
 	ResourceView* rsv = bufferToBind->GetOrCreateView(bindFlag);
 	CopyResourceToGPUHeap(rsv, handleStart, slot);

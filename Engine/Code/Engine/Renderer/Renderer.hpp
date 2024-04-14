@@ -317,7 +317,7 @@ private:
 	ConstantBuffer& GetCurrentModelBuffer();
 	ConstantBuffer& GetCurrentLightBuffer();
 
-	void SetColorTarget(Texture* dst);
+	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
 
 	void UploadAllPendingResources();
 	void DrawAllEffects();

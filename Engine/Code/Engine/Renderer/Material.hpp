@@ -28,6 +28,7 @@ struct ShaderLoadInfo {
 
 struct MaterialConfig
 {
+	MaterialConfig();
 	std::string m_name = "Unnamed";
 	std::string m_src = "";
 	ShaderLoadInfo m_shaders[ShaderType::NUM_SHADER_TYPES] = {};
@@ -38,6 +39,8 @@ struct MaterialConfig
 	CullMode m_cullMode = CullMode::BACK;
 	WindingOrder m_windingOrder = WindingOrder::COUNTERCLOCKWISE;
 	TopologyType m_topology = TopologyType::TOPOLOGY_TYPE_TRIANGLE;
+	TextureFormat m_renderTargetFormats[8] = {};
+	unsigned int m_numRenderTargets = 1;
 	bool m_depthEnable = false;
 	bool m_stencilEnable = false;
 };
@@ -91,6 +94,7 @@ private:
 	void ParseFillMode(XMLElement const& xmlElement);
 	void ParseTopology(XMLElement const& xmlElement);
 	void ParseDepthStencil(XMLElement const& xmlElement);
+	void ParseRenderTargets(XMLElement const& xmlElement);
 
 	char const* GetEntryPoint(ShaderType shaderType) const;
 	static char const* GetTargetForShader(ShaderType shaderType);

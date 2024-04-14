@@ -17,7 +17,16 @@ inline void ThrowIfFailed(long hr, char const* errorMsg) {
 	}
 }
 
-
+enum class TextureFormat : int {
+	INVALID = -1,
+	R8G8B8A8_UNORM,
+	R32G32B32A32_FLOAT,
+	R32G32_FLOAT,
+	D24_UNORM_S8_UINT,
+	R24G8_TYPELESS,
+	R32_FLOAT,
+	UNKNOWN
+};
 
 static const char* BlendModeStrings[] = {"ALPHA", "ADDITIVE", "OPAQUE"};
 enum class BlendMode
@@ -131,6 +140,7 @@ constexpr unsigned int UAV_HANDLE_START = SRV_HANDLE_END + 1;
 constexpr unsigned int UAV_HANDLE_END = SRV_UAV_CBV_DEFAULT_SIZE - 1;
 constexpr unsigned int UAV_DESCRIPTORS_AMOUNT = UAV_HANDLE_END - UAV_HANDLE_START + 1;
 
+TextureFormat ParseFromString(std::string const& text);
 
 
 

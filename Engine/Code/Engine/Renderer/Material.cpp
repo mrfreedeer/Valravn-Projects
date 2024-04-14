@@ -6,7 +6,7 @@
 Material::Material(const MaterialConfig& config) :
 	m_config(config)
 {
-
+	
 }
 
 Material::~Material()
@@ -32,6 +32,7 @@ const std::string& Material::GetPath() const
 
 void Material::LoadFromXML(XMLElement const* xmlElement)
 {
+	
 	while (xmlElement) {
 		std::string attrName = xmlElement->Name();
 		ParseAttribute(attrName, *xmlElement);
@@ -76,7 +77,7 @@ void Material::ParseShader(std::string const& attributeName, XMLElement const& x
 	loadInfo.m_shaderEntryPoint = ParseXmlAttribute(xmlElement, "entryPoint", "Unknown");
 	bool isEngineMat = ParseXmlAttribute(xmlElement, "EngineShader", false);
 
-	std::string shaderSrc = (isEngineMat)? ENGINE_MAT_DIR : "";
+	std::string shaderSrc = (isEngineMat) ? ENGINE_MAT_DIR : "";
 	shaderSrc += ParseXmlAttribute(xmlElement, "src", "Unknown Shader Src");
 	loadInfo.m_shaderName = ParseXmlAttribute(xmlElement, "shaderName", shaderSrc);
 
@@ -204,6 +205,21 @@ void Material::ParseDepthStencil(XMLElement const& xmlElement)
 
 }
 
+void Material::ParseRenderTargets(XMLElement const& xmlElement)
+{
+	XMLElement const* renderTargetDesc = xmlElement.FirstChildElement();
+	m_config.m_numRenderTargets = ParseXmlAttribute(xmlElement, "count", 1);
+	if(m_config.m_numRenderTargets == 0) m_config.m_renderTargetFormats[0] = TextureFormat::INVALID;
+
+	while (renderTargetDesc) {
+		std::string texFormat = ParseXmlAttribute(*renderTargetDesc, "format", "INVALID");
+		unsigned int rtIndex = ParseXmlAttribute(*renderTargetDesc, "index", 0);
+		m_config.m_renderTargetFormats[rtIndex] = ParseFromString(texFormat);
+
+		renderTargetDesc = renderTargetDesc->NextSiblingElement();
+	}
+}
+
 char const* Material::GetEntryPoint(ShaderType shaderType) const
 {
 	return m_config.m_shaders[shaderType].m_shaderEntryPoint.c_str();
@@ -261,5 +277,20 @@ void Material::ParseAttribute(std::string const& attributeName, XMLElement const
 	if (AreStringsEqualCaseInsensitive(attributeName, "depthstencil")) {
 		ParseDepthStencil(xmlElement);
 		return;
+	}
+
+	if (AreStringsEqualCaseInsensitive(attributeName, "rendertargets")) {
+		ParseRenderTargets(xmlElement);
+		return;
+	}
+
+}
+
+MaterialConfig::MaterialConfig()
+{
+	// Default RT0 is R8G8B8A8_UNORM
+	m_renderTargetFormats[0] = TextureFormat::R8G8B8A8_UNORM;
+	for (unsigned int rtIndex = 1; rtIndex < 8; rtIndex++) {
+		m_renderTargetFormats[rtIndex] = TextureFormat::INVALID;
 	}
 }

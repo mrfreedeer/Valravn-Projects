@@ -2,6 +2,7 @@
 #include "Engine/Math/IntVec2.hpp"
 #include "Engine/Renderer/ResourceView.hpp"
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Renderer/GraphicsCommon.hpp"
 #include <vector>
 #include <string>
 
@@ -9,15 +10,7 @@ class Resource;
 class TextureView;
 class Renderer;
 
-enum class TextureFormat : int {
-		R8G8B8A8_UNORM,
-		R32G32B32A32_FLOAT,
-		R32G32_FLOAT,
-		D24_UNORM_S8_UINT,
-		R24G8_TYPELESS,
-		R32_FLOAT,
-		UNKNOWN
-};
+
 
 
 struct TextureCreateInfo {
@@ -32,6 +25,7 @@ struct TextureCreateInfo {
 	Resource* m_handle = nullptr;
 	void* m_initialData = nullptr;
 	Rgba8 m_clearColour = Rgba8();
+
 };
 
 

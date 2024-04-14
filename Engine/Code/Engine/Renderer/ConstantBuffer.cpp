@@ -38,3 +38,4 @@ size_t ConstantBuffer::AlignToCBufferStride(size_t size) const
 ConstantBuffer::~ConstantBuffer()
 {
 }
+ 

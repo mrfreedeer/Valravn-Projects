@@ -8,7 +8,7 @@ struct ms_input_t
 struct ps_input_t
 {
     float4 position : SV_Position;
-    float3 normal : NORMAL0;
+    float3 eyeSpacePosition : POSITION0;
     float4 color : COLOR0;
     float2 uv : TEXCOORD0;
 };
@@ -103,20 +103,29 @@ void MeshMain(
     
     if (genIndex < vertCount)
     {
+        // Output a quad with UVs of (0.0f, 0.0f) - (1.0f, 1.0f) each
+        
         float3 vertexPositions[4];
         vertexPositions[0] = position + SpriteRadius * (jBasis - kBasis); // Bottom Left
         vertexPositions[1] = position + SpriteRadius * -(jBasis + kBasis); // BottomRight
         vertexPositions[2] = position + SpriteRadius * (jBasis + kBasis); // Top Left
         vertexPositions[3] = position + SpriteRadius * (-jBasis + kBasis); // Top Right
+        
+        float2 UVs[4];
+        UVs[0] = float2(0.0f, 0.0f);
+        UVs[1] = float2(1.0f, 0.0f);
+        UVs[2] = float2(0.0f, 1.0f);
+        UVs[3] = float2(1.0f, 1.0f);
+        
         for (int i = 0; i < 4; i++)
         {
             ps_input_t outVert = (ps_input_t) 0;
             float4 position = float4(vertexPositions[i], 1.0f);
             float4 viewPosition = mul(ViewMatrix, position);
             outVert.position = mul(ProjectionMatrix, viewPosition);
-            outVert.normal = iBasis; // poiting towards camera
+            outVert.eyeSpacePosition = viewPosition;
             outVert.color = vertices[accessIndex].color;
-            outVert.uv = 0.0f.xx;
+            outVert.uv = UVs[i];
         
             out_verts[genIndex + i] = outVert;
 
@@ -193,16 +202,16 @@ void MeshMain(
 
 float4 PixelMain(ps_input_t input) : SV_Target0
 {
-    //float4 ambient = AmbientIntensity;
-    //float3 normalizedNormal = normalize(input.normal);
-    //float4 directional = DirectionalLightIntensity * saturate(dot(normalizedNormal, -DirectionalLight));
-    //float4 lightColor = ambient + directional + ComputeDiffuseLighting(input.worldPosition, normalizedNormal);
-    //float4 diffuseColor = diffuseTexture.Sample(diffuseSampler, input.uv);
-    //float4 resultingColor = lightColor * diffuseColor * input.color;
+ 
     
-    //clip(resultingColor.a - 0.5f);
+    float2 posInCircle = (input.uv * 2.0f) - 1.0f;
+    float radiusSqr = dot(posInCircle, posInCircle);
+    
+    if (radiusSqr > 1.0f)
+        discard;
     
     float4 resultingColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * ModelColor;
+    
     //float4 resultingColor = /*diffuseTexture.Sample(diffuseSampler, input.uv) * input.color **/ meshlets[0].Color;
     if (resultingColor.w == 0)
         discard;
