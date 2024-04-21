@@ -58,7 +58,7 @@ struct RendererConfig {
 
 struct ModelConstants {
 	Mat44 ModelMatrix = Mat44();
-	float ModelColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+	float ModelColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	float ModelPadding[4];
 };
 
@@ -76,7 +76,7 @@ struct ImmediateContext {
 	ModelConstants m_modelConstants = {};
 	bool m_isIndexedDraw = false;
 	bool m_isMeshDraw = false;
-	bool m_usingDepthAsTexture =false;
+	bool m_usingDepthAsTexture = false;
 	VertexBuffer* const* m_immediateVBO = nullptr;
 	IndexBuffer* const* m_immediateIBO = nullptr;
 	ConstantBuffer* m_cameraCBO = nullptr;
@@ -86,7 +86,7 @@ struct ImmediateContext {
 	std::map<unsigned int, Buffer*> m_boundBuffers;
 	size_t m_vertexStart = 0;
 	size_t m_vertexCount = 0;
-	size_t m_indexStart = 0; 
+	size_t m_indexStart = 0;
 	size_t m_indexCount = 0;
 	IntVec3 m_meshThreads = IntVec3::ZERO;
 	//VertexBuffer* m_immediateBuffer = nullptr;
@@ -167,6 +167,7 @@ public:
 	void EndCamera(Camera const& camera);
 
 	void ClearScreen(Rgba8 const& color);
+	void ClearRenderTarget(unsigned int slot, Rgba8 const& color);
 	void ClearDepth(float clearDepth = 1.0f);
 	Material* CreateOrGetMaterial(std::filesystem::path materialPathNoExt);
 	Texture* CreateOrGetTextureFromFile(char const* imageFilePath);
@@ -186,7 +187,7 @@ public:
 	void DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes);
 	void DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices);
 	void DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices);
-	void BindDepthAsTexture(Texture* depthTarget = nullptr);
+	void BindDepthAsTexture(Texture* depthTarget = nullptr, unsigned int slot = 0);
 
 	void SetModelMatrix(Mat44 const& modelMat);
 	void SetModelColor(Rgba8 const& modelColor);
@@ -212,6 +213,7 @@ public:
 	void BindStructuredBuffer(Buffer* const& buffer, unsigned int slot);
 
 	// Setters
+	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
 	void SetMaterialPSO(Material* mat);
 	void SetBlendMode(BlendMode newBlendMode);
 	void SetCullMode(CullMode newCullMode);
@@ -291,7 +293,7 @@ private:
 	void CreatePSOForMaterial(Material* material);
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
-	void CreateViewport();	
+	void CreateViewport();
 	void DestroyTexture(Texture* textureToDestroy);
 	Texture* GetTextureForFileName(char const* imageFilePath);
 	Texture* CreateTextureFromFile(char const* imageFilePath);
@@ -302,7 +304,7 @@ private:
 	ResourceView* CreateConstantBufferView(ResourceViewInfo const& viewInfo, DescriptorHeap* descriptorHeap) const;
 	void SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc);
 	BitmapFont* CreateBitmapFont(std::filesystem::path bitmapPath);
-	
+
 	void ClearTexture(Rgba8 const& color, Texture* tex);
 	void ResetGPUDescriptorHeaps();
 	void CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot = 0);
@@ -317,7 +319,6 @@ private:
 	ConstantBuffer& GetCurrentModelBuffer();
 	ConstantBuffer& GetCurrentLightBuffer();
 
-	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
 
 	void UploadAllPendingResources();
 	void DrawAllEffects();
@@ -390,7 +391,7 @@ private:
 
 	bool m_useWARP = false;
 	bool m_uploadRequested = false;
-	bool m_isCommandListOpen =false;
+	bool m_isCommandListOpen = false;
 	bool m_hasUsedModelSlot = false;
 
 	unsigned int m_currentRenderTarget = 0;
@@ -420,7 +421,7 @@ private:
 template<typename T_Object>
 void Renderer::SetDebugName(ComPtr<T_Object> object, char const* name)
 {
-	if(!object) return;
+	if (!object) return;
 #if defined(ENGINE_DEBUG_RENDER)
 	object->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
 	//object->SetName(name);

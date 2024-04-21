@@ -5,6 +5,7 @@
 #include "Engine/Renderer/ConstantBuffer.hpp"
 #include "Engine/Math/Vec4.hpp"
 #include "Engine/Renderer/D3D12/Resource.hpp"
+#include "Engine/Renderer/Texture.hpp"
 #include "Game/Gameplay/Basic3DMode.hpp"
 #include "Game/Framework/GameCommon.hpp"
 #include "Game/Gameplay/Prop.hpp"
@@ -42,6 +43,11 @@ Basic3DMode::Basic3DMode(Game* game, Vec2 const& UISize) :
 	GameMode(game, UISize)
 {
 	m_worldCamera.SetPerspectiveView(g_theWindow->GetConfig().m_clientAspect, 60, 0.1f, 100.0f);
+}
+
+Basic3DMode::~Basic3DMode()
+{
+	m_depthTexture = nullptr;
 }
 
 void Basic3DMode::Startup()
@@ -129,6 +135,7 @@ void Basic3DMode::Startup()
 	config.m_simulationBounds = m_particlesBounds;
 	config.m_iterations = 5;
 	config.m_kernelRadius = 0.196f;
+	config.m_renderingRadius = config.m_kernelRadius;
 	config.m_restDensity = 1000.0f;
 
 
@@ -196,6 +203,19 @@ void Basic3DMode::Startup()
 	m_gameConstants = new ConstantBuffer(cBufferDesc);
 	m_gameConstants->Initialize();
 
+
+	TextureCreateInfo depthTextureInfo = {};
+	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	depthTextureInfo.m_format = TextureFormat::R32_FLOAT;
+	depthTextureInfo.m_owner = g_theRenderer;
+	depthTextureInfo.m_clearColour = Rgba8(255, 255, 255, 255);
+	depthTextureInfo.m_clearFormat = TextureFormat::R32_FLOAT;
+	depthTextureInfo.m_dimensions = g_theWindow->GetClientDimensions();
+	depthTextureInfo.m_owner = g_theRenderer;
+	depthTextureInfo.m_name = "Prepass DRT";
+
+	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
+
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -234,6 +254,10 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 		g_theRenderer->BindTexture(nullptr);
 		RenderEntities();
+
+		g_theRenderer->SetRenderTarget(m_depthTexture, 1);
+		g_theRenderer->ClearRenderTarget(1, Rgba8::WHITE);
+
 		RenderParticles();
 
 	}
@@ -245,7 +269,8 @@ void Basic3DMode::Render() const
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
-		g_theRenderer->BindDepthAsTexture();
+		//g_theRenderer->BindDepthAsTexture();
+		g_theRenderer->BindTexture(m_depthTexture);
 		g_theRenderer->DrawVertexArray(verts);
 
 	}

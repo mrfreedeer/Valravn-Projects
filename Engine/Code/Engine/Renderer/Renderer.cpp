@@ -1319,9 +1319,9 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 {
 	// Resource barrier for RT and DRT 
-	Texture* currentRt = ctx.m_renderTargets[0];
+	/*Texture* currentRt = ctx.m_renderTargets[0];
 	Resource* currentRtResc = currentRt->GetResource();
-	currentRtResc->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+	currentRtResc->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());*/
 
 	Texture* depthTarget = ctx.m_depthTarget;
 	Resource* depthTargetRsc = depthTarget->GetResource();
@@ -1334,13 +1334,13 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	else {
 		Resource* srvDepthTargetRsc = ctx.m_depthTargetSRV->GetResource();
 		srvDepthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_commandList.Get());
-		ctx.m_boundTextures[0] = srvDepthTarget;
 	}
 
 	SetMaterialPSO(ctx.m_material);
 
 	// Copy Descriptors into the GPU Descriptor heap
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
+		// There might be some RT still in RT state being bound here
 		CopyTextureToHeap(texture, ctx.m_srvHandleStart, slot);
 	}
 
@@ -1387,12 +1387,25 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
+	UINT rtCount = 0;
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		Texture* rt = ctx.m_renderTargets[rtIndex];
+		if (!rt) continue;
+		rtCount++;
+
+		D3D12_CPU_DESCRIPTOR_HANDLE& rtHandle = rtvHandles[rtIndex];
+		rtHandle = rt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+		Resource* rtResource = rt->GetResource();
+		rtResource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+	}
+
 	ResourceView* dsvView = ctx.m_depthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
 
-	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), m_currentBackBuffer, m_RTVdescriptorSize);
-	m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, &dsvHandle);
+	//D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	//m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, &dsvHandle);
+	m_commandList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, &dsvHandle);
 
 	if (ctx.m_isMeshDraw) {
 		unsigned int threadX = ctx.m_meshThreads.x;
@@ -1844,11 +1857,12 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, 
 /// First approach for enabling reading from depth target as textures
 /// </summary>
 /// <param name="depthTarget"></param>
-void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/)
+void Renderer::BindDepthAsTexture(Texture* depthTarget, unsigned int slot)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 	currentDrawCtx.m_depthTargetSRV = (depthTarget) ? depthTarget : currentDrawCtx.m_depthTarget;
 	currentDrawCtx.m_usingDepthAsTexture = true;
+	BindTexture(currentDrawCtx.m_depthTargetSRV, slot);
 }
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
@@ -2198,7 +2212,7 @@ void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
 
 Texture* Renderer::GetCurrentRenderTarget() const
 {
-	if (!m_currentCamera) GetActiveRenderTarget();
+	if (!m_currentCamera) return GetActiveRenderTarget();
 	Texture* cameraColorTarget = m_currentCamera->GetRenderTarget();
 	return  (cameraColorTarget) ? cameraColorTarget : GetActiveRenderTarget();
 }
@@ -2574,7 +2588,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 	currentDrawCtx.m_boundTextures[slot] = texture;
 	if (texture) {
 		// if it is depth texture, special code handles resource barries at DrawImmediateCtx
-		if (texture->IsDSVCompatible()) return;
+		if (texture->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT)) return;
 		texture->m_handle->MarkForBinding();
 	}
 }
@@ -2637,6 +2651,10 @@ void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int hand
 	Texture* usedTex = const_cast<Texture*>(textureToBind);
 	if (!textureToBind) {
 		usedTex = m_defaultTexture;
+	}
+	if (usedTex->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT)) {
+		Resource* textureResource = usedTex->GetResource();
+		textureResource->TransitionTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, m_commandList.Get());
 	}
 
 	ResourceView* rsv = usedTex->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
@@ -3060,6 +3078,15 @@ void Renderer::ClearScreen(Rgba8 const& color)
 	ClearTexture(color, currentRt);
 }
 
+void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
+{
+	Texture* tex = m_immediateCtxs[m_currentDrawCtx].m_renderTargets[slot];
+	if(!tex)return;
+	Resource* resource = tex->GetResource();
+	resource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+	ClearTexture(color, tex);
+}
+
 void Renderer::ClearDepth(float clearDepth /*= 0.0f*/)
 {
 	ResourceView* dsvView = m_defaultDepthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
@@ -3141,7 +3168,7 @@ void ImmediateContext::Reset()
 	//VertexBuffer* m_immediateBuffer = nullptr;
 	m_material = nullptr;
 	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
-		m_renderTargets[8] = nullptr;
+		m_renderTargets[rtIndex] = nullptr;
 	}
 	m_depthTarget = nullptr;
 	m_srvHandleStart = 0;

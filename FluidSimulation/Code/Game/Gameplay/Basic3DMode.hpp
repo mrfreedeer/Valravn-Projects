@@ -19,6 +19,7 @@ class StructuredBuffer;
 class Basic3DMode : public GameMode {
 public:
 	Basic3DMode(Game* game, Vec2 const& UISize);
+	~Basic3DMode();
 	virtual void Startup() override;
 	virtual void Update(float deltaSeconds);
 	virtual void Render() const override;
