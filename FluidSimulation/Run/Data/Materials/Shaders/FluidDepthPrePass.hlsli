@@ -227,6 +227,6 @@ ps_output_t PixelMain(ps_input_t input)
         discard;
     
     output.color = resultingColor;
-    output.worldDepth = 1.0f;
+    output.worldDepth = 0.0f;
     return output;
 }

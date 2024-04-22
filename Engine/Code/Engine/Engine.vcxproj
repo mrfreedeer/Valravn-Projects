@@ -536,6 +536,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClCompile Include="Renderer\DebugRendererSystem.cpp" />
     <ClCompile Include="Renderer\DebugShape.cpp" />
     <ClCompile Include="Renderer\GraphicsCommon.cpp" />
+    <ClCompile Include="Renderer\ImmediateContext.cpp" />
     <ClCompile Include="Renderer\IndexBuffer.cpp" />
     <ClCompile Include="Renderer\MaterialSystem.cpp" />
     <ClCompile Include="Renderer\Mesh.cpp" />
@@ -657,6 +658,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClInclude Include="Renderer\DebugShape.hpp" />
     <ClInclude Include="Renderer\DefaultShader.hpp" />
     <ClInclude Include="Renderer\GraphicsCommon.hpp" />
+    <ClInclude Include="Renderer\ImmediateContext.hpp" />
     <ClInclude Include="Renderer\IndexBuffer.hpp" />
     <ClInclude Include="Renderer\MaterialSystem.hpp" />
     <ClInclude Include="Renderer\Mesh.hpp" />

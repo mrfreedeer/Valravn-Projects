@@ -199,6 +199,7 @@ void Basic3DMode::Startup()
 	cBufferDesc.owner = g_theRenderer;
 	cBufferDesc.size = sizeof(GameConstants);
 	cBufferDesc.stride = sizeof(GameConstants);
+	cBufferDesc.debugName = "Game Constants";
 
 	m_gameConstants = new ConstantBuffer(cBufferDesc);
 	m_gameConstants->Initialize();
@@ -262,6 +263,8 @@ void Basic3DMode::Render() const
 
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
+
+	g_theRenderer->FlushPendingWork();
 
 	g_theRenderer->BeginCamera(m_UICamera);
 	{

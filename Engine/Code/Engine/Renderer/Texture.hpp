@@ -36,7 +36,7 @@ public:
 	/// Checks if view has been created, or creates it otherwise
 	/// </summary>
 	ResourceView* GetOrCreateView(ResourceBindFlagBit viewType);
-	bool IsBindCompatible(ResourceBindFlag bindFlag) const {return (m_creationInfo.m_bindFlags & bindFlag); }
+	bool IsBindCompatible(ResourceBindFlag bindFlag) const;
 	IntVec2 GetDimensions() const;
 	Resource* GetResource() const;
 	ID3D12Resource* GetRawResource() const;

@@ -1,5 +1,6 @@
 #pragma  once
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Math/Mat44.hpp"
 
 #undef OPAQUE
 #define DX_SAFE_RELEASE(dxObject)			\
@@ -10,6 +11,19 @@
 		(dxObject) = nullptr;				\
 	}										\
 }
+
+struct ModelConstants {
+	Mat44 ModelMatrix = Mat44();
+	float ModelColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	float ModelPadding[4];
+};
+
+struct CameraConstants {
+	Mat44 ProjectionMatrix;
+	Mat44 ViewMatrix;
+	Mat44 InvertedMatrix;
+};
+
 
 inline void ThrowIfFailed(long hr, char const* errorMsg) {
 	if (hr < 0) {

@@ -25,6 +25,10 @@ Buffer::~Buffer()
 		m_uploadResource->m_resource->Unmap(0, nullptr);
 		m_dataMap =	nullptr;
 	}
+
+	m_owner->RemoveResource(m_buffer);
+	m_owner->RemoveResource(m_uploadResource);
+
 	delete m_buffer;
 	m_buffer = nullptr;
 
@@ -37,6 +41,8 @@ void Buffer::Initialize()
 	m_buffer = new Resource();
 	m_uploadResource = new Resource();
 
+	m_owner->TrackResource(m_buffer);
+	m_owner->TrackResource(m_uploadResource);
 	switch (m_memoryUsage)
 	{
 	case MemoryUsage::Default:
@@ -107,7 +113,7 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	memcpy(m_dataMap, data, sizeInBytes);
 	m_owner->AddToUpdateQueue(this);
 	m_markedForUpdate = true;
-	m_buffer->MarkForBinding();
+	//m_buffer->MarkForBinding(ResourceBindState::ALL_SHADER);
 }
 
 void Buffer::CreateDynamicBuffer(void const* data)

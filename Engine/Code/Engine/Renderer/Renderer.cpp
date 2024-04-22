@@ -18,6 +18,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Math/Vec4.hpp"
 #include "Engine/Renderer/DebugRendererSystem.hpp"
+#include "Engine/Renderer/ImmediateContext.hpp"
 #include <dxgidebug.h>
 #include <d3dx12.h> // Notice the X. These are the helper structures not the DX12 header
 #include <regex>
@@ -596,7 +597,7 @@ void Renderer::WaitForFenceValue(ComPtr<ID3D12Fence1>& fence, unsigned int fence
 	}
 }
 
-void Renderer::Flush(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent)
+void Renderer::FlushAndFinish(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent)
 {
 	unsigned int currentValue = fenceValues[m_currentBackBuffer];
 	unsigned int newFenceValue = SignalFence(commandQueue, fence, currentValue);
@@ -744,8 +745,6 @@ void Renderer::Startup()
 
 	m_immediateVBO = new VertexBuffer(vertexBuffDesc);
 
-
-
 	BufferDesc diffuseVBuffDesc = {};
 	diffuseVBuffDesc.data = nullptr;
 	diffuseVBuffDesc.descriptorHeap = nullptr;
@@ -775,14 +774,17 @@ void Renderer::Startup()
 	cameraBufferDesc.owner = this;
 	cameraBufferDesc.size = sizeof(CameraConstants);
 	cameraBufferDesc.stride = sizeof(CameraConstants);
+	cameraBufferDesc.debugName = "CameraCBuffer";
 
 	BufferDesc modelBufferDesc = cameraBufferDesc;
 	modelBufferDesc.size = sizeof(ModelConstants);
 	modelBufferDesc.stride = sizeof(ModelConstants);
+	modelBufferDesc.debugName = "ModelCBuffer";
 
 	BufferDesc lightBufferDesc = cameraBufferDesc;
 	lightBufferDesc.size = sizeof(LightConstants);
 	lightBufferDesc.stride = sizeof(LightConstants);
+	lightBufferDesc.debugName = "LightCBuffer";
 
 	int engineDescriptorShare = CBV_DESCRIPTORS_AMOUNT / g_engineBufferCount;
 
@@ -818,8 +820,6 @@ void Renderer::Startup()
 	DebugRenderSystemStartup(debugSystemConfig);
 
 	m_immediateCtxs = new ImmediateContext[m_immediateCtxCount]{};
-
-
 	InitializeImGui();
 
 }
@@ -1273,11 +1273,6 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
-	m_hasUsedModelSlot = true;
 	CopyCurrentDrawCtxToNext();
 }
 
@@ -1290,15 +1285,10 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	currentDrawCtx.m_isIndexedDraw = true;
+	currentDrawCtx.SetIndexDrawFlag(true);
 
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
-	m_hasUsedModelSlot = true;
 	CopyCurrentDrawCtxToNext();
 }
 
@@ -1325,16 +1315,18 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 
 	Texture* depthTarget = ctx.m_depthTarget;
 	Resource* depthTargetRsc = depthTarget->GetResource();
-	Texture* srvDepthTarget = ctx.m_depthTargetSRV;
+	Texture const* srvDepthTarget = ctx.GetDepthSRV();
 
-	bool transitionDefaultDepth = (ctx.m_depthTarget != srvDepthTarget) || (!ctx.m_usingDepthAsTexture);
-	if (transitionDefaultDepth) {
-		depthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_commandList.Get());
-	}
-	else {
-		Resource* srvDepthTargetRsc = ctx.m_depthTargetSRV->GetResource();
+	bool transitioDepthSRV = (ctx.UsesDepthAsTexture());
+	if (transitioDepthSRV) {
+		Resource* srvDepthTargetRsc = srvDepthTarget->GetResource();
 		srvDepthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_commandList.Get());
 	}
+	else {
+		depthTargetRsc->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_commandList.Get());
+	}
+
+
 
 	SetMaterialPSO(ctx.m_material);
 
@@ -1364,7 +1356,7 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	};
 
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
-	if (ctx.m_isMeshDraw) {
+	if (ctx.UsesMeshShaders()) {
 		// Mesh shaders get root signature with no IA
 		m_commandList->SetGraphicsRootSignature(m_MSRootSignature.Get());
 	}
@@ -1388,6 +1380,8 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
+	D3D12_RENDER_PASS_RENDER_TARGET_DESC renderPassRTDesc[8] = {};
+
 	UINT rtCount = 0;
 	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
 		Texture* rt = ctx.m_renderTargets[rtIndex];
@@ -1399,15 +1393,17 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 		Resource* rtResource = rt->GetResource();
 		rtResource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
 	}
-
 	ResourceView* dsvView = ctx.m_depthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
 
-	//D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
-	//m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, &dsvHandle);
 	m_commandList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, &dsvHandle);
 
-	if (ctx.m_isMeshDraw) {
+
+
+	//D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	//m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, &dsvHandle);
+
+	if (ctx.UsesMeshShaders()) {
 		unsigned int threadX = ctx.m_meshThreads.x;
 		unsigned int threadY = ctx.m_meshThreads.y;
 		unsigned int threadZ = ctx.m_meshThreads.z;
@@ -1416,7 +1412,7 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 	else {
 		m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-		VertexBuffer* usedBuffer = (ctx.m_immediateVBO) ? *ctx.m_immediateVBO : m_immediateVBO;
+		VertexBuffer* usedBuffer = (ctx.m_externalVBO) ? ctx.m_externalVBO : m_immediateVBO;
 		IndexBuffer* usedIndexedBuffer = nullptr;
 
 
@@ -1428,8 +1424,8 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 		D3DbufferView.SizeInBytes = (UINT)vBufferView.m_sizeInBytes;
 
 		m_commandList->IASetVertexBuffers(0, 1, &D3DbufferView);
-		if (ctx.m_isIndexedDraw) {
-			usedIndexedBuffer = (ctx.m_immediateIBO) ? *ctx.m_immediateIBO : m_immediateIBO;
+		if (ctx.IsIndexDraw()) {
+			usedIndexedBuffer = (ctx.m_externalIBO) ? ctx.m_externalIBO : m_immediateIBO;
 			D3D12_INDEX_BUFFER_VIEW D3DindexedBufferView = {};
 			BufferView iBufferView = usedIndexedBuffer->GetBufferView();
 			D3DindexedBufferView.BufferLocation = iBufferView.m_bufferLocation;
@@ -1443,6 +1439,7 @@ void Renderer::DrawImmediateCtx(ImmediateContext& ctx)
 			m_commandList->DrawInstanced((UINT)ctx.m_vertexCount, 1, (UINT)ctx.m_vertexStart, 0);
 		}
 	}
+
 }
 
 /// <summary>
@@ -1456,11 +1453,10 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		ImmediateContext& nextCtx = m_immediateCtxs[m_currentDrawCtx + 1];
 
 		nextCtx = ImmediateContext(m_immediateCtxs[m_currentDrawCtx]);
-		nextCtx.m_immediateIBO = nullptr;
-		nextCtx.m_immediateVBO = nullptr;
-		nextCtx.m_isIndexedDraw = false;
-		nextCtx.m_isMeshDraw = false;
-		nextCtx.m_usingDepthAsTexture = false;
+		nextCtx.ResetExternalBuffers();
+		nextCtx.SetIndexDrawFlag(false);
+		nextCtx.SetPipelineTypeFlag(false);
+		nextCtx.SetDepthTextureSRVFlag(false);
 	}
 	m_currentDrawCtx++;
 }
@@ -1716,20 +1712,16 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
-	currentDrawCtx.m_isMeshDraw = true;
 	currentDrawCtx.m_meshThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
 	currentDrawCtx.m_srvHandleStart = m_srvHandleStart;
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
 
+	currentDrawCtx.SetPipelineTypeFlag(true);
+	currentDrawCtx.SetDrawCallUsage(true);
+
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
 	CopyCurrentDrawCtxToNext();
-
-	m_hasUsedModelSlot = true;
 
 }
 
@@ -1751,12 +1743,9 @@ void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* verte
 	currentDrawCtx.m_vertexStart = m_immediateVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
+	currentDrawCtx.SetDrawCallUsage(true);
 	CopyCurrentDrawCtxToNext();
-	m_hasUsedModelSlot = true;
+
 }
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes)
@@ -1772,17 +1761,10 @@ void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vert
 	currentDrawCtx.m_vertexStart = m_immediateDiffuseVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
-
-	currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
+	currentDrawCtx.SetDrawCallUsage(true);
+	currentDrawCtx.SetDiffuseShaderUsage(true);
 
 	CopyCurrentDrawCtxToNext();
-	m_hasUsedModelSlot = true;
-
-
 }
 
 void Renderer::DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes)
@@ -1795,7 +1777,8 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	currentDrawCtx.m_isIndexedDraw = true;
+	currentDrawCtx.SetIndexDrawFlag(true);
+	currentDrawCtx.SetDrawCallUsage(true);
 
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
@@ -1807,11 +1790,6 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU
 	currentDrawCtx.m_indexStart = m_immediateIndices.size();
 	std::copy(indices, indices + numIndices, std::back_inserter(m_immediateIndices));
 
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
-	m_hasUsedModelSlot = true;
 	CopyCurrentDrawCtxToNext();
 
 }
@@ -1826,7 +1804,9 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNC
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_cbvHandleStart = m_cbvHandleStart;
-	currentDrawCtx.m_isIndexedDraw = true;
+	currentDrawCtx.SetIndexDrawFlag(true);
+	currentDrawCtx.SetDrawCallUsage(true);
+	currentDrawCtx.SetDiffuseShaderUsage(true);
 
 	UpdateDescriptorsHandleStarts(currentDrawCtx);
 
@@ -1837,13 +1817,6 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNC
 	currentDrawCtx.m_indexCount = (size_t)numIndices;
 	currentDrawCtx.m_indexStart = m_immediateIndices.size();
 	std::copy(indices, indices + numIndices, std::back_inserter(m_immediateIndices));
-
-	if (!m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-	}
-	currentDrawCtx.m_immediateVBO = &m_immediateDiffuseVBO;
-	m_hasUsedModelSlot = true;
 
 	CopyCurrentDrawCtxToNext();
 }
@@ -1860,31 +1833,34 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, 
 void Renderer::BindDepthAsTexture(Texture* depthTarget, unsigned int slot)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
-	currentDrawCtx.m_depthTargetSRV = (depthTarget) ? depthTarget : currentDrawCtx.m_depthTarget;
-	currentDrawCtx.m_usingDepthAsTexture = true;
-	BindTexture(currentDrawCtx.m_depthTargetSRV, slot);
+	currentDrawCtx.SetDepthTextureSRVFlag(true);
+	Texture* usedTexture = (depthTarget) ? depthTarget : currentDrawCtx.m_depthTarget;
+	BindTexture(usedTexture, slot);
+	currentDrawCtx.m_depthSRVSlot = slot;
 }
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
-	if (m_hasUsedModelSlot) {
+	if (currentDrawCtx.WasUsedForDrawCall()) {
 		currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
+		currentDrawCtx.SetDrawCallUsage(false);
 	}
 	currentDrawCtx.m_modelConstants.ModelMatrix = modelMat;
-	m_hasUsedModelSlot = false;
+	currentDrawCtx.m_modelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 }
 
 void Renderer::SetModelColor(Rgba8 const& modelColor)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
-	if (m_hasUsedModelSlot) {
+	if (currentDrawCtx.WasUsedForDrawCall()) {
 		currentDrawCtx.m_modelCBO = &GetNextModelBuffer();
+		currentDrawCtx.SetDrawCallUsage(false);
 	}
 	modelColor.GetAsFloats(currentDrawCtx.m_modelConstants.ModelColor);
-	m_hasUsedModelSlot = false;
+	currentDrawCtx.m_modelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
 }
 
 void Renderer::ExecuteCommandLists(ID3D12CommandList** commandLists, unsigned int count)
@@ -2261,19 +2237,19 @@ void Renderer::UploadAllPendingResources()
 	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
 	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
 	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
-	m_immediateVBO->m_buffer->MarkForBinding();
+	m_immediateVBO->m_buffer->MarkForVertexAndCBufferBind();
 
 	// Single buffer for any indexed draw calls
 	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
 	m_immediateIBO->GuaranteeBufferSize(indexSize);
 	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
-	m_immediateIBO->m_buffer->MarkForBinding();
+	m_immediateIBO->m_buffer->MarkForVertexAndCBufferBind();
 
 	// Lit vertexes also get their own buffer
 	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
 	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
 	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
-	m_immediateDiffuseVBO->m_buffer->MarkForBinding();
+	m_immediateDiffuseVBO->m_buffer->MarkForVertexAndCBufferBind();
 
 	std::vector<D3D12_RESOURCE_BARRIER> copyBarriers;
 	// Resource barriers to get all buffer resources ready for copying
@@ -2300,48 +2276,38 @@ void Renderer::UploadAllPendingResources()
 		m_ResourcesCommandList->CopyResource(defaultBuffer->m_resource, uploadBuffer->m_resource);
 	}
 
+	m_ResourcesCommandList->Close();
+	ID3D12CommandList* ppCommandLists[] = { m_ResourcesCommandList.Get() };
+	ExecuteCommandLists(ppCommandLists, 1);
+	SignalFence(m_rscFence, ++m_rscFenceValue);
+	m_commandQueue->Wait(m_rscFence.Get(), m_rscFenceValue);
+	WaitForFenceValue(m_rscFence, m_rscFenceValue, m_rscFenceEvent);
+	WaitForGPU();
+
+
+	m_ResourcesCommandList->Reset(GetCommandAllocForCmdList(CommandListType::ResourcesCommandList), nullptr);
 	/// <summary>
 	/// The next are for ensuring all constant buffers are in the correct state before the main draw calls
 	/// </summary>
 	std::vector<D3D12_RESOURCE_BARRIER> resourceBindingBarriers;
-	for (int resourceIndex = 0; resourceIndex < m_resources.size(); resourceIndex++) {
-		Resource* resource = m_resources[resourceIndex];
-		if (!resource->m_isBound) continue;
-
-		resource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, resourceBindingBarriers);
-		resource->m_isBound = false;
-	}
-
-	for (unsigned int cBufferInd = 0; cBufferInd < m_currentCameraCBufferSlot; cBufferInd++) {
-		ConstantBuffer& cbo = m_cameraCBOArray[cBufferInd];
-		if (!cbo.m_buffer) continue;
-		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
-	}
-
-	for (unsigned int cBufferInd = 0; cBufferInd < m_currentModelCBufferSlot; cBufferInd++) {
-		ConstantBuffer& cbo = m_modelCBOArray[cBufferInd];
-		if (!cbo.m_buffer) continue;
-
-		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
-	}
-
-	for (unsigned int cBufferInd = 0; cBufferInd < m_currentLightCBufferSlot; cBufferInd++) {
-		ConstantBuffer& cbo = m_lightCBOArray[cBufferInd];
-		if (!cbo.m_buffer) continue;
-
-		cbo.m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, resourceBindingBarriers);
+	int resourceIndex = 0;
+	for (Resource* resource : m_resources) {
+		if (!resource) continue;
+		resource->AddResourceBarrierToList(resourceBindingBarriers);
+		resource->ClearBinds();
+		resourceIndex++;
 	}
 
 	if (resourceBindingBarriers.size() > 0) {
 		m_ResourcesCommandList->ResourceBarrier((UINT)resourceBindingBarriers.size(), resourceBindingBarriers.data());
+		m_ResourcesCommandList->Close();
+		ExecuteCommandLists(ppCommandLists, 1);
 	}
 
 
 	m_bufferUpdateQueue.clear();
 	/// Uploading all vertex and constant buffers
-	m_ResourcesCommandList->Close();
-	ID3D12CommandList* ppCommandLists[] = { m_ResourcesCommandList.Get() };
-	ExecuteCommandLists(ppCommandLists, 1);
+
 
 	// Wait for all resources to finish uploading, copying and for resource barriers
 	SignalFence(m_rscFence, ++m_rscFenceValue);
@@ -2361,30 +2327,8 @@ void Renderer::DrawEffect(FxContext& ctx)
 {
 	Texture* activeTarget = GetActiveRenderTarget();
 	Texture* backTarget = GetBackUpRenderTarget();
-	/*if (m_isAntialiasingEnabled) {
-		TextureCreateInfo info;
-		info.m_name = "ApplyEffectTex";
-		info.m_dimensions = activeTarget->GetDimensions();
-		info.m_format = TextureFormat::R8G8B8A8_UNORM;
-		info.m_bindFlags = TextureBindFlagBit::TEXTURE_BIND_RENDER_TARGET_BIT | TextureBindFlagBit::TEXTURE_BIND_SHADER_RESOURCE_BIT;
-		info.m_memoryUsage = MemoryUsage::GPU;
 
-		Texture* singleSampleActive = CreateTexture(info);
-		m_deviceContext->ResolveSubresource(singleSampleActive->m_texture, 0, activeTarget->m_texture, 0, LocalToD3D11ColorFormat(info.m_format));
-
-		if (customDepth) {
-			CopyTextureWithShader(backTarget, singleSampleActive, customDepth, effect, camera);
-		}
-		else {
-			CopyTextureWithShader(backTarget, singleSampleActive, m_depthBuffer, effect, camera);
-		}
-
-
-		DestroyTexture(singleSampleActive);
-	}
-	else {*/
 	CopyTextureWithMaterial(backTarget, activeTarget, ctx.m_depthTarget, ctx.m_fx, ctx.m_cameraConstants);
-	//}
 
 	m_currentRenderTarget = (m_currentRenderTarget + 1) % 2;
 }
@@ -2469,7 +2413,12 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 
 void Renderer::TrackResource(Resource* newResource)
 {
-	m_resources.push_back(newResource);
+	m_resources.insert(newResource);
+}
+
+void Renderer::RemoveResource(Resource* newResource)
+{
+	m_resources.erase(newResource);
 }
 
 ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
@@ -2479,32 +2428,86 @@ ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdL
 	return commandAllocators[(unsigned int)cmdListType].Get();
 }
 
-void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
+void Renderer::FlushPendingWork()
+{
+	UploadAllPendingResources();
+	DrawAllImmediateContexts();
+	m_commandList->Close();
+	ID3D12CommandList* commandLists[] = { m_commandList.Get() };
+	ExecuteCommandLists(commandLists, 1);
+	WaitForGPU();
+
+	ResetGPUState();
+
+}
+
+void Renderer::ResetGPUState()
 {
 
-	blendDesc.RenderTarget[0].BlendEnable = true;
-	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-	blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	// Command list allocators can only be reset when the associated 
+  // command lists have finished execution on the GPU; apps should use 
+  // fences to determine GPU execution progress.
 
-	switch (blendMode) {
-	case BlendMode::ALPHA:
-		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-		break;
-	case BlendMode::ADDITIVE:
-		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-		break;
-	case BlendMode::OPAQUE:
-		blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-		blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-		break;
-	default:
-		ERROR_AND_DIE(Stringf("Unknown / unsupported blend mode #%i", blendMode));
-		break;
+	m_currentModelCBufferSlot = 0;
+	m_currentCameraCBufferSlot = 0;
+
+	m_currentDrawCtx = 0;
+	m_srvHandleStart = SRV_HANDLE_START;
+	m_cbvHandleStart = CBV_HANDLE_START;
+
+	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DefaultCommandList);
+
+	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
+
+	auto rscCmdAlloc = GetCommandAllocForCmdList(CommandListType::ResourcesCommandList);
+	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
+	rscCmdAlloc->Reset();
+	ThrowIfFailed(m_ResourcesCommandList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
+
+	// However, when ExecuteCommandList() is called on a particular command 
+	// list, that command list can then be reset at any time and must be before 
+	// re-recording.
+	ThrowIfFailed(m_commandList->Reset(cmdAllocator, m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
+
+	m_isCommandListOpen = true;
+
+	ResetGPUDescriptorHeaps();
+
+	// Record commands.
+	//float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	//m_defaultRenderTarget->GetClearColour().GetAsFloats(clearColor);
+	//m_commandList->ClearRenderTargetView(currentRTVHandle, clearColor, 0, nullptr);
+	m_immediateVertexes.clear();
+	m_immediateIndices.clear();
+}
+
+void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
+{
+	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		blendDesc.RenderTarget[rtIndex].BlendEnable = true;
+		blendDesc.RenderTarget[rtIndex].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		blendDesc.RenderTarget[rtIndex].BlendOp = D3D12_BLEND_OP_ADD;
+		blendDesc.RenderTarget[rtIndex].SrcBlendAlpha = D3D12_BLEND_ONE;
+		blendDesc.RenderTarget[rtIndex].DestBlendAlpha = D3D12_BLEND_ONE;
+		blendDesc.RenderTarget[rtIndex].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+		switch (blendMode) {
+		case BlendMode::ALPHA:
+			blendDesc.RenderTarget[rtIndex].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+			blendDesc.RenderTarget[rtIndex].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+			break;
+		case BlendMode::ADDITIVE:
+			blendDesc.RenderTarget[rtIndex].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+			blendDesc.RenderTarget[rtIndex].DestBlend = D3D12_BLEND_ONE;
+			break;
+		case BlendMode::OPAQUE:
+			blendDesc.RenderTarget[rtIndex].SrcBlend = D3D12_BLEND_ONE;
+			blendDesc.RenderTarget[rtIndex].DestBlend = D3D12_BLEND_ZERO;
+			break;
+		default:
+			ERROR_AND_DIE(Stringf("Unknown / unsupported blend mode #%i", blendMode));
+			break;
+		}
 	}
 }
 
@@ -2578,7 +2581,7 @@ void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*=
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_boundCBuffers[slot] = cBuffer;
-	cBuffer->m_buffer->MarkForBinding();
+	cBuffer->m_buffer->MarkForVertexAndCBufferBind();
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
@@ -2589,7 +2592,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 	if (texture) {
 		// if it is depth texture, special code handles resource barries at DrawImmediateCtx
 		if (texture->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT)) return;
-		texture->m_handle->MarkForBinding();
+		texture->m_handle->MarkForBinding(ResourceBindState::PIXEL_SHADER);
 	}
 }
 
@@ -2622,20 +2625,20 @@ void Renderer::BindVertexBuffer(VertexBuffer* const& vertexBuffer)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
-	currentDrawCtx.m_immediateVBO = &vertexBuffer;
+	currentDrawCtx.m_externalVBO = vertexBuffer;
 	currentDrawCtx.m_vertexStart = 0;
 	currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
-	vertexBuffer->m_buffer->MarkForBinding();
+	vertexBuffer->m_buffer->MarkForVertexAndCBufferBind();
 }
 
 void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount)
 {
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
-	currentDrawCtx.m_immediateIBO = &indexBuffer;
+	currentDrawCtx.m_externalIBO = indexBuffer;
 	currentDrawCtx.m_indexStart = 0;
 	currentDrawCtx.m_indexCount = indexCount;
-	indexBuffer->m_buffer->MarkForBinding();
+	indexBuffer->m_buffer->MarkForBinding(ResourceBindState::ALL_SHADER);
 }
 
 void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
@@ -2643,7 +2646,7 @@ void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 
 	currentDrawCtx.m_boundBuffers[slot] = buffer;
-	buffer->m_buffer->MarkForBinding();
+	buffer->m_buffer->MarkForBinding(ResourceBindState::ALL_SHADER);
 }
 
 void Renderer::CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot)
@@ -2790,12 +2793,7 @@ void Renderer::BeginFrame()
 	g_theMaterialSystem->BeginFrame();
 	DebugRenderBeginFrame();
 
-	m_currentModelCBufferSlot = 0;
-	m_currentCameraCBufferSlot = 0;
 
-	m_currentDrawCtx = 0;
-	m_srvHandleStart = SRV_HANDLE_START;
-	m_cbvHandleStart = CBV_HANDLE_START;
 
 	if (m_uploadRequested) {
 		//WaitForGPU();
@@ -2812,50 +2810,8 @@ void Renderer::BeginFrame()
 		m_uploadRequested = false;
 	}
 
-	Texture* currentRt = GetActiveRenderTarget();
-	Resource* activeRTResource = currentRt->GetResource();
 
-	// Command list allocators can only be reset when the associated 
-  // command lists have finished execution on the GPU; apps should use 
-  // fences to determine GPU execution progress.
-
-	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DefaultCommandList);
-
-	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
-
-	auto rscCmdAlloc = GetCommandAllocForCmdList(CommandListType::ResourcesCommandList);
-	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
-	rscCmdAlloc->Reset();
-	ThrowIfFailed(m_ResourcesCommandList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ThrowIfFailed(m_commandList->Reset(cmdAllocator, m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
-
-	m_isCommandListOpen = true;
-	BindTexture(nullptr);
-	activeRTResource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
-	// Indicate that the back buffer will be used as a render target.
-	//CD3DX12_RESOURCE_BARRIER resourceBarrierRTV = CD3DX12_RESOURCE_BARRIER::Transition(m_backBuffers[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	//m_commandList->ResourceBarrier(1, &resourceBarrierRTV);
-	//m_defaultRenderTarget->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
-
-	//D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = m_defaultRenderTarget->GetOrCreateView(ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
-
-	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), m_currentBackBuffer, m_RTVdescriptorSize);
-	m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, nullptr);
-
-	ResetGPUDescriptorHeaps();
-	ClearScreen(currentRt->GetClearColour());
-	ClearDepth();
-	// Record commands.
-	//float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	//m_defaultRenderTarget->GetClearColour().GetAsFloats(clearColor);
-	//m_commandList->ClearRenderTargetView(currentRTVHandle, clearColor, 0, nullptr);
-	m_immediateVertexes.clear();
-	m_immediateIndices.clear();
+	ResetGPUState();
 
 	BeginFrameImGui();
 
@@ -2869,8 +2825,6 @@ void Renderer::EndFrame()
 	UploadAllPendingResources();
 
 	DrawAllImmediateContexts();
-
-
 
 	if (m_effectsCtxs.size() > 0) {
 		DrawAllEffects();
@@ -2891,6 +2845,7 @@ void Renderer::EndFrame()
 	//m_commandList->CopyResource(currentBackBuffer->m_resource, defaultRTResource->m_resource);
 
 
+
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
 
 	ThrowIfFailed(m_commandList->Close(), "COULD NOT CLOSE COMMAND LIST");
@@ -2905,7 +2860,7 @@ void Renderer::EndFrame()
 	m_swapChain->Present(1, 0);
 #endif
 
-	Flush(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
+	FlushAndFinish(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
 	// Flush Command Queue getting ready for next Frame
 	//WaitForGPU();
 
@@ -2919,7 +2874,7 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
-	Flush(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
+	FlushAndFinish(m_commandQueue, m_fence, m_fenceValues.data(), m_fenceEvent);
 
 	ShutdownImGui();
 
@@ -3044,10 +2999,12 @@ void Renderer::BeginCamera(Camera const& camera)
 	ConstantBuffer& nextModelBuffer = GetCurrentModelBuffer();
 	m_currentModelCBufferSlot++;
 
+	ModelConstants modelConstants = {};
+	nextModelBuffer.CopyCPUToGPU(&modelConstants, sizeof(ModelConstants));
+
 	currentDrawCtx.m_cameraCBO = &nextCameraBuffer;
-	currentDrawCtx.m_modelConstants = ModelConstants();
 	currentDrawCtx.m_modelCBO = &nextModelBuffer;
-	m_hasUsedModelSlot = false;
+
 	//BindConstantBuffer(m_cameraCBO, 2);
 	//BindConstantBuffer(m_modelCBO, 3);
 }
@@ -3060,16 +3017,15 @@ void Renderer::EndCamera(Camera const& camera)
 		ERROR_RECOVERABLE("USING A DIFFERENT CAMERA TO END CAMERA PASS");
 	}
 
-	if (m_hasUsedModelSlot) {
-		ConstantBuffer* currentModelCBO = currentDrawCtx.m_modelCBO;
-		currentModelCBO->CopyCPUToGPU(&currentDrawCtx.m_modelConstants, sizeof(ModelConstants));
-		m_currentModelCBufferSlot++;
+	if (currentDrawCtx.WasUsedForDrawCall()) {
+
+		currentDrawCtx.Reset();
 	}
 
+
 	m_currentCamera = nullptr;
-	currentDrawCtx.Reset();
-	Material* defaultMat = GetDefaultMaterial();
-	m_commandList->ClearState(defaultMat->m_PSO);
+	//Material* defaultMat = GetDefaultMaterial();
+	//m_commandList->ClearState(defaultMat->m_PSO);
 }
 
 void Renderer::ClearScreen(Rgba8 const& color)
@@ -3080,20 +3036,25 @@ void Renderer::ClearScreen(Rgba8 const& color)
 
 void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
 {
-	Texture* tex = m_immediateCtxs[m_currentDrawCtx].m_renderTargets[slot];
-	if(!tex)return;
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
+	Texture* tex = currentDrawCtx.m_renderTargets[slot];
+	if (!tex)return;
 	Resource* resource = tex->GetResource();
 	resource->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+
+	currentDrawCtx.SetRenderTargetClear(slot, true);
 	ClearTexture(color, tex);
 }
 
 void Renderer::ClearDepth(float clearDepth /*= 0.0f*/)
 {
+	ImmediateContext& currentDrawCtx = m_immediateCtxs[m_currentDrawCtx];
 	ResourceView* dsvView = m_defaultDepthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
 	Resource* dsvRsc = m_defaultDepthTarget->GetResource();
 	dsvRsc->TransitionTo(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_commandList.Get());
 
 	D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH;
+	currentDrawCtx.SetDepthRenderTargetClear(true);
 
 	m_commandList->ClearDepthStencilView(dsvView->GetHandle(), clearFlags, clearDepth, 0, 0, NULL);
 }
@@ -3116,61 +3077,4 @@ LiveObjectReporter::~LiveObjectReporter()
 	}
 
 #endif
-}
-
-ImmediateContext::ImmediateContext(ImmediateContext const& otherCtx)
-{
-	m_modelConstants = otherCtx.m_modelConstants;
-	m_isIndexedDraw = otherCtx.m_isIndexedDraw;
-	m_isMeshDraw = otherCtx.m_isMeshDraw;
-	m_immediateIBO = otherCtx.m_immediateIBO;
-	m_cameraCBO = otherCtx.m_cameraCBO;
-	m_modelCBO = otherCtx.m_modelCBO;
-	m_boundTextures.clear();
-	m_boundCBuffers.clear();
-	m_boundBuffers.clear();
-
-	m_boundTextures.insert(otherCtx.m_boundTextures.begin(), otherCtx.m_boundTextures.end());
-	m_boundCBuffers.insert(otherCtx.m_boundCBuffers.begin(), otherCtx.m_boundCBuffers.end());
-	m_boundBuffers.insert(otherCtx.m_boundBuffers.begin(), otherCtx.m_boundBuffers.end());
-
-	m_vertexStart = otherCtx.m_vertexStart;
-	m_vertexCount = otherCtx.m_vertexCount;
-	m_indexStart = otherCtx.m_indexStart;
-	m_indexCount = otherCtx.m_indexCount;
-	m_meshThreads = otherCtx.m_meshThreads;
-	//VertexBuffer* m_immediateBuffer = nullptr;
-	m_material = otherCtx.m_material;
-	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
-		m_renderTargets[rtIndex] = otherCtx.m_renderTargets[rtIndex];
-	}
-	m_depthTarget = otherCtx.m_depthTarget;
-	m_srvHandleStart = otherCtx.m_srvHandleStart;
-	m_cbvHandleStart = otherCtx.m_cbvHandleStart;
-}
-
-void ImmediateContext::Reset()
-{
-	m_modelConstants = {};
-	m_isIndexedDraw = false;
-	m_isMeshDraw = false;
-	m_immediateIBO = nullptr;
-	m_cameraCBO = nullptr;
-	m_modelCBO = nullptr;
-	m_boundTextures.clear();
-	m_boundCBuffers.clear();
-	m_boundBuffers.clear();
-	m_vertexStart = 0;
-	m_vertexCount = 0;
-	m_indexStart = 0;
-	m_indexCount = 0;
-	m_meshThreads = IntVec3::ZERO;
-	//VertexBuffer* m_immediateBuffer = nullptr;
-	m_material = nullptr;
-	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
-		m_renderTargets[rtIndex] = nullptr;
-	}
-	m_depthTarget = nullptr;
-	m_srvHandleStart = 0;
-	m_cbvHandleStart = 0;
 }

@@ -343,6 +343,9 @@
     <ClCompile Include="Renderer\GraphicsCommon.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="Renderer\ImmediateContext.cpp">
+      <Filter>Renderer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Math\Vec2.hpp">
@@ -695,6 +698,9 @@
     </ClInclude>
     <ClInclude Include="..\ThirdParty\ImGUI\imgui_impl_dx12.h">
       <Filter>ThirdParty\ImGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer\ImmediateContext.hpp">
+      <Filter>Renderer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

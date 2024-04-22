@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <cstdint>
 #include <vector>
+#include <set>
 #include <map>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -40,65 +41,21 @@ class Material;
 class Buffer;
 class VertexBuffer;
 class IndexBuffer;
-struct Rgba8;
-struct Vertex_PCU;
 class Texture;
-struct TextureCreateInfo;
 class Image;
 class Camera;
 class ConstantBuffer;
 class BitmapFont;
+class ImmediateContext;
+struct Rgba8;
+struct Vertex_PCU;
+struct TextureCreateInfo;
 
 extern MaterialSystem* g_theMaterialSystem;
 
 struct RendererConfig {
 	Window* m_window = nullptr;
 	unsigned int m_backBuffersCount = 2;
-};
-
-struct ModelConstants {
-	Mat44 ModelMatrix = Mat44();
-	float ModelColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	float ModelPadding[4];
-};
-
-struct CameraConstants {
-	Mat44 ProjectionMatrix;
-	Mat44 ViewMatrix;
-	Mat44 InvertedMatrix;
-};
-
-
-
-struct ImmediateContext {
-	ImmediateContext() = default;
-	ImmediateContext(ImmediateContext const& otherCtx);
-	ModelConstants m_modelConstants = {};
-	bool m_isIndexedDraw = false;
-	bool m_isMeshDraw = false;
-	bool m_usingDepthAsTexture = false;
-	VertexBuffer* const* m_immediateVBO = nullptr;
-	IndexBuffer* const* m_immediateIBO = nullptr;
-	ConstantBuffer* m_cameraCBO = nullptr;
-	ConstantBuffer* m_modelCBO = nullptr;
-	std::map<unsigned int, Texture const*> m_boundTextures;
-	std::map<unsigned int, ConstantBuffer*> m_boundCBuffers;
-	std::map<unsigned int, Buffer*> m_boundBuffers;
-	size_t m_vertexStart = 0;
-	size_t m_vertexCount = 0;
-	size_t m_indexStart = 0;
-	size_t m_indexCount = 0;
-	IntVec3 m_meshThreads = IntVec3::ZERO;
-	//VertexBuffer* m_immediateBuffer = nullptr;
-	Material* m_material = nullptr;
-	Texture* m_renderTargets[8] = {};
-	Texture* m_depthTarget = nullptr;
-	Texture* m_depthTargetSRV = nullptr;
-	unsigned int m_srvHandleStart = 0;
-	unsigned int m_cbvHandleStart = 0;
-
-	void Reset();
-
 };
 
 struct FxContext {
@@ -246,11 +203,15 @@ public:
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
 	void TrackResource(Resource* newResource);
+	void RemoveResource(Resource* newResource);
 	void SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue);
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
 	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
 	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
 
+
+	void FlushPendingWork();
+	void ResetGPUState();
 private:
 
 	// DX12 Initialization & Render Initialization
@@ -277,7 +238,7 @@ private:
 	// Fence signaling
 	unsigned int SignalFence(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int& fenceValue);
 	void WaitForFenceValue(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue, HANDLE fenceEvent);
-	void Flush(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent);
+	void FlushAndFinish(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent);
 
 	Texture* GetActiveRenderTarget() const;
 	Texture* GetBackUpRenderTarget() const;
@@ -357,7 +318,7 @@ private:
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	std::vector<Texture*> m_loadedTextures;
 	std::vector<BitmapFont*> m_loadedFonts;
-	std::vector<Resource*> m_resources;
+	std::set<Resource*> m_resources;
 
 	std::vector<ID3D12Resource*> m_frameUploadHeaps;
 	//ID3D12DescriptorHeap* m_RTVdescriptorHeap;
@@ -376,6 +337,7 @@ private:
 	std::vector<unsigned int> m_immediateIndices;
 	std::vector<unsigned int> m_fenceValues;
 	std::vector<Buffer*> m_bufferUpdateQueue;
+	std::vector<Buffer*> m_boundOtherResources;
 	unsigned int m_rscFenceValue = 0;
 
 	Material* m_default2DMaterial = nullptr;
@@ -392,7 +354,7 @@ private:
 	bool m_useWARP = false;
 	bool m_uploadRequested = false;
 	bool m_isCommandListOpen = false;
-	bool m_hasUsedModelSlot = false;
+	bool m_renderPassOpen = false;
 
 	unsigned int m_currentRenderTarget = 0;
 	unsigned int m_currentBackBuffer = 0;

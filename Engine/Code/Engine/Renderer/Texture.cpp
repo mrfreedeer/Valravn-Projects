@@ -119,6 +119,12 @@ ResourceView* Texture::GetOrCreateView(ResourceBindFlagBit viewType)
 
 }
 
+bool Texture::IsBindCompatible(ResourceBindFlag bindFlag) const
+{
+	bool isCompatible = m_creationInfo.m_bindFlags & bindFlag;
+	return isCompatible;
+}
+
 IntVec2 Texture::GetDimensions() const
 {
 	return m_creationInfo.m_dimensions;
