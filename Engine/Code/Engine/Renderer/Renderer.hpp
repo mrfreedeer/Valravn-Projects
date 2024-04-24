@@ -30,7 +30,7 @@
 template <typename T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-
+struct ID3D12Device13;
 
 struct ShaderByteCode;
 struct ShaderLoadInfo;
@@ -219,165 +219,38 @@ private:
 	void ShutdownImGui();
 	void BeginFrameImGui();
 	void EndFrameImGui();
-	void EnableDebugLayer() const;
-	void CreateDXGIFactory();
-	ComPtr<IDXGIAdapter4> GetAdapter();
-	void CreateDevice(ComPtr<IDXGIAdapter4> adapter);
-	void CreateCommandQueue(D3D12_COMMAND_LIST_TYPE type);
-	bool HasTearingSupport();
-	void CreateSwapChain();
-	void CreateDescriptorHeap(ID3D12DescriptorHeap*& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, unsigned int numDescriptors, bool visibleFromGPU = false);
-	void CreateRenderTargetViewsForBackBuffers();
-	void CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>& commandAllocator);
-	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
-	void CreateFence(ComPtr<ID3D12Fence1>& fence, char const* debugName);
-	void CreateFenceEvent();
-	void CreateDefaultRootSignature();
-	void CreateDefaultTextureTargets();
-
-	// Fence signaling
-	unsigned int SignalFence(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int& fenceValue);
-	void WaitForFenceValue(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue, HANDLE fenceEvent);
-	void FlushAndFinish(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent);
-
-	Texture* GetActiveRenderTarget() const;
-	Texture* GetBackUpRenderTarget() const;
-
-	Texture* GetActiveBackBuffer() const;
-	Texture* GetBackUpBackBuffer() const;
-
-	// Shaders & Resources
-	bool CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std::vector<D3D12_SIGNATURE_PARAMETER_DESC>& elementsDescs, std::vector<std::string>& semanticNames);
-	bool CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo);
-	void LoadEngineShaderBinaries();
-
 	void CreatePSOForMaterial(Material* material);
-	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
-	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
-	void CreateViewport();
-	void DestroyTexture(Texture* textureToDestroy);
-	Texture* GetTextureForFileName(char const* imageFilePath);
-	Texture* CreateTextureFromFile(char const* imageFilePath);
-	Texture* CreateTextureFromImage(Image const& image);
-	ResourceView* CreateShaderResourceView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateRenderTargetView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateDepthStencilView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateConstantBufferView(ResourceViewInfo const& viewInfo, DescriptorHeap* descriptorHeap) const;
-	void SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc);
-	BitmapFont* CreateBitmapFont(std::filesystem::path bitmapPath);
 
-	void ClearTexture(Rgba8 const& color, Texture* tex);
-	void ResetGPUDescriptorHeaps();
-	void CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot = 0);
-	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot = 0);
-	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);
-
-	// Handling of pre-allocated engine buffers
-	ConstantBuffer& GetNextCameraBuffer();
-	ConstantBuffer& GetNextModelBuffer();
-	ConstantBuffer& GetNextLightBuffer();
-	ConstantBuffer& GetCurrentCameraBuffer();
-	ConstantBuffer& GetCurrentModelBuffer();
-	ConstantBuffer& GetCurrentLightBuffer();
-
-
-	void UploadAllPendingResources();
-	void DrawAllEffects();
-	void DrawEffect(FxContext& ctx);
-	void DrawAllImmediateContexts();
-	void ClearAllImmediateContexts();
-	void DrawImmediateCtx(ImmediateContext& ctx);
-	void CopyCurrentDrawCtxToNext();
-	/// <summary>
-	/// Update where SRV and CBV handles will start
-	/// </summary>
-	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
-	ComPtr<ID3D12GraphicsCommandList6> GetBufferCommandList();
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetGraphicsPSO(Material* material, std::vector<std::string>& nameStrings);
-	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC GetMeshShaderPSO(Material* material);
-
-	void ResetResourcesState();
 private:
 	RendererConfig m_config = {};
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
 
+	Mat44 m_lightRenderTransform;
+
 	ComPtr<ID3D12Device2> m_device;
-	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12RootSignature> m_MSRootSignature;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
-	ComPtr<IDXGISwapChain4> m_swapChain;
-	ComPtr<ID3D12Fence1> m_fence;
-	ComPtr<ID3D12Fence1> m_rscFence;
-	ComPtr<IDXGIFactory4> m_dxgiFactory;
+	ComPtr<IDXGISwapChain3> m_swapChain;
+	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+	ComPtr<ID3D12Resource2> m_renderTargets[2];
+	ComPtr<ID3D12Resource2> m_floatRenderTargets[2];
+	unsigned int m_frameIndex = 0;
+	unsigned int m_rtvDescriptorSize = 0;
+
+	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
-	std::vector<ComPtr<ID3D12CommandAllocator>> m_commandAllocators[2];
-	std::vector<Texture*> m_backBuffers;
-	std::vector<Texture*> m_defaultRenderTargets;
-	std::vector<ShaderByteCode*> m_shaderByteCodes;
-	std::vector<Texture*> m_loadedTextures;
-	std::vector<BitmapFont*> m_loadedFonts;
-	std::set<Resource*> m_resources;
+	// App resources.
+	ComPtr<ID3D12Resource> m_vertexBuffer;
+	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	std::vector<ID3D12Resource*> m_frameUploadHeaps;
-	//ID3D12DescriptorHeap* m_RTVdescriptorHeap;
-	std::vector<DescriptorHeap*> m_defaultDescriptorHeaps;
-	std::vector<DescriptorHeap*> m_defaultGPUDescriptorHeaps;
-	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
-	std::vector<ComPtr<ID3D12GraphicsCommandList6>> m_commandLists;
-
-	ImmediateContext* m_immediateCtxs = nullptr;
-	std::vector<FxContext> m_effectsCtxs;
-	std::vector<ConstantBuffer> m_cameraCBOArray;
-	std::vector<ConstantBuffer> m_modelCBOArray;
-	std::vector<ConstantBuffer> m_lightCBOArray;
-	std::vector<Vertex_PCU> m_immediateVertexes;
-	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
-	std::vector<unsigned int> m_immediateIndices;
-	std::vector<unsigned int> m_fenceValues;
-	std::vector<Buffer*> m_bufferUpdateQueue;
-	std::vector<Buffer*> m_boundOtherResources;
-	unsigned int m_rscFenceValue = 0;
-
-	Material* m_default2DMaterial = nullptr;
-	Material* m_default3DMaterial = nullptr;
-	Texture* m_defaultDepthTarget = nullptr;
-	Texture* m_defaultTexture = nullptr;
-	Camera const* m_currentCamera = nullptr;
-	VertexBuffer* m_immediateVBO = nullptr;
-	VertexBuffer* m_immediateDiffuseVBO = nullptr;
-	IndexBuffer* m_immediateIBO = nullptr;
-	HANDLE m_fenceEvent; // void*
-	HANDLE m_rscFenceEvent;
-
-	bool m_useWARP = false;
-	bool m_uploadRequested = false;
-	bool m_isCommandListOpen = false;
-	bool m_renderPassOpen = false;
-
-	unsigned int m_currentRenderTarget = 0;
-	unsigned int m_currentBackBuffer = 0;
-	unsigned int m_antiAliasingLevel = 0;
-	unsigned int m_currentFrame = 0;
-	unsigned int m_RTVdescriptorSize = 0;
-	unsigned int m_currentCameraCBufferSlot = 0;
-	unsigned int m_currentModelCBufferSlot = 0;
-	unsigned int m_currentLightCBufferSlot = 0;
-	unsigned int m_srvHandleStart = 0;
-	unsigned int m_cbvHandleStart = 0;
-	unsigned int m_immediateCtxCount = IMMEDIATE_CTX_AMOUNT;
-	unsigned int m_currentDrawCtx = 0;
-
-	D3D12_VIEWPORT m_viewport = {};
-	D3D12_RECT m_scissorRect = {};
-
-	// Lighting
-	Light m_lights[MAX_LIGHTS];
-	Vec3 m_directionalLight = Vec3(0.0f, 0.0f, -1.0f);
-	Rgba8 m_directionalLightIntensity = Rgba8::WHITE;
-	Rgba8 m_ambientIntensity = Rgba8::WHITE;
-	Mat44 m_lightRenderTransform = Mat44();
+	// Synchronization objects.
+	HANDLE m_fenceEvent;
+	ComPtr<ID3D12Fence> m_fence;
+	UINT64 m_fenceValue;
+	D3D12_VIEWPORT m_viewport;
+	D3D12_RECT m_scissorRect;
 };
 
 template<typename T_Object>
