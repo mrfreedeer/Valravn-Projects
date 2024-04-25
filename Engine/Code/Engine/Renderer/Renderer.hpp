@@ -213,13 +213,25 @@ public:
 	void FlushPendingWork();
 	void ResetGPUState();
 private:
-
-	// DX12 Initialization & Render Initialization
+	// ImGui
 	void InitializeImGui();
 	void ShutdownImGui();
 	void BeginFrameImGui();
 	void EndFrameImGui();
+
+	// DX12 Initialization & Render Initialization
+	void CreateDevice();
+	void EnableDebugLayer();
+	void CreateCommandQueue();
+	void CreateSwapChain();
+
+	// Textures
+	void DestroyTexture(Texture* textureToDestroy);
+
+	// Material and Compilation
 	void CreatePSOForMaterial(Material* material);
+	bool CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo);
+
 
 private:
 	RendererConfig m_config = {};
@@ -227,27 +239,30 @@ private:
 	LiveObjectReporter m_liveObjectReporter;
 
 	Mat44 m_lightRenderTransform;
+	unsigned int m_currentBackBuffer = 0;
 
+	std::vector<Texture*> m_createdTextures;
 	ComPtr<ID3D12Device2> m_device;
+	ComPtr<IDXGIFactory4> m_DXGIFactory;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
-	ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+	DescriptorHeap* m_rtvHeap = nullptr;
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12Resource2> m_renderTargets[2];
 	ComPtr<ID3D12Resource2> m_floatRenderTargets[2];
-	unsigned int m_frameIndex = 0;
-	unsigned int m_rtvDescriptorSize = 0;
+
 
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
 	// App resources.
 	ComPtr<ID3D12Resource> m_vertexBuffer;
+	ComPtr<ID3D12Fence> m_fence;
+
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
 	// Synchronization objects.
 	HANDLE m_fenceEvent;
-	ComPtr<ID3D12Fence> m_fence;
 	UINT64 m_fenceValue;
 	D3D12_VIEWPORT m_viewport;
 	D3D12_RECT m_scissorRect;

@@ -43,7 +43,7 @@ struct VertexTest
 
 std::wstring GetAssetFullPath(LPCWSTR assetName)
 {
-	std::string engineStr = ENGINE_DIR ;
+	std::string engineStr = ENGINE_DIR;
 	engineStr += "Renderer/Materials/Shaders/";
 	std::wstring returnString(engineStr.begin(), engineStr.end());
 
@@ -186,11 +186,36 @@ void GetHardwareAdapter(
 	*ppAdapter = adapter.Detach();
 }
 
-void Renderer::Startup()
+
+void Renderer::CreateDevice()
 {
-	
 	UINT dxgiFactoryFlags = 0;
 
+#if defined(_DEBUG)
+	// Enable additional debug layers.
+	dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+#endif
+	ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&m_DXGIFactory)), "FAILED TO CREATE DXGI FACTORY");
+
+
+	ComPtr<IDXGIAdapter1> hardwareAdapter;
+	GetHardwareAdapter(m_DXGIFactory.Get(), &hardwareAdapter, false);
+
+	ThrowIfFailed(D3D12CreateDevice(
+		hardwareAdapter.Get(),
+		D3D_FEATURE_LEVEL_12_2,
+		IID_PPV_ARGS(&m_device)
+	), "FAILED TO CREATE DEVICE");
+
+	SetDebugName(m_DXGIFactory, "DXGI FACTORY");
+	SetDebugName(m_device, "DEVICE");
+
+}
+
+
+
+void Renderer::EnableDebugLayer()
+{
 #if defined(_DEBUG)
 	// Enable the debug layer (requires the Graphics Tools "optional feature").
 	// NOTE: Enabling the debug layer after device creation will invalidate the active device.
@@ -200,25 +225,15 @@ void Renderer::Startup()
 		{
 			debugController->EnableDebugLayer();
 
-			// Enable additional debug layers.
-			dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+
 		}
 	}
 #endif
+}
 
-	ComPtr<IDXGIFactory4> factory;
-	ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)), "FAILED TO CREATE DXGI FACTORY");
 
-	
-		ComPtr<IDXGIAdapter1> hardwareAdapter;
-		GetHardwareAdapter(factory.Get(), &hardwareAdapter, false);
-
-		ThrowIfFailed(D3D12CreateDevice(
-			hardwareAdapter.Get(),
-			D3D_FEATURE_LEVEL_11_0,
-			IID_PPV_ARGS(&m_device)
-		), "FAILED TO CREATE DEVICE");
-
+void Renderer::CreateCommandQueue()
+{
 	// Describe and create the command queue.
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -226,6 +241,11 @@ void Renderer::Startup()
 
 	ThrowIfFailed(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)), "FAILED TO CREATE COMMANDQUEUE");
 
+	SetDebugName(m_commandQueue, "COMMAND QUEUE");
+}
+
+void Renderer::CreateSwapChain()
+{
 	Window* window = Window::GetWindowContext();
 	IntVec2 windowDims = window->GetClientDimensions();
 
@@ -244,7 +264,7 @@ void Renderer::Startup()
 	swapChainDesc.SampleDesc.Count = 1;
 
 	ComPtr<IDXGISwapChain1> swapChain;
-	ThrowIfFailed(factory->CreateSwapChainForHwnd(
+	ThrowIfFailed(m_DXGIFactory->CreateSwapChainForHwnd(
 		m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
 		windowHandle,
 		&swapChainDesc,
@@ -254,26 +274,150 @@ void Renderer::Startup()
 	), "Failed to create swap chain");
 
 	// This sample does not support fullscreen transitions.
-	ThrowIfFailed(factory->MakeWindowAssociation(windowHandle, DXGI_MWA_NO_ALT_ENTER), "Failed to make window association");
+	ThrowIfFailed(m_DXGIFactory->MakeWindowAssociation(windowHandle, DXGI_MWA_NO_ALT_ENTER), "Failed to make window association");
 
 	ThrowIfFailed(swapChain.As(&m_swapChain), "Failed to get Swap Chain");
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
+}
 
-	// Create descriptor heaps.
-	{
-		// Describe and create a render target view (RTV) descriptor heap.
-		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-		rtvHeapDesc.NumDescriptors = 4;
-		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		ThrowIfFailed(m_device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap)), "Failed to create RTV HEAP");
+/// <summary>
+/// Only function allowed to create textures
+/// </summary>
+/// <param name="creationInfo"></param>
+/// <returns></returns>
+Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
+{
+	Resource*& handle = creationInfo.m_handle;
 
-		m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	if (handle) {
+		handle->m_resource->AddRef();
+		//handle->m_resource->
 	}
+	else {
+		D3D12_RESOURCE_DESC textureDesc = {};
+		textureDesc.Width = (UINT64)creationInfo.m_dimensions.x;
+		textureDesc.Height = (UINT64)creationInfo.m_dimensions.y;
+		textureDesc.MipLevels = 1;
+		textureDesc.DepthOrArraySize = 1;
+		textureDesc.Format = LocalToD3D12(creationInfo.m_format);
+		textureDesc.Flags = LocalToD3D12(creationInfo.m_bindFlags);
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.SampleDesc.Quality = 0;
+		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+
+		CD3DX12_HEAP_PROPERTIES heapType(D3D12_HEAP_TYPE_DEFAULT);
+		D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON;
+		if (creationInfo.m_initialData) {
+			initialResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
+		}
+		handle = new Resource();
+		handle->m_currentState = initialResourceState;
+
+		TrackResource(handle);
+		D3D12_CLEAR_VALUE clearValueRT = {};
+		D3D12_CLEAR_VALUE clearValueDST = {};
+		D3D12_CLEAR_VALUE* clearValue = NULL;
+
+		// If it can be bound as RT then it needs the clear colour, otherwise it's null
+		if (creationInfo.m_bindFlags & RESOURCE_BIND_RENDER_TARGET_BIT) {
+			creationInfo.m_clearColour.GetAsFloats(clearValueRT.Color);
+			clearValueRT.Format = LocalToD3D12(creationInfo.m_clearFormat);
+			clearValue = &clearValueRT;
+		}
+
+		if (creationInfo.m_bindFlags & RESOURCE_BIND_DEPTH_STENCIL_BIT) {
+			creationInfo.m_clearColour.GetAsFloats(clearValueDST.Color);
+			clearValueDST.Format = LocalToD3D12(TextureFormat::D24_UNORM_S8_UINT);
+			clearValue = &clearValueDST;
+		}
+
+		HRESULT textureCreateHR = m_device->CreateCommittedResource(
+			&heapType,
+			D3D12_HEAP_FLAG_NONE,
+			&textureDesc,
+			initialResourceState,
+			clearValue,
+			IID_PPV_ARGS(&handle->m_resource)
+		);
+
+		if (creationInfo.m_initialData) {
+			ID3D12Resource* textureUploadHeap;
+			UINT64  const uploadBufferSize = GetRequiredIntermediateSize(handle->m_resource, 0, 1);
+			CD3DX12_RESOURCE_DESC uploadHeapDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+			CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
+
+			HRESULT createUploadHeap = m_device->CreateCommittedResource(
+				&heapProperties,
+				D3D12_HEAP_FLAG_NONE,
+				&uploadHeapDesc,
+				D3D12_RESOURCE_STATE_GENERIC_READ,
+				nullptr,
+				IID_PPV_ARGS(&textureUploadHeap));
+
+			ThrowIfFailed(createUploadHeap, "FAILED TO CREATE TEXTURE UPLOAD HEAP");
+			SetDebugName(textureUploadHeap, "UplHeap");
+
+			D3D12_SUBRESOURCE_DATA imageData = {};
+			imageData.pData = creationInfo.m_initialData;
+			imageData.RowPitch = creationInfo.m_stride * creationInfo.m_dimensions.x;
+			imageData.SlicePitch = creationInfo.m_stride * creationInfo.m_dimensions.y * creationInfo.m_dimensions.x;
+			UpdateSubresources(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
+			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, m_commandList.Get());
+
+		/*	m_frameUploadHeaps.push_back(textureUploadHeap);
+			if (!m_isCommandListOpen) {
+				m_uploadRequested = true;
+			}*/
+		}
+
+		std::string const errorMsg = Stringf("COULD NOT CREATE TEXTURE WITH NAME %s", creationInfo.m_name.c_str());
+		ThrowIfFailed(textureCreateHR, errorMsg.c_str());
+	}
+	//WaitForGPU();
+	Texture* newTexture = new Texture(creationInfo);
+	newTexture->m_handle = handle;
+	SetDebugName(newTexture->m_handle->m_resource, creationInfo.m_name.c_str());
+
+	m_createdTextures.push_back(newTexture);
+
+	return newTexture;
+}
+
+void Renderer::DestroyTexture(Texture* textureToDestroy)
+{
+	if (textureToDestroy) {
+		Resource* texResource = textureToDestroy->m_handle;
+		delete textureToDestroy;
+		if (texResource) {
+			delete texResource;
+		}
+	}
+}
+
+void Renderer::Startup()
+{
+
+	EnableDebugLayer();
+	CreateDevice();
+	CreateCommandQueue();
+	CreateSwapChain();
+
+	m_rtvHeap = new DescriptorHeap(this, DescriptorHeapType::RTV, 4);
+
+	TextureCreateInfo secRtvDesc = {};
+	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
+	secRtvDesc.m_clearColour = Rgba8::BLACK;
+	secRtvDesc.m_clearFormat = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_dimensions = IntVec2(2560, 1280);
+	secRtvDesc.m_format = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_initialData = nullptr;
+	secRtvDesc.m_name = "FLOAT RT";
+	secRtvDesc.m_owner = this;
+
 
 	// Create frame resources.
 	{
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart());
+		//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart());
 
 		D3D12_RESOURCE_DESC textureDesc = {};
 		textureDesc.MipLevels = 1;
@@ -296,21 +440,16 @@ void Renderer::Startup()
 		// Create a RTV for each frame.
 		for (UINT n = 0; n < 2; n++)
 		{
+			secRtvDesc.m_handle = nullptr;
+			CreateTexture(secRtvDesc);
+
 			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])), "FAILED TO GET BACK BUFFER");
-			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHandle);
-			rtvHandle.Offset(1, m_rtvDescriptorSize);
-
-			ThrowIfFailed(m_device->CreateCommittedResource(
-				&defaultHeap,
-				D3D12_HEAP_FLAG_NONE,
-				&textureDesc,
-				D3D12_RESOURCE_STATE_RENDER_TARGET,
-				&clearVal,
-				IID_PPV_ARGS(&m_floatRenderTargets[n])), "FAILED TO CREATE FLOAT RENDER TARGETS");
+			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, m_rtvHeap->GetNextCPUHandle());
+			//rtvHandle.Offset(1, m_rtvDescriptorSize);
 
 
-			m_device->CreateRenderTargetView(m_floatRenderTargets[n].Get(), nullptr, rtvHandle);
-			rtvHandle.Offset(1, m_rtvDescriptorSize);
+			m_device->CreateRenderTargetView(m_createdTextures[n]->GetResource()->m_resource, nullptr, m_rtvHeap->GetNextCPUHandle());
+			//rtvHandle.Offset(1, m_rtvDescriptorSize);
 
 		}
 
@@ -344,12 +483,30 @@ void Renderer::Startup()
 #else
 		UINT compileFlags = 0;
 #endif
-		
 
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr), "FAILED TO COMPILE VSHADER");
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr), "FAILED TO COMPILE PSHADER");
+		std::vector<unsigned char> vertexBytecode;
+		std::vector<unsigned char> pixelBytecode;
 
-		// Define the vertex input layout.
+		std::string shaderStr = ENGINE_DIR;
+		shaderStr += "Renderer/Materials/Shaders/shaders.hlsl";
+
+		ShaderLoadInfo shaderLoadInfo = {};
+		shaderLoadInfo.m_shaderEntryPoint = "VSMain";
+		shaderLoadInfo.m_shaderSrc = shaderStr;
+		shaderLoadInfo.m_shaderName = "VertexShader";
+		shaderLoadInfo.m_shaderType = ShaderType::Vertex;
+
+		CompileShaderToByteCode(vertexBytecode, shaderLoadInfo);
+
+		shaderLoadInfo.m_shaderEntryPoint = "PSMain";
+		shaderLoadInfo.m_shaderName = "PixelShader";
+		shaderLoadInfo.m_shaderType = ShaderType::Pixel;
+		CompileShaderToByteCode(pixelBytecode, shaderLoadInfo);
+
+		/*	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr), "FAILED TO COMPILE VSHADER");
+			ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr), "FAILED TO COMPILE PSHADER");*/
+
+			// Define the vertex input layout.
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 		{
 			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -360,8 +517,8 @@ void Renderer::Startup()
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexBytecode.data(), vertexBytecode.size());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelBytecode.data(), pixelBytecode.size());
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		psoDesc.DepthStencilState.DepthEnable = FALSE;
@@ -398,8 +555,8 @@ void Renderer::Startup()
 		// recommended. Every time the GPU needs it, the upload heap will be marshalled 
 		// over. Please read up on Default Heap usage. An upload heap is used here for 
 		// code simplicity and because there are very few verts to actually transfer.
-		 auto uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		 auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
+		auto uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
 		ThrowIfFailed(m_device->CreateCommittedResource(
 			&uploadHeap,
 			D3D12_HEAP_FLAG_NONE,
@@ -448,8 +605,136 @@ void Renderer::Startup()
 			WaitForSingleObject(m_fenceEvent, INFINITE);
 		}
 
-		m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+		m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 	}
+}
+
+void Renderer::CreatePSOForMaterial(Material* material)
+{
+
+}
+
+bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo)
+{
+
+	char const* sourceName = loadInfo.m_shaderSrc.c_str();
+	char const* entryPoint = loadInfo.m_shaderEntryPoint.c_str();
+	char const* target = Material::GetTargetForShader(loadInfo.m_shaderType);
+
+	ComPtr<IDxcUtils> pUtils;
+	ComPtr<IDxcCompiler3> pCompiler;
+	DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&pUtils));
+	DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&pCompiler));
+
+	ComPtr<IDxcIncludeHandler> pIncludeHandler;
+	pUtils->CreateDefaultIncludeHandler(&pIncludeHandler);
+
+
+	std::filesystem::path filenamePath = std::filesystem::path(sourceName);
+	std::string filenameStr = filenamePath.filename().string();
+	std::string filenamePDB = filenamePath.filename().replace_extension(".pdb").string();
+	std::wstring wFilename = std::wstring(filenameStr.begin(), filenameStr.end());
+	std::wstring wEntryPoint = std::wstring(entryPoint, entryPoint + strlen(entryPoint));
+	std::wstring wTarget = std::wstring(target, target + strlen(target));
+	std::wstring wFilenamePDB = std::wstring(filenamePDB.begin(), filenamePDB.end());
+	std::wstring wSrc = std::wstring(loadInfo.m_shaderSrc.begin(), loadInfo.m_shaderSrc.end());
+
+	ComPtr<IDxcCompilerArgs> compilerArgs;
+	LPCWSTR additionalArgs[]{
+			DXC_ARG_ALL_RESOURCES_BOUND,
+	};
+	pUtils->BuildArguments(wSrc.c_str(), wEntryPoint.c_str(), wTarget.c_str(), NULL, 0, NULL, 0, &compilerArgs);
+	compilerArgs->AddArguments(additionalArgs, _countof(additionalArgs));
+
+	//LPCWSTR pszArgs[] =
+	//{
+	//	wFilename.c_str(),            // Optional shader source file name for error reporting
+	//								 // and for PIX shader source view.  
+	//	L"-E", wEntryPoint.c_str(),              // Entry point.
+	//	L"-T", wTarget.c_str(),            // Target.
+	//	L"-Zs",                      // Enable debug information (slim format)
+	//	//L"-D", L"MYDEFINE=1",        // A single define.
+	//	//L"-Fo", L"myshader.bin",     // Optional. Stored in the pdb. 
+	//	L"-Fd", wFilenamePDB.c_str(),     // The file name of the pdb. This must either be supplied
+	//								 // or the autogenerated file name must be used.
+	//	L"-Qstrip_reflect",          // Strip reflection into a separate blob. 
+	//};
+
+#if defined(ENGINE_DEBUG_RENDER)
+	LPCWSTR debugArg[]{
+		DXC_ARG_SKIP_OPTIMIZATIONS,
+		L"-Qembed_debug",
+		DXC_ARG_DEBUG
+	};
+	compilerArgs->AddArguments(debugArg, _countof(debugArg));
+#else 
+	LPCWSTR optimizationArg[]{
+			DXC_ARG_OPTIMIZATION_LEVEL3
+	};
+	compilerArgs->AddArguments(optimizationArg, 1);
+#endif
+
+	//LPCWSTR pszArgs[] =
+	//{
+	//	wFilename.c_str(),            // Optional shader source file name for error reporting
+	//								 // and for PIX shader source view.  
+	//	L"-E", wEntryPoint.c_str(),              // Entry point.
+	//	L"-T", wTarget.c_str(),            // Target.
+	//	L"-Zs",                      // Enable debug information (slim format)
+	//	//L"-D", L"MYDEFINE=1",        // A single define.
+	//	//L"-Fo", L"myshader.bin",     // Optional. Stored in the pdb. 
+	//	L"-Fd", wFilenamePDB.c_str(),     // The file name of the pdb. This must either be supplied
+	//								 // or the autogenerated file name must be used.
+	//	L"-Qstrip_reflect",          // Strip reflection into a separate blob. 
+	//};
+
+	DxcBuffer bufferSource = {};
+	ComPtr<IDxcBlobEncoding> pSource = nullptr;
+	pUtils->LoadFile(wSrc.c_str(), nullptr, &pSource);
+	bufferSource.Ptr = pSource->GetBufferPointer();
+	bufferSource.Size = pSource->GetBufferSize();
+	BOOL encodingKnown = TRUE;
+	pSource->GetEncoding(&encodingKnown, &bufferSource.Encoding); // Assume BOM says UTF8 or UTF16 or this is ANSI text.
+
+	ComPtr<IDxcResult> pResults;
+	auto stringCompilerArgs = compilerArgs->GetArguments();
+	auto optionsCount = compilerArgs->GetCount();
+	pCompiler->Compile(&bufferSource, stringCompilerArgs, optionsCount, pIncludeHandler.Get(), IID_PPV_ARGS(&pResults));
+
+
+	ComPtr<IDxcBlobUtf8> pErrors = nullptr;
+	pResults->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&pErrors), nullptr);
+	// Note that d3dcompiler would return null if no errors or warnings are present.
+	// IDxcCompiler3::Compile will always return an error buffer, but its length
+	// will be zero if there are no warnings or errors.
+
+	HRESULT hrStatus;
+	pResults->GetStatus(&hrStatus);
+
+	ThrowIfFailed(hrStatus, Stringf("COULD NOT COMPILE SHADER FILE: %s", pErrors->GetStringPointer()).c_str());
+	ComPtr<IDxcBlob> pShader = nullptr;
+	ComPtr<IDxcBlobUtf16> pShaderName = nullptr;
+	pResults->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&pShader), &pShaderName);
+
+	/*IDxcCompiler2::CompileWithDebug()
+		HRESULT shaderCompileResult = D3DCompile(source, strlen(source), sourceName, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, compilerFlags, 0, &shaderBlob, &shaderErrorBlob);
+
+	if (!SUCCEEDED(shaderCompileResult)) {
+
+		std::string errorString = std::string((char*)shaderErrorBlob->GetBufferPointer());
+		DX_SAFE_RELEASE(shaderErrorBlob);
+		DX_SAFE_RELEASE(shaderBlob);
+
+		DebuggerPrintf(Stringf("%s NOT COMPILING: %s", sourceName, errorString.c_str()).c_str());
+		ERROR_AND_DIE("FAILED TO COMPILE SHADER TO BYTECODE");
+
+	}*/
+
+
+	outByteCode.resize(pShader->GetBufferSize());
+	memcpy(outByteCode.data(), pShader->GetBufferPointer(), pShader->GetBufferSize());
+
+	return true;
 }
 
 void Renderer::BeginFrame()
@@ -476,12 +761,14 @@ void Renderer::BeginFrame()
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	auto rtBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	auto rtBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	// Indicate that the back buffer will be used as a render target.
 	m_commandList->ResourceBarrier(1, &rtBarrier);
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex * 2, m_rtvDescriptorSize);
-	CD3DX12_CPU_DESCRIPTOR_HANDLE secrtvHandle(m_rtvHeap->GetCPUDescriptorHandleForHeapStart(), m_frameIndex * 2 + 1, m_rtvDescriptorSize);
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2);
+	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2 + 1);
+	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2, m_rtvDescriptorSize);
+	//CD3DX12_CPU_DESCRIPTOR_HANDLE secrtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2 + 1, m_rtvDescriptorSize);
 	m_commandList->OMSetRenderTargets(2, &rtvHandle, TRUE, nullptr);
 
 	// Record commands.
@@ -493,7 +780,7 @@ void Renderer::BeginFrame()
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
-	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Indicate that the back buffer will now be used to present.
 	m_commandList->ResourceBarrier(1, &barrier);
@@ -520,11 +807,34 @@ void Renderer::EndFrame()
 		WaitForSingleObject(m_fenceEvent, INFINITE);
 	}
 
-	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 }
 
 void Renderer::Shutdown()
 {
+	for(unsigned int textureInd = 0; textureInd < m_createdTextures.size(); textureInd++){
+		Texture* tex = m_createdTextures[textureInd];
+		DestroyTexture(tex);
+	}
+
+	if (m_rtvHeap) {
+		delete m_rtvHeap;
+		m_rtvHeap = nullptr;
+	}
+
+	m_device.Reset();
+	m_DXGIFactory.Reset();
+	m_commandQueue.Reset();
+	m_swapChain.Reset();
+
+	m_commandAllocator.Reset();
+
+	m_rootSignature.Reset();
+	m_pipelineState.Reset();
+
+	// App resources.
+	m_vertexBuffer.Reset();
+	m_fence.Reset();
 
 }
 
@@ -563,10 +873,6 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 	return nullptr;
 }
 
-Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
-{
-	return nullptr;
-}
 
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
@@ -949,7 +1255,6 @@ void Renderer::EndFrameImGui()
 #endif
 }
 
-void Renderer::CreatePSOForMaterial(Material* material)
-{
 
-}
+
+
