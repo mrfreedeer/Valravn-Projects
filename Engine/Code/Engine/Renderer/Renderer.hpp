@@ -224,6 +224,9 @@ private:
 	void EnableDebugLayer();
 	void CreateCommandQueue();
 	void CreateSwapChain();
+	void CreateDescriptorHeaps();
+	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
+	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
 
 	// Textures
 	void DestroyTexture(Texture* textureToDestroy);
@@ -246,10 +249,11 @@ private:
 	ComPtr<IDXGIFactory4> m_DXGIFactory;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
-	DescriptorHeap* m_rtvHeap = nullptr;
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	ComPtr<ID3D12Resource2> m_renderTargets[2];
 	ComPtr<ID3D12Resource2> m_floatRenderTargets[2];
+	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
+	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
 
 
 	ComPtr<ID3D12RootSignature> m_rootSignature;

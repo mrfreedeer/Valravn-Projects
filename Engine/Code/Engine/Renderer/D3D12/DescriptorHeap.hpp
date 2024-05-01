@@ -13,7 +13,8 @@ enum class DescriptorHeapType {
 	SAMPLER,
 	RTV,
 	DSV,
-	NUM_DESCRIPTOR_HEAPS
+	NUM_DESCRIPTOR_HEAPS,
+	MAX_GPU_VISIBLE = SAMPLER + 1,
 };
 
 class DescriptorHeap {

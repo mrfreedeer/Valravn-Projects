@@ -280,6 +280,19 @@ void Renderer::CreateSwapChain()
 	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 }
 
+void Renderer::CreateDescriptorHeaps()
+{
+	m_GPUDescriptorHeaps[(unsigned int) DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE, true);
+	m_CPUDescriptorHeaps[(unsigned int) DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE);
+
+	m_GPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SAMPLER] = new DescriptorHeap(this, DescriptorHeapType::SAMPLER, 2, true);
+	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SAMPLER] = new DescriptorHeap(this, DescriptorHeapType::SAMPLER, 2);
+
+	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::RTV] = new DescriptorHeap(this, DescriptorHeapType::RTV, 64);
+
+	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::DSV] = new DescriptorHeap(this, DescriptorHeapType::DSV, 64);
+}
+
 /// <summary>
 /// Only function allowed to create textures
 /// </summary>
@@ -401,8 +414,9 @@ void Renderer::Startup()
 	CreateDevice();
 	CreateCommandQueue();
 	CreateSwapChain();
+	CreateDescriptorHeaps();
 
-	m_rtvHeap = new DescriptorHeap(this, DescriptorHeapType::RTV, 4);
+	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
 	TextureCreateInfo secRtvDesc = {};
 	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
@@ -444,11 +458,11 @@ void Renderer::Startup()
 			CreateTexture(secRtvDesc);
 
 			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])), "FAILED TO GET BACK BUFFER");
-			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, m_rtvHeap->GetNextCPUHandle());
+			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHeap->GetNextCPUHandle());
 			//rtvHandle.Offset(1, m_rtvDescriptorSize);
 
 
-			m_device->CreateRenderTargetView(m_createdTextures[n]->GetResource()->m_resource, nullptr, m_rtvHeap->GetNextCPUHandle());
+			m_device->CreateRenderTargetView(m_createdTextures[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());
 			//rtvHandle.Offset(1, m_rtvDescriptorSize);
 
 		}
@@ -765,8 +779,11 @@ void Renderer::BeginFrame()
 	// Indicate that the back buffer will be used as a render target.
 	m_commandList->ResourceBarrier(1, &rtBarrier);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2);
-	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2 + 1);
+	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
+
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2);
+	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2 + 1);
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2, m_rtvDescriptorSize);
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE secrtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2 + 1, m_rtvDescriptorSize);
 	m_commandList->OMSetRenderTargets(2, &rtvHandle, TRUE, nullptr);
@@ -817,9 +834,21 @@ void Renderer::Shutdown()
 		DestroyTexture(tex);
 	}
 
-	if (m_rtvHeap) {
-		delete m_rtvHeap;
-		m_rtvHeap = nullptr;
+	for (unsigned int heapIndex = 0; heapIndex < (unsigned int)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS; heapIndex++) {
+		DescriptorHeap*& cpuHeap = m_CPUDescriptorHeaps[heapIndex];
+		if(cpuHeap){
+			delete cpuHeap;
+			cpuHeap = nullptr;
+		}
+		
+		if(heapIndex >= (unsigned int) DescriptorHeapType::MAX_GPU_VISIBLE) continue;
+
+		DescriptorHeap*& gpuHeap = m_GPUDescriptorHeaps[heapIndex];
+
+		if (gpuHeap) {
+			delete gpuHeap;
+			gpuHeap = nullptr;
+		}
 	}
 
 	m_device.Reset();
@@ -943,6 +972,16 @@ DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeap
 {
 	return nullptr;
 
+}
+
+DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType)
+{
+	return m_GPUDescriptorHeaps[(unsigned int)descriptorHeapType];
+}
+
+DescriptorHeap* Renderer::GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType)
+{
+	return m_CPUDescriptorHeaps[(unsigned int)descriptorHeapType];
 }
 
 ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewInfo, DescriptorHeap* descriptorHeap /*= nullptr*/) const
