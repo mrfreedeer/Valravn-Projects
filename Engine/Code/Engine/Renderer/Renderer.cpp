@@ -8,9 +8,10 @@
 #include "Engine/Renderer/Texture.hpp"
 #include "Engine/Renderer/BitmapFont.hpp"
 #include "Engine/Core/Image.hpp"
+#include "Engine/Renderer/D3D12/Fence.hpp"
 #include "Engine/Renderer/D3D12/Resource.hpp"
-#include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Renderer/D3D12/D3D12TypeConversions.hpp"
+#include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Window/Window.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/FileUtils.hpp"
@@ -293,6 +294,100 @@ void Renderer::CreateDescriptorHeaps()
 	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::DSV] = new DescriptorHeap(this, DescriptorHeapType::DSV, 64);
 }
 
+void Renderer::CreateFences()
+{
+	m_fence = new Fence(m_device.Get(), m_commandQueue.Get());
+}
+
+void Renderer::CreateDefaultRootSignature()
+{
+	/**
+		 * Usual layout is 3 Constant Buffers
+		 * Textures 0-8
+		 * Sampler
+		 * #TODO programatically define more complex root signatures. Perhaps just really on the HLSL definition?
+		 */
+
+
+	D3D12_DESCRIPTOR_RANGE1 descriptorRanges[4] = {};
+	ZeroMemory(descriptorRanges, sizeof(D3D12_DESCRIPTOR_RANGE1) * 4);
+	descriptorRanges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, CBV_DESCRIPTORS_AMOUNT, 0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0 };
+	descriptorRanges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+	descriptorRanges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, UAV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+	descriptorRanges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 2, 0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+
+
+	// Base parameters, initial at the root table. Could be a descriptor, or a pointer to descriptor 
+	// In this case, one descriptor table per slot in the first 3
+
+	CD3DX12_ROOT_PARAMETER1 rootParameters[4] = {};
+
+	rootParameters[0].InitAsDescriptorTable(1, &descriptorRanges[0], D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[1].InitAsDescriptorTable(1, &descriptorRanges[1], D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[2].InitAsDescriptorTable(1, &descriptorRanges[2], D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[3].InitAsDescriptorTable(1, &descriptorRanges[3], D3D12_SHADER_VISIBILITY_ALL);
+
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignature(_countof(descriptorRanges), rootParameters);
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC MSRootSignature(_countof(descriptorRanges), rootParameters);
+	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
+	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+	MSRootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
+	MSRootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+
+	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	//rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	//ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error), "COULD NOT SERIALIZE ROOT SIGNATURE");
+	ComPtr<ID3DBlob> signature;
+	ComPtr<ID3DBlob> MSsignature;
+	ComPtr<ID3DBlob> error;
+
+	HRESULT rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&rootSignature, signature.GetAddressOf(), error.GetAddressOf());
+	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
+	ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
+	SetDebugName(m_rootSignature, "DEFAULTROOTSIGNATURE");
+
+	rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&MSRootSignature, MSsignature.GetAddressOf(), error.GetAddressOf());
+	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
+	//ThrowIfFailed(m_device->CreateRootSignature(0, MSsignature->GetBufferPointer(), MSsignature->GetBufferSize(), IID_PPV_ARGS(&m_MSRootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
+	//SetDebugName(m_MSRootSignature, "DEFAULTROOTSIGNATURE");
+}
+
+void Renderer::CreateBackBuffers()
+{
+	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
+
+	// Handle size is vendor specific
+	unsigned int rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	// Get a helper handle to the descriptor and create the RTVs 
+
+	m_backBuffers.resize(m_config.m_backBuffersCount);
+	for (unsigned int frameBufferInd = 0; frameBufferInd < m_config.m_backBuffersCount; frameBufferInd++) {
+		ID3D12Resource2* bufferTex = nullptr;
+		Texture*& backBuffer = m_backBuffers[frameBufferInd];
+		HRESULT fetchBuffer = m_swapChain->GetBuffer(frameBufferInd, IID_PPV_ARGS(&bufferTex));
+		if (!SUCCEEDED(fetchBuffer)) {
+			ERROR_AND_DIE("COULD NOT GET FRAME BUFFER");
+		}
+
+		D3D12_RESOURCE_DESC bufferTexDesc = bufferTex->GetDesc();
+
+		TextureCreateInfo backBufferTexInfo = {};
+		backBufferTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT;
+		backBufferTexInfo.m_dimensions = IntVec2((int)bufferTexDesc.Width, (int)bufferTexDesc.Height);
+		backBufferTexInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
+		backBufferTexInfo.m_name = Stringf("BackBuffer %d", frameBufferInd);
+		backBufferTexInfo.m_owner = this;
+		backBufferTexInfo.m_handle = new Resource();
+		TrackResource(backBufferTexInfo.m_handle);
+		backBufferTexInfo.m_handle->m_resource = bufferTex;
+
+		backBuffer = CreateTexture(backBufferTexInfo);
+		m_device->CreateRenderTargetView(backBuffer->GetRawResource(), nullptr, rtvHeap->GetNextCPUHandle());
+		DX_SAFE_RELEASE(bufferTex);
+	}
+}
+
 /// <summary>
 /// Only function allowed to create textures
 /// </summary>
@@ -415,8 +510,10 @@ void Renderer::Startup()
 	CreateCommandQueue();
 	CreateSwapChain();
 	CreateDescriptorHeaps();
+	CreateFences(); // Has to go after creating command queue
+	CreateDefaultRootSignature();
+	CreateBackBuffers();
 
-	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
 	TextureCreateInfo secRtvDesc = {};
 	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
@@ -427,6 +524,7 @@ void Renderer::Startup()
 	secRtvDesc.m_initialData = nullptr;
 	secRtvDesc.m_name = "FLOAT RT";
 	secRtvDesc.m_owner = this;
+	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
 
 	// Create frame resources.
@@ -455,14 +553,10 @@ void Renderer::Startup()
 		for (UINT n = 0; n < 2; n++)
 		{
 			secRtvDesc.m_handle = nullptr;
-			CreateTexture(secRtvDesc);
-
-			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])), "FAILED TO GET BACK BUFFER");
-			m_device->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtvHeap->GetNextCPUHandle());
-			//rtvHandle.Offset(1, m_rtvDescriptorSize);
+			m_floatRenderTargets[n] = CreateTexture(secRtvDesc);
 
 
-			m_device->CreateRenderTargetView(m_createdTextures[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());
+			m_device->CreateRenderTargetView(m_floatRenderTargets[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());
 			//rtvHandle.Offset(1, m_rtvDescriptorSize);
 
 		}
@@ -472,19 +566,6 @@ void Renderer::Startup()
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)), "FAILED TO CREATE COMMAND ALLOCATOR");
 
-
-	////////////////////////////////////////////////////////////////
-
-	// Create an empty root signature.
-	{
-		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error), "FAILED TO SERIALIZE ROOT SIGNATURE");
-		ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)), "FIALED TO CREATE ROOT SIGNATURE");
-	}
 
 	// Create the pipeline state, which includes compiling and loading shaders.
 	{
@@ -594,30 +675,8 @@ void Renderer::Startup()
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-		ThrowIfFailed(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)), "FAILED CREATING FENCE");
-		m_fenceValue = 1;
-
-		// Create an event handle to use for frame synchronization.
-		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-		if (m_fenceEvent == nullptr)
-		{
-			ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()), "FAILED GETTING LAST ERROR");
-		}
-
-		// Wait for the command list to execute; we are reusing the same command 
-		// list in our main loop but for now, we just want to wait for setup to 
-		// complete before continuing.
-		  // Signal and increment the fence value.
-		const UINT64 fence = m_fenceValue;
-		ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence), "FAILED TO SIGNAL FENCE");
-		m_fenceValue++;
-
-		// Wait until the previous frame is finished.
-		if (m_fence->GetCompletedValue() < fence)
-		{
-			ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent), "FAILED TO SET EVENT ON COMPLETION");
-			WaitForSingleObject(m_fenceEvent, INFINITE);
-		}
+		m_fence->Signal();
+		m_fence->Wait();
 
 		m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 	}
@@ -775,18 +834,23 @@ void Renderer::BeginFrame()
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-	auto rtBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	// Indicate that the back buffer will be used as a render target.
-	m_commandList->ResourceBarrier(1, &rtBarrier);
+	Texture* currentBackBuffer = m_backBuffers[m_currentBackBuffer];
+	Resource* backBuffer = currentBackBuffer->GetResource();
+	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+
+	//auto rtBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	//// Indicate that the back buffer will be used as a render target.
+	//m_commandList->ResourceBarrier(1, &rtBarrier);
 
 	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer);
+	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer + 2);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2);
-	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer * 2 + 1);
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {rtvHandle, secrtvHandle};
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2, m_rtvDescriptorSize);
 	//CD3DX12_CPU_DESCRIPTOR_HANDLE secrtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2 + 1, m_rtvDescriptorSize);
-	m_commandList->OMSetRenderTargets(2, &rtvHandle, TRUE, nullptr);
+	m_commandList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
 
 	// Record commands.
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
@@ -797,10 +861,12 @@ void Renderer::BeginFrame()
 	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
-	auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
+
+	//auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Indicate that the back buffer will now be used to present.
-	m_commandList->ResourceBarrier(1, &barrier);
+	//m_commandList->ResourceBarrier(1, &barrier);
 
 	ThrowIfFailed(m_commandList->Close(), "FAILED TO CLOSE COMMAND LIST");
 }
@@ -813,16 +879,8 @@ void Renderer::EndFrame()
 
 	// Present the frame.
 	ThrowIfFailed(m_swapChain->Present(1, 0), "FAILED TO PRESENT");
-	const UINT64 fence = m_fenceValue;
-	ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), fence), "FAILED TO SIGNAL");
-	m_fenceValue++;
-
-	// Wait until the previous frame is finished.
-	if (m_fence->GetCompletedValue() < fence)
-	{
-		ThrowIfFailed(m_fence->SetEventOnCompletion(fence, m_fenceEvent), "FAILED TO SET EVENT ON COMPLETION");
-		WaitForSingleObject(m_fenceEvent, INFINITE);
-	}
+	m_fence->Signal();
+	m_fence->Wait();
 
 	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 }
@@ -851,6 +909,12 @@ void Renderer::Shutdown()
 		}
 	}
 
+	if(m_fence){
+		delete m_fence;
+		m_fence = nullptr;
+	}
+
+
 	m_device.Reset();
 	m_DXGIFactory.Reset();
 	m_commandQueue.Reset();
@@ -863,7 +927,7 @@ void Renderer::Shutdown()
 
 	// App resources.
 	m_vertexBuffer.Reset();
-	m_fence.Reset();
+	
 
 }
 
@@ -1156,7 +1220,12 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 
 void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 {
-
+#if defined(ENGINE_DEBUG_RENDER)
+	object->SetPrivateData(WKPDID_D3DDebugObjectName, (UINT)strlen(name), name);
+#else
+	UNUSED(object);
+	UNUSED(name);
+#endif
 }
 
 void Renderer::SetSamplerMode(SamplerMode samplerMode)

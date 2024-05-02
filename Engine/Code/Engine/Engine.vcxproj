@@ -535,6 +535,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClCompile Include="Renderer\D3D11\D3D11TypeConversions.cpp" />
     <ClCompile Include="Renderer\D3D12\D3D12TypeConversions.cpp" />
     <ClCompile Include="Renderer\D3D12\DescriptorHeap.cpp" />
+    <ClCompile Include="Renderer\D3D12\Fence.cpp" />
     <ClCompile Include="Renderer\D3D12\Resource.cpp" />
     <ClCompile Include="Renderer\DebugRendererSystem.cpp" />
     <ClCompile Include="Renderer\DebugShape.cpp" />
@@ -656,6 +657,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClInclude Include="Renderer\D3D12\d3dx12_root_signature.h" />
     <ClInclude Include="Renderer\D3D12\d3dx12_state_object.h" />
     <ClInclude Include="Renderer\D3D12\DescriptorHeap.hpp" />
+    <ClInclude Include="Renderer\D3D12\Fence.hpp" />
     <ClInclude Include="Renderer\D3D12\Resource.hpp" />
     <ClInclude Include="Renderer\DebugRendererSystem.hpp" />
     <ClInclude Include="Renderer\DebugShape.hpp" />

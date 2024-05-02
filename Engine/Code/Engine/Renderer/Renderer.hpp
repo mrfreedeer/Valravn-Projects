@@ -47,6 +47,7 @@ class Camera;
 class ConstantBuffer;
 class BitmapFont;
 class ImmediateContext;
+class Fence;
 struct Rgba8;
 struct Vertex_PCU;
 struct TextureCreateInfo;
@@ -225,6 +226,9 @@ private:
 	void CreateCommandQueue();
 	void CreateSwapChain();
 	void CreateDescriptorHeaps();
+	void CreateFences();
+	void CreateDefaultRootSignature();
+	void CreateBackBuffers();
 	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
 	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
 
@@ -250,24 +254,21 @@ private:
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
 	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
-	ComPtr<ID3D12Resource2> m_renderTargets[2];
-	ComPtr<ID3D12Resource2> m_floatRenderTargets[2];
+	
+	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
-
-
+	std::vector<Texture*> m_backBuffers;
+	Texture* m_floatRenderTargets[2] = {};
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
 	// App resources.
 	ComPtr<ID3D12Resource> m_vertexBuffer;
-	ComPtr<ID3D12Fence> m_fence;
+	Fence* m_fence = nullptr;
 
 	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
-	// Synchronization objects.
-	HANDLE m_fenceEvent;
-	UINT64 m_fenceValue;
 	D3D12_VIEWPORT m_viewport;
 	D3D12_RECT m_scissorRect;
 };
