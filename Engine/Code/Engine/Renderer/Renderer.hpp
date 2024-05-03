@@ -151,9 +151,8 @@ public:
 	void SetModelColor(Rgba8 const& modelColor);
 	void ExecuteCommandLists(ID3D12CommandList** commandLists, unsigned int count);
 	void WaitForGPU();
-	DescriptorHeap* GetDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-	ResourceView* CreateResourceView(ResourceViewInfo const& resourceViewInfo, DescriptorHeap* descriptorHeap = nullptr) const;
+
+	ResourceView* CreateResourceView(ResourceViewInfo const& resourceViewInfo) const;
 	BitmapFont* CreateOrGetBitmapFont(std::filesystem::path bitmapPath);
 	Material* GetMaterialForName(char const* materialName);
 	Material* GetMaterialForPath(std::filesystem::path const& materialPath);
@@ -229,9 +228,13 @@ private:
 	void CreateFences();
 	void CreateDefaultRootSignature();
 	void CreateBackBuffers();
-	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
-	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType);
+	ResourceView* CreateShaderResourceView(ResourceViewInfo const& resourceViewInfo) const;
+	ResourceView* CreateRenderTargetView(ResourceViewInfo const& viewInfo) const;
+	ResourceView* CreateDepthStencilView(ResourceViewInfo const& viewInfo) const;
+	ResourceView* CreateConstantBufferView(ResourceViewInfo const& viewInfo) const;
 
+	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
 	// Textures
 	void DestroyTexture(Texture* textureToDestroy);
 

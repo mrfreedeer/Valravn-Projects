@@ -223,7 +223,7 @@ ResourceView* Buffer::CreateConstantBufferView()
 	bufferViewInfo.m_cbvDesc = cBufferView;
 	bufferViewInfo.m_viewType = RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT;
 
-	ResourceView* newView = m_owner->CreateResourceView(bufferViewInfo, m_descriptorHeap);
+	ResourceView* newView = m_owner->CreateResourceView(bufferViewInfo);
 	m_views.push_back(newView);
 
 	return newView;

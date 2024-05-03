@@ -211,6 +211,21 @@ void Renderer::CreateDevice()
 	SetDebugName(m_DXGIFactory, "DXGI FACTORY");
 	SetDebugName(m_device, "DEVICE");
 
+#if defined(_DEBUG)
+	ComPtr<ID3D12InfoQueue> d3dInfoQueue;
+	if (SUCCEEDED(m_device.As(&d3dInfoQueue)))
+	{
+
+		D3D12_MESSAGE_ID hide[] =
+		{
+			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+		};
+		D3D12_INFO_QUEUE_FILTER filter = {};
+		filter.DenyList.NumIDs = _countof(hide);
+		filter.DenyList.pIDList = hide;
+		d3dInfoQueue->AddStorageFilterEntries(&filter);
+	}
+#endif
 }
 
 
@@ -228,6 +243,8 @@ void Renderer::EnableDebugLayer()
 
 
 		}
+
+
 	}
 #endif
 }
@@ -283,8 +300,8 @@ void Renderer::CreateSwapChain()
 
 void Renderer::CreateDescriptorHeaps()
 {
-	m_GPUDescriptorHeaps[(unsigned int) DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE, true);
-	m_CPUDescriptorHeaps[(unsigned int) DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE);
+	m_GPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE, true);
+	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SRV_UAV_CBV] = new DescriptorHeap(this, DescriptorHeapType::SRV_UAV_CBV, SRV_UAV_CBV_DEFAULT_SIZE);
 
 	m_GPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SAMPLER] = new DescriptorHeap(this, DescriptorHeapType::SAMPLER, 2, true);
 	m_CPUDescriptorHeaps[(unsigned int)DescriptorHeapType::SAMPLER] = new DescriptorHeap(this, DescriptorHeapType::SAMPLER, 2);
@@ -383,9 +400,70 @@ void Renderer::CreateBackBuffers()
 		backBufferTexInfo.m_handle->m_resource = bufferTex;
 
 		backBuffer = CreateTexture(backBufferTexInfo);
-		m_device->CreateRenderTargetView(backBuffer->GetRawResource(), nullptr, rtvHeap->GetNextCPUHandle());
+		backBuffer->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT);
 		DX_SAFE_RELEASE(bufferTex);
 	}
+}
+
+ResourceView* Renderer::CreateShaderResourceView(ResourceViewInfo const& resourceViewInfo) const
+{
+	DescriptorHeap* srvDescriptorHeap = GetCPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = srvDescriptorHeap->GetNextCPUHandle();
+	m_device->CreateShaderResourceView(resourceViewInfo.m_source->m_resource, resourceViewInfo.m_srvDesc, cpuHandle);
+
+	ResourceView* newResourceView = new ResourceView(resourceViewInfo);
+	newResourceView->m_descriptorHandle = cpuHandle;
+	newResourceView->m_source = resourceViewInfo.m_source;
+
+	return newResourceView;
+}
+
+ResourceView* Renderer::CreateRenderTargetView(ResourceViewInfo const& viewInfo) const
+{
+	D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc = viewInfo.m_rtvDesc;
+
+	DescriptorHeap* rtvDescriptorHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = rtvDescriptorHeap->GetNextCPUHandle();
+
+	m_device->CreateRenderTargetView(viewInfo.m_source->m_resource, rtvDesc, cpuHandle);
+
+	ResourceView* newResourceView = new ResourceView(viewInfo);
+	newResourceView->m_descriptorHandle = cpuHandle;
+
+	return newResourceView;
+}
+
+ResourceView* Renderer::CreateDepthStencilView(ResourceViewInfo const& viewInfo) const
+{
+	D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = viewInfo.m_dsvDesc;
+
+	DescriptorHeap* dsvDescriptorHeap = GetCPUDescriptorHeap(DescriptorHeapType::DSV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = dsvDescriptorHeap->GetNextCPUHandle();
+
+	m_device->CreateDepthStencilView(viewInfo.m_source->m_resource, dsvDesc, cpuHandle);
+
+	ResourceView* newResourceView = new ResourceView(viewInfo);
+	newResourceView->m_descriptorHandle = cpuHandle;
+
+	return newResourceView;
+}
+
+ResourceView* Renderer::CreateConstantBufferView(ResourceViewInfo const& viewInfo) const
+{
+	D3D12_CONSTANT_BUFFER_VIEW_DESC* cbvDesc = viewInfo.m_cbvDesc;
+
+	DescriptorHeap* cbvDescriptorHeap = GetCPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = cbvDescriptorHeap->GetNextCPUHandle();
+
+	m_device->CreateConstantBufferView(cbvDesc, cpuHandle);
+	HRESULT deviceRemoved = m_device->GetDeviceRemovedReason();
+	ThrowIfFailed(deviceRemoved, Stringf("DEVICE REMOVED %#04x", deviceRemoved).c_str());
+
+	ResourceView* newResourceView = new ResourceView(viewInfo);
+	newResourceView->m_descriptorHandle = cpuHandle;
+
+	return newResourceView;
 }
 
 /// <summary>
@@ -472,10 +550,10 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 			UpdateSubresources(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
 			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, m_commandList.Get());
 
-		/*	m_frameUploadHeaps.push_back(textureUploadHeap);
-			if (!m_isCommandListOpen) {
-				m_uploadRequested = true;
-			}*/
+			/*	m_frameUploadHeaps.push_back(textureUploadHeap);
+				if (!m_isCommandListOpen) {
+					m_uploadRequested = true;
+				}*/
 		}
 
 		std::string const errorMsg = Stringf("COULD NOT CREATE TEXTURE WITH NAME %s", creationInfo.m_name.c_str());
@@ -526,43 +604,6 @@ void Renderer::Startup()
 	secRtvDesc.m_owner = this;
 	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
-
-	// Create frame resources.
-	{
-		//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart());
-
-		D3D12_RESOURCE_DESC textureDesc = {};
-		textureDesc.MipLevels = 1;
-		textureDesc.Format = DXGI_FORMAT_R32_FLOAT;
-		textureDesc.Width = 2560;
-		textureDesc.Height = 1280;
-		textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-		textureDesc.DepthOrArraySize = 1;
-		textureDesc.SampleDesc.Count = 1;
-		textureDesc.SampleDesc.Quality = 0;
-		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		D3D12_CLEAR_VALUE clearVal = {};
-		clearVal.Color[0] = 0.0f;
-		clearVal.Color[1] = 0.0f;
-		clearVal.Color[2] = 0.0f;
-		clearVal.Color[3] = 0.0f;
-		clearVal.Format = DXGI_FORMAT_R32_FLOAT;
-
-		CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-		// Create a RTV for each frame.
-		for (UINT n = 0; n < 2; n++)
-		{
-			secRtvDesc.m_handle = nullptr;
-			m_floatRenderTargets[n] = CreateTexture(secRtvDesc);
-
-
-			m_device->CreateRenderTargetView(m_floatRenderTargets[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());
-			//rtvHandle.Offset(1, m_rtvDescriptorSize);
-
-		}
-
-
-	}
 
 	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)), "FAILED TO CREATE COMMAND ALLOCATOR");
 
@@ -671,6 +712,17 @@ void Renderer::Startup()
 		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
 		m_vertexBufferView.StrideInBytes = sizeof(VertexTest);
 		m_vertexBufferView.SizeInBytes = vertexBufferSize;
+	}
+
+	for (UINT n = 0; n < 2; n++)
+	{
+		secRtvDesc.m_handle = nullptr;
+		m_floatRenderTargets[n] = CreateTexture(secRtvDesc);
+		m_floatRenderTargets[n]->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+
+		/*m_device->CreateRenderTargetView(m_floatRenderTargets[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());*/
+		//rtvHandle.Offset(1, m_rtvDescriptorSize);
+
 	}
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -789,21 +841,6 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	ComPtr<IDxcBlobUtf16> pShaderName = nullptr;
 	pResults->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&pShader), &pShaderName);
 
-	/*IDxcCompiler2::CompileWithDebug()
-		HRESULT shaderCompileResult = D3DCompile(source, strlen(source), sourceName, macros, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, target, compilerFlags, 0, &shaderBlob, &shaderErrorBlob);
-
-	if (!SUCCEEDED(shaderCompileResult)) {
-
-		std::string errorString = std::string((char*)shaderErrorBlob->GetBufferPointer());
-		DX_SAFE_RELEASE(shaderErrorBlob);
-		DX_SAFE_RELEASE(shaderBlob);
-
-		DebuggerPrintf(Stringf("%s NOT COMPILING: %s", sourceName, errorString.c_str()).c_str());
-		ERROR_AND_DIE("FAILED TO COMPILE SHADER TO BYTECODE");
-
-	}*/
-
-
 	outByteCode.resize(pShader->GetBufferSize());
 	memcpy(outByteCode.data(), pShader->GetBufferPointer(), pShader->GetBufferSize());
 
@@ -838,18 +875,13 @@ void Renderer::BeginFrame()
 	Resource* backBuffer = currentBackBuffer->GetResource();
 	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
 
-	//auto rtBarrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	//// Indicate that the back buffer will be used as a render target.
-	//m_commandList->ResourceBarrier(1, &rtBarrier);
 
-	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer);
-	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = rtvHeap->GetHandleAtOffset(m_currentBackBuffer + 2);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {rtvHandle, secrtvHandle};
-	//CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2, m_rtvDescriptorSize);
-	//CD3DX12_CPU_DESCRIPTOR_HANDLE secrtvHandle(m_rtvHeap->GetCPUHandleForHeapStart(), m_frameIndex * 2 + 1, m_rtvDescriptorSize);
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_backBuffers[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_floatRenderTargets[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvHandle, secrtvHandle };
 	m_commandList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
 
 	// Record commands.
@@ -862,11 +894,6 @@ void Renderer::BeginFrame()
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
 	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
-
-	//auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_currentBackBuffer].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
-	// Indicate that the back buffer will now be used to present.
-	//m_commandList->ResourceBarrier(1, &barrier);
 
 	ThrowIfFailed(m_commandList->Close(), "FAILED TO CLOSE COMMAND LIST");
 }
@@ -887,19 +914,19 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
-	for(unsigned int textureInd = 0; textureInd < m_createdTextures.size(); textureInd++){
+	for (unsigned int textureInd = 0; textureInd < m_createdTextures.size(); textureInd++) {
 		Texture* tex = m_createdTextures[textureInd];
 		DestroyTexture(tex);
 	}
 
 	for (unsigned int heapIndex = 0; heapIndex < (unsigned int)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS; heapIndex++) {
 		DescriptorHeap*& cpuHeap = m_CPUDescriptorHeaps[heapIndex];
-		if(cpuHeap){
+		if (cpuHeap) {
 			delete cpuHeap;
 			cpuHeap = nullptr;
 		}
-		
-		if(heapIndex >= (unsigned int) DescriptorHeapType::MAX_GPU_VISIBLE) continue;
+
+		if (heapIndex >= (unsigned int)DescriptorHeapType::MAX_GPU_VISIBLE) continue;
 
 		DescriptorHeap*& gpuHeap = m_GPUDescriptorHeaps[heapIndex];
 
@@ -909,7 +936,7 @@ void Renderer::Shutdown()
 		}
 	}
 
-	if(m_fence){
+	if (m_fence) {
 		delete m_fence;
 		m_fence = nullptr;
 	}
@@ -927,7 +954,7 @@ void Renderer::Shutdown()
 
 	// App resources.
 	m_vertexBuffer.Reset();
-	
+
 
 }
 
@@ -1027,29 +1054,36 @@ void Renderer::WaitForGPU()
 
 }
 
-DescriptorHeap* Renderer::GetDescriptorHeap(DescriptorHeapType descriptorHeapType) const
-{
-	return nullptr;
-}
-
 DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
-{
-	return nullptr;
-
-}
-
-DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType)
 {
 	return m_GPUDescriptorHeaps[(unsigned int)descriptorHeapType];
 }
 
-DescriptorHeap* Renderer::GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType)
+DescriptorHeap* Renderer::GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
 {
 	return m_CPUDescriptorHeaps[(unsigned int)descriptorHeapType];
 }
 
-ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewInfo, DescriptorHeap* descriptorHeap /*= nullptr*/) const
+ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewInfo) const
 {
+	switch (resourceViewInfo.m_viewType)
+	{
+	default:
+		ERROR_AND_DIE("UNRECOGNIZED VIEW TYPE");
+		break;
+	case RESOURCE_BIND_SHADER_RESOURCE_BIT:
+		return CreateShaderResourceView(resourceViewInfo);
+	case RESOURCE_BIND_RENDER_TARGET_BIT:
+		return CreateRenderTargetView(resourceViewInfo);
+	case RESOURCE_BIND_DEPTH_STENCIL_BIT:
+		return CreateDepthStencilView(resourceViewInfo);
+	case RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT:
+		return CreateConstantBufferView(resourceViewInfo);
+	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
+		// TODO
+		break;
+	}
+
 	return nullptr;
 }
 
