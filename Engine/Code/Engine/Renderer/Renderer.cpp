@@ -547,7 +547,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 			imageData.pData = creationInfo.m_initialData;
 			imageData.RowPitch = creationInfo.m_stride * creationInfo.m_dimensions.x;
 			imageData.SlicePitch = creationInfo.m_stride * creationInfo.m_dimensions.y * creationInfo.m_dimensions.x;
-			UpdateSubresources(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
+			//UpdateResource(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
 			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, m_commandList.Get());
 
 			/*	m_frameUploadHeaps.push_back(textureUploadHeap);
@@ -1265,6 +1265,29 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 void Renderer::SetSamplerMode(SamplerMode samplerMode)
 {
 
+}
+
+void Renderer::UpdateResource(Resource* dest, void const* data, unsigned int dataSize)
+{
+	ID3D12Resource2* rsc = dest->m_resource;
+	ComPtr<ID3D12Resource2> intermediateBuffer;
+
+	D3D12_SUBRESOURCE_DATA rscData = {};
+	rscData.pData = data;
+	rscData.RowPitch = dataSize;
+
+	UINT64 uploadBufferSize = GetRequiredIntermediateSize(rsc, 0, 1);
+	CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC  bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+	ThrowIfFailed(m_device->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&bufferDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&intermediateBuffer)), "FAILED TO CREATE INTERMEDIATE BUFFER");
+
+	//UpdateSubresources(m_ResourcesCommandList, dest->m_resource, intermediateBuffer, 0, 0, 1, )
 }
 
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)

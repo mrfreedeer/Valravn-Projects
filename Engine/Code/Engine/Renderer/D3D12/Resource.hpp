@@ -34,6 +34,9 @@ public:
 	void MarkForVertexAndCBufferBind();
 	bool IsBound() const { return m_stateFlags != 0; }
 	void ClearBinds() { m_stateFlags = 0;}
+	void Map(void*& dataMap);
+	void Unmap();
+
 	static D3D12_RESOURCE_STATES GetResourceState(ResourceBindState bindState);
 private:
 	Resource();

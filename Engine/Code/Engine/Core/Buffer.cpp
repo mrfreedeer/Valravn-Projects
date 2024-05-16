@@ -11,7 +11,6 @@ Buffer::Buffer(BufferDesc const& bufferDesc) :
 	m_size(bufferDesc.size),
 	m_stride(bufferDesc.stride),
 	m_memoryUsage(bufferDesc.memoryUsage),
-	m_descriptorHeap(bufferDesc.descriptorHeap),
 	m_data(bufferDesc.data),
 	m_name(bufferDesc.debugName)
 {
@@ -21,33 +20,24 @@ Buffer::Buffer(BufferDesc const& bufferDesc) :
 
 Buffer::~Buffer()
 {
-	if (m_uploadResource && m_dataMap) {
-		m_uploadResource->m_resource->Unmap(0, nullptr);
-		m_dataMap =	nullptr;
+	if (m_buffer) {
+		delete m_buffer;
+		m_buffer = nullptr;
 	}
 
-	m_owner->RemoveResource(m_buffer);
-	m_owner->RemoveResource(m_uploadResource);
-
-	delete m_buffer;
-	m_buffer = nullptr;
-
-	delete m_uploadResource;
-	m_uploadResource = nullptr;
 }
 
 void Buffer::Initialize()
 {
 	m_buffer = new Resource();
-	m_uploadResource = new Resource();
 
-	m_owner->TrackResource(m_buffer);
-	m_owner->TrackResource(m_uploadResource);
 	switch (m_memoryUsage)
 	{
 	case MemoryUsage::Default:
-	case MemoryUsage::Dynamic:
-		CreateDynamicBuffer(m_data);
+		CreateDefaultBuffer(m_data);
+		break;
+	case MemoryUsage::Upload:
+		CreateBuffer(m_buffer, true);
 		break;
 	default:
 		break;
@@ -60,7 +50,7 @@ bool Buffer::GuaranteeBufferSize(size_t newsize)
 
 	DX_SAFE_RELEASE(m_buffer->m_resource);
 	m_size = newsize;
-	CreateDynamicBuffer(nullptr);
+	CreateDefaultBuffer(nullptr);
 
 	return true;
 }
@@ -104,30 +94,15 @@ ResourceView* Buffer::GetOrCreateView(ResourceBindFlagBit viewType)
 
 void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 {
-	//GuaranteeBufferSize(sizeInBytes);
-	//ComPtr<ID3D12Device2>& device = m_owner->m_device;
 
-	//m_buffer->TransitionTo(D3D12_RESOURCE_STATE_GENERIC_READ, m_ow);
-	//ID3D12Resource2*& resource = m_uploadResource->m_resource;
-	//ID3D12GraphicsCommandList6* rscCommandList = m_owner->m_ResourcesCommandList.Get();
-	memcpy(m_dataMap, data, sizeInBytes);
-	m_owner->AddToUpdateQueue(this);
-	m_markedForUpdate = true;
-	//m_buffer->MarkForBinding(ResourceBindState::ALL_SHADER);
 }
 
-void Buffer::CreateDynamicBuffer(void const* data)
+void Buffer::CreateDefaultBuffer(void const* data)
 {
-	DX_SAFE_RELEASE(m_buffer->m_resource);
-	DX_SAFE_RELEASE(m_uploadResource->m_resource);
+	if(m_buffer) delete m_buffer;
 	CreateBuffer(m_buffer);
-	CreateBuffer(m_uploadResource, true);
 
-	//CD3DX12_RANGE readRange(0, sizeInBytes);        // We do not intend to read from this resource on the CPU.
-	ThrowIfFailed(m_uploadResource->m_resource->Map(0, nullptr, reinterpret_cast<void**>(&m_dataMap)), "COULD NOT MAP BUFFER");
-	if (data) {
-		CopyCPUToGPU(data, m_size);
-	}
+	//m_owner->UpdateResource(m_buffer, intermediateBuffer, data);
 
 }
 
@@ -152,36 +127,36 @@ void Buffer::CreateBuffer(Resource*& buffer, bool isUpload)
 	m_owner->SetDebugName(resource, fullDebugName.c_str());
 }
 
-
-void Buffer::CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data)
-{
-	UNUSED(uploadBuffer);
-	UNUSED(data);
-	//ComPtr<ID3D12Device2>& device = m_owner->m_device;
-
-	//CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	//CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m_size);
-	//ThrowIfFailed(device->CreateCommittedResource(
-	//	&heapProperties,
-	//	D3D12_HEAP_FLAG_NONE,
-	//	&resourceDesc,
-	//	D3D12_RESOURCE_STATE_GENERIC_READ,
-	//	nullptr,
-	//	IID_PPV_ARGS(&uploadBuffer)), "COULD NOT CREATE COMMITED VERTEX BUFFER RESOURCE");
-
-	//if (data) {
-	//	// Copy the data
-	//	UINT8* pVertexDataBegin;
-	//	//CD3DX12_RANGE readRange(0, m_size);        // We do not intend to read from this resource on the CPU.
-	//	ThrowIfFailed(uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVertexDataBegin)), "COULD NOT MAP VERTEX BUFFER");
-	//	memcpy(pVertexDataBegin, data, m_size);
-	//	uploadBuffer->Unmap(0, nullptr);
-
-	//	m_owner->WaitForGPU();
-	//}
-
-	//m_buffer->m_currentState = (int)D3D12_RESOURCE_STATE_GENERIC_READ;
-}
+//
+//void Buffer::CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data)
+//{
+//	UNUSED(uploadBuffer);
+//	UNUSED(data);
+//	//ComPtr<ID3D12Device2>& device = m_owner->m_device;
+//
+//	//CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+//	//CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m_size);
+//	//ThrowIfFailed(device->CreateCommittedResource(
+//	//	&heapProperties,
+//	//	D3D12_HEAP_FLAG_NONE,
+//	//	&resourceDesc,
+//	//	D3D12_RESOURCE_STATE_GENERIC_READ,
+//	//	nullptr,
+//	//	IID_PPV_ARGS(&uploadBuffer)), "COULD NOT CREATE COMMITED VERTEX BUFFER RESOURCE");
+//
+//	//if (data) {
+//	//	// Copy the data
+//	//	UINT8* pVertexDataBegin;
+//	//	//CD3DX12_RANGE readRange(0, m_size);        // We do not intend to read from this resource on the CPU.
+//	//	ThrowIfFailed(uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVertexDataBegin)), "COULD NOT MAP VERTEX BUFFER");
+//	//	memcpy(pVertexDataBegin, data, m_size);
+//	//	uploadBuffer->Unmap(0, nullptr);
+//
+//	//	m_owner->WaitForGPU();
+//	//}
+//
+//	//m_buffer->m_currentState = (int)D3D12_RESOURCE_STATE_GENERIC_READ;
+//}
 
 ResourceView* Buffer::CreateShaderResourceView()
 {

@@ -58,6 +58,16 @@ void Resource::MarkForVertexAndCBufferBind()
 
 }
 
+void Resource::Map(void*& dataMap)
+{
+	ThrowIfFailed( m_resource->Map(0, nullptr, &dataMap), "FAILED TO MAP RESOURCE");
+}
+
+void Resource::Unmap()
+{
+	m_resource->Unmap(0, nullptr);
+}
+
 D3D12_RESOURCE_STATES Resource::GetResourceState(ResourceBindState bindState)
 {
 	switch (bindState) {

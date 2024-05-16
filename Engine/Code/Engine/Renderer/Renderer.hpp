@@ -197,6 +197,7 @@ public:
 	void SetDebugName(ComPtr<T_Object> object, char const* name);
 	void SetSamplerMode(SamplerMode samplerMode);
 
+	void UpdateResource(Resource* dest, void const* data, unsigned int dataSize);
 	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;

@@ -1184,13 +1184,4 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />
     <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets')" />
   </ImportGroup>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets'))" />
-  </Target>
 </Project>
