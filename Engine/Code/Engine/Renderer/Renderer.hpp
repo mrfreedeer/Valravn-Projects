@@ -18,7 +18,6 @@
 #include <dxcapi.h>
 #include <d3d12shader.h>
 //#include <d3dcompiler.h>
-#include <wrl.h>
 
 
 #pragma comment (lib, "Engine/Renderer/D3D12/dxcompiler.lib")
@@ -27,8 +26,6 @@
 //#pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "dxguid.lib")
 
-template <typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 struct ID3D12Device13;
 
@@ -197,7 +194,6 @@ public:
 	void SetDebugName(ComPtr<T_Object> object, char const* name);
 	void SetSamplerMode(SamplerMode samplerMode);
 
-	void UpdateResource(Resource* dest, void const* data, unsigned int dataSize);
 	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;
@@ -267,11 +263,9 @@ private:
 	ComPtr<ID3D12RootSignature> m_rootSignature;
 	ComPtr<ID3D12PipelineState> m_pipelineState;
 
+	VertexBuffer* m_vBuffer = nullptr;
 	// App resources.
-	ComPtr<ID3D12Resource> m_vertexBuffer;
 	Fence* m_fence = nullptr;
-
-	D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
 
 	D3D12_VIEWPORT m_viewport;
 	D3D12_RECT m_scissorRect;

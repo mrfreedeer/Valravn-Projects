@@ -448,7 +448,6 @@ Mesh::Mesh(MeshBuilder const& meshBuilder, Renderer* renderer)
 
 	BufferDesc newVBufferDesc = {};
 	newVBufferDesc.data = vertexes.data();
-	newVBufferDesc.descriptorHeap = nullptr;
 	newVBufferDesc.memoryUsage = memoryUsage;
 	newVBufferDesc.owner = renderer;
 	newVBufferDesc.size = meshBuilder.m_vertexes.size() * m_stride;

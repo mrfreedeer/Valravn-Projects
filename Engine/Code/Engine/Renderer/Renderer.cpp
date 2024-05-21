@@ -21,18 +21,17 @@
 #include "Engine/Renderer/DebugRendererSystem.hpp"
 #include "Engine/Renderer/ImmediateContext.hpp"
 #include <dxgidebug.h>
+#include <dxcapi.h>
 #include <d3dx12.h> // Notice the X. These are the helper structures not the DX12 header
 #include <regex>
 #include <ThirdParty/ImGUI/imgui.h>
 #include <ThirdParty/ImGUI/imgui_impl_win32.h>
 #include <ThirdParty/ImGUI/imgui_impl_dx12.h>
-#include <d3dcompiler.h>
 #include <DirectXMath.h>
 using namespace DirectX;
 
 #pragma message("ENGINE_DIR == " ENGINE_DIR)
 #pragma comment( lib, "dxgi.lib" )        // directx graphics interface
-#pragma comment( lib, "d3dcompiler.lib" ) // shader compiler
 #pragma comment( lib, "dxguid.lib" )
 
 MaterialSystem* g_theMaterialSystem = nullptr;
@@ -395,7 +394,7 @@ void Renderer::CreateBackBuffers()
 		backBufferTexInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 		backBufferTexInfo.m_name = Stringf("BackBuffer %d", frameBufferInd);
 		backBufferTexInfo.m_owner = this;
-		backBufferTexInfo.m_handle = new Resource();
+		backBufferTexInfo.m_handle = new Resource(m_device.Get());
 		TrackResource(backBufferTexInfo.m_handle);
 		backBufferTexInfo.m_handle->m_resource = bufferTex;
 
@@ -496,7 +495,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 		if (creationInfo.m_initialData) {
 			initialResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 		}
-		handle = new Resource();
+		handle = new Resource(m_device.Get());
 		handle->m_currentState = initialResourceState;
 
 		TrackResource(handle);
@@ -613,13 +612,6 @@ void Renderer::Startup()
 		ComPtr<ID3DBlob> vertexShader;
 		ComPtr<ID3DBlob> pixelShader;
 
-#if defined(_DEBUG)
-		// Enable better shader debugging with the graphics debugging tools.
-		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-		UINT compileFlags = 0;
-#endif
-
 		std::vector<unsigned char> vertexBytecode;
 		std::vector<unsigned char> pixelBytecode;
 
@@ -685,40 +677,22 @@ void Renderer::Startup()
 			{ { -0.25f, -0.25f * 2.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
 		};
 
-		const UINT vertexBufferSize = sizeof(triangleVertices);
+		BufferDesc bufDescTest = {};
+		bufDescTest.data = triangleVertices;
+		bufDescTest.debugName = "First Triangle Data";
+		bufDescTest.memoryUsage = MemoryUsage::Upload;
+		bufDescTest.owner = this;
+		bufDescTest.size = sizeof(triangleVertices);
+		bufDescTest.stride = sizeof(VertexTest);
 
-		// Note: using upload heaps to transfer static data like vert buffers is not 
-		// recommended. Every time the GPU needs it, the upload heap will be marshalled 
-		// over. Please read up on Default Heap usage. An upload heap is used here for 
-		// code simplicity and because there are very few verts to actually transfer.
-		auto uploadHeap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-		auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(vertexBufferSize);
-		ThrowIfFailed(m_device->CreateCommittedResource(
-			&uploadHeap,
-			D3D12_HEAP_FLAG_NONE,
-			&bufferDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			nullptr,
-			IID_PPV_ARGS(&m_vertexBuffer)), "FAILED TO CREATE VERTEX BUFFER");
+		m_vBuffer = new VertexBuffer(bufDescTest);
 
-		// Copy the triangle data to the vertex buffer.
-		UINT8* pVertexDataBegin;
-		CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-		ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)), "FAILED TO MAP VBUFFER");
-		memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
-		m_vertexBuffer->Unmap(0, nullptr);
-
-		// Initialize the vertex buffer view.
-		m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-		m_vertexBufferView.StrideInBytes = sizeof(VertexTest);
-		m_vertexBufferView.SizeInBytes = vertexBufferSize;
 	}
 
 	for (UINT n = 0; n < 2; n++)
 	{
 		secRtvDesc.m_handle = nullptr;
 		m_floatRenderTargets[n] = CreateTexture(secRtvDesc);
-		m_floatRenderTargets[n]->GetResource()->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
 
 		/*m_device->CreateRenderTargetView(m_floatRenderTargets[n]->GetResource()->m_resource, nullptr, rtvHeap->GetNextCPUHandle());*/
 		//rtvHandle.Offset(1, m_rtvDescriptorSize);
@@ -770,7 +744,6 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	};
 	pUtils->BuildArguments(wSrc.c_str(), wEntryPoint.c_str(), wTarget.c_str(), NULL, 0, NULL, 0, &compilerArgs);
 	compilerArgs->AddArguments(additionalArgs, _countof(additionalArgs));
-
 	//LPCWSTR pszArgs[] =
 	//{
 	//	wFilename.c_str(),            // Optional shader source file name for error reporting
@@ -872,11 +845,10 @@ void Renderer::BeginFrame()
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
 	Texture* currentBackBuffer = m_backBuffers[m_currentBackBuffer];
-	Resource* backBuffer = currentBackBuffer->GetResource();
-	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList.Get());
+	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList);
 
-
-
+	Texture* floatRT = m_floatRenderTargets[m_currentBackBuffer];
+	floatRT->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_backBuffers[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_floatRenderTargets[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
@@ -884,16 +856,19 @@ void Renderer::BeginFrame()
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvHandle, secrtvHandle };
 	m_commandList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
 
+	BufferView vBufferView =  m_vBuffer->GetBufferView();
+	D3D12_VERTEX_BUFFER_VIEW dxBufferView = LocalToD3D12(vBufferView);
+	
 	// Record commands.
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	m_commandList->ClearRenderTargetView(secrtvHandle, secClearColor, 0, nullptr);
 	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+	m_commandList->IASetVertexBuffers(0, 1, &dxBufferView);
 	m_commandList->DrawInstanced(3, 1, 0, 0);
 
-	backBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
+	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
 
 	ThrowIfFailed(m_commandList->Close(), "FAILED TO CLOSE COMMAND LIST");
 }
@@ -952,9 +927,10 @@ void Renderer::Shutdown()
 	m_rootSignature.Reset();
 	m_pipelineState.Reset();
 
-	// App resources.
-	m_vertexBuffer.Reset();
+	m_commandList.Reset();
 
+	// App resources.
+	delete m_vBuffer;
 
 }
 
@@ -1265,29 +1241,6 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 void Renderer::SetSamplerMode(SamplerMode samplerMode)
 {
 
-}
-
-void Renderer::UpdateResource(Resource* dest, void const* data, unsigned int dataSize)
-{
-	ID3D12Resource2* rsc = dest->m_resource;
-	ComPtr<ID3D12Resource2> intermediateBuffer;
-
-	D3D12_SUBRESOURCE_DATA rscData = {};
-	rscData.pData = data;
-	rscData.RowPitch = dataSize;
-
-	UINT64 uploadBufferSize = GetRequiredIntermediateSize(rsc, 0, 1);
-	CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	CD3DX12_RESOURCE_DESC  bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
-	ThrowIfFailed(m_device->CreateCommittedResource(
-		&heapProperties,
-		D3D12_HEAP_FLAG_NONE,
-		&bufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&intermediateBuffer)), "FAILED TO CREATE INTERMEDIATE BUFFER");
-
-	//UpdateSubresources(m_ResourcesCommandList, dest->m_resource, intermediateBuffer, 0, 0, 1, )
 }
 
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)

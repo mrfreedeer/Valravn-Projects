@@ -716,9 +716,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli">
-      <Filter>Renderer\Materials\Shaders</Filter>
-    </None>
     <None Include="Renderer\Materials\Shaders\Default.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
@@ -749,12 +746,16 @@
     <None Include="Renderer\Materials\Shaders\SSAO.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
-    <None Include="Renderer\Materials\Shaders\Common\Math.hlsli">
-      <Filter>Renderer\Materials\Shaders\Common</Filter>
-    </None>
     <None Include="Renderer\Materials\Shaders\LinearDepthVisualizer.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
+    <None Include="Renderer\Materials\Shaders\Common\Math.hlsli">
+      <Filter>Renderer\Materials\Shaders\Common</Filter>
+    </None>
+    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli">
+      <Filter>Renderer\Materials\Shaders</Filter>
+    </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Xml Include="Renderer\Materials\Default2DMaterial.xml">

@@ -1,6 +1,7 @@
 #pragma  once
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Math/Mat44.hpp"
+#include <wrl.h>
 
 #undef OPAQUE
 #define DX_SAFE_RELEASE(dxObject)			\
@@ -24,6 +25,8 @@ struct CameraConstants {
 	Mat44 InvertedMatrix;
 };
 
+template <typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 inline void ThrowIfFailed(long hr, char const* errorMsg) {
 	if (hr < 0) {

@@ -21,7 +21,6 @@ struct BufferDesc {
 	size_t stride = 0;
 	MemoryUsage memoryUsage = MemoryUsage::Upload;
 	void const* data = nullptr;
-	DescriptorHeap* descriptorHeap = nullptr;
 };
 
 class Buffer {
@@ -43,21 +42,25 @@ public:
 
 	virtual void CopyCPUToGPU(void const* data, size_t sizeInBytes);
 	size_t GetSize() const { return m_size; }
+	bool IsPendingCopy() const { return m_isPendingCopy;}
+	void ClearPendingCopies();
 protected:
 	virtual void Initialize();
-	virtual void CreateDefaultBuffer(void const* data);
-	virtual void CreateBuffer(Resource*& buffer, bool isUpload = false);
+	virtual void CreateBuffer(Resource* const& buffer, bool isUpload = false);
 	ResourceView* CreateShaderResourceView();
 	ResourceView* CreateConstantBufferView();
 protected:
+	BufferDesc m_bufferDesc = {};
 	Renderer* m_owner = nullptr;
+	ID3D12Device2* m_device = nullptr;
 	size_t m_size = 0;
 	size_t m_stride = 0;
 	MemoryUsage m_memoryUsage = MemoryUsage::Upload;
-	void const* m_data = nullptr;
 	Resource* m_buffer = nullptr;
+	Resource* m_uploadBuffer = nullptr;
 	std::vector<ResourceView*> m_views;
 	std::string m_name = "";
+	bool m_isPendingCopy = false;
 
 };
 

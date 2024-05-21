@@ -1,5 +1,4 @@
 #include "Engine/Renderer/D3D12/Resource.hpp"
-#include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
 #include <d3d12.h>
@@ -14,6 +13,11 @@ void Resource::TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsComman
 	commList->ResourceBarrier(1, &resourceBarrier);
 	m_currentState = (int)newState;
 
+}
+
+void Resource::TransitionTo(D3D12_RESOURCE_STATES newState, ComPtr<ID3D12GraphicsCommandList> commList)
+{
+	TransitionTo(newState, commList.Get());
 }
 
 bool Resource::AddResourceBarrierToList(D3D12_RESOURCE_STATES newState, std::vector< D3D12_RESOURCE_BARRIER>& rscBarriers)
@@ -83,7 +87,8 @@ D3D12_RESOURCE_STATES Resource::GetResourceState(ResourceBindState bindState)
 	
 }
 
-Resource::Resource()
+Resource::Resource(ID3D12Device2* device):
+	m_device(device)
 {
 }
 
