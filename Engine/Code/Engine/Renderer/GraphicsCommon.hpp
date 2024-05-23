@@ -111,6 +111,13 @@ enum class TopologyType {// Transformed directly to DX12 (if standard changes, u
 	NUM_TOPOLOGIES
 };
 
+enum class CommandListType {
+	DEFAULT,
+	RESOURCES,
+	NUM_COMMAND_LIST_TYPES
+};
+
+
 constexpr char const* EnumToString(BlendMode blendMode) {
 	return BlendModeStrings[(int)blendMode];
 }

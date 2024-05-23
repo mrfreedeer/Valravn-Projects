@@ -33,11 +33,5 @@ enum class MemoryUsage {
 	GPU [[deprecated]],		// cpu read/write, gpu read
 };
 
-enum class CommandListType{
-	DefaultCommandList,
-	ResourcesCommandList,
-	NUM_COMMAND_LISTS
-};
-
 
 #pragma warning(disable : 26812)

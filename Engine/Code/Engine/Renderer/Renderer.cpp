@@ -290,7 +290,7 @@ void Renderer::CreateSwapChain()
 		&swapChain
 	), "Failed to create swap chain");
 
-	// This sample does not support fullscreen transitions.
+	// This sample does not support full screen transitions.
 	ThrowIfFailed(m_DXGIFactory->MakeWindowAssociation(windowHandle, DXGI_MWA_NO_ALT_ENTER), "Failed to make window association");
 
 	ThrowIfFailed(swapChain.As(&m_swapChain), "Failed to get Swap Chain");
@@ -472,6 +472,7 @@ ResourceView* Renderer::CreateConstantBufferView(ResourceViewInfo const& viewInf
 /// <returns></returns>
 Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 {
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 	Resource*& handle = creationInfo.m_handle;
 
 	if (handle) {
@@ -547,7 +548,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 			imageData.RowPitch = creationInfo.m_stride * creationInfo.m_dimensions.x;
 			imageData.SlicePitch = creationInfo.m_stride * creationInfo.m_dimensions.y * creationInfo.m_dimensions.x;
 			//UpdateResource(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
-			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, m_commandList.Get());
+			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, cmdList);
 
 			/*	m_frameUploadHeaps.push_back(textureUploadHeap);
 				if (!m_isCommandListOpen) {
@@ -589,22 +590,25 @@ void Renderer::Startup()
 	CreateDescriptorHeaps();
 	CreateFences(); // Has to go after creating command queue
 	CreateDefaultRootSignature();
+
+	size_t totalCmdList = size_t(m_config.m_backBuffersCount * (size_t)CommandListType::NUM_COMMAND_LIST_TYPES);
+	m_commandAllocators.resize(totalCmdList);
+	m_commandLists.resize(totalCmdList);
+
+	for (unsigned int frameIndex = 0; frameIndex < m_config.m_backBuffersCount; frameIndex++) {
+		for (unsigned int cmdListType = 0; cmdListType < (unsigned int) CommandListType::NUM_COMMAND_LIST_TYPES; cmdListType++) {
+			size_t accessIndex = (((size_t)frameIndex * 2) + (size_t)cmdListType);
+			ID3D12CommandAllocator*& cmdAllocator = m_commandAllocators[accessIndex];
+			ID3D12GraphicsCommandList6*& cmdList = m_commandLists[accessIndex];
+
+			ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator)), "FAILED TO CREATE COMMAND ALLOCATOR");
+			ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator, m_pipelineState.Get(), IID_PPV_ARGS(&cmdList)), "FAILED TO CREATE COMMAND LIST");
+
+			cmdList->Close();
+		}
+	}
+
 	CreateBackBuffers();
-
-
-	TextureCreateInfo secRtvDesc = {};
-	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
-	secRtvDesc.m_clearColour = Rgba8::BLACK;
-	secRtvDesc.m_clearFormat = TextureFormat::R32_FLOAT;
-	secRtvDesc.m_dimensions = IntVec2(2560, 1280);
-	secRtvDesc.m_format = TextureFormat::R32_FLOAT;
-	secRtvDesc.m_initialData = nullptr;
-	secRtvDesc.m_name = "FLOAT RT";
-	secRtvDesc.m_owner = this;
-	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
-
-
-	ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)), "FAILED TO CREATE COMMAND ALLOCATOR");
 
 
 	// Create the pipeline state, which includes compiling and loading shaders.
@@ -660,12 +664,7 @@ void Renderer::Startup()
 		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)), "FAILED TO CREATE PSO");
 	}
 
-	// Create the command list.
-	ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)), "FAILED TO CREATE COMMAND LIST");
-
-	// Command lists are created in the recording state, but there is nothing
-	// to record yet. The main loop expects it to be closed, so close it now.
-	ThrowIfFailed(m_commandList->Close(), "FAILED TO CLOSE COMMAND LIST");
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
 	// Create the vertex buffer.
 	{
@@ -689,6 +688,19 @@ void Renderer::Startup()
 
 	}
 
+	Window* window = Window::GetWindowContext();
+	IntVec2 clientDims = window->GetClientDimensions();
+
+	TextureCreateInfo secRtvDesc = {};
+	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
+	secRtvDesc.m_clearColour = Rgba8::BLACK;
+	secRtvDesc.m_clearFormat = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_dimensions = clientDims;
+	secRtvDesc.m_format = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_initialData = nullptr;
+	secRtvDesc.m_name = "FLOAT RT";
+	secRtvDesc.m_owner = this;
+	DescriptorHeap* rtvHeap = GetCPUDescriptorHeap(DescriptorHeapType::RTV);
 	for (UINT n = 0; n < 2; n++)
 	{
 		secRtvDesc.m_handle = nullptr;
@@ -822,6 +834,9 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 
 void Renderer::BeginFrame()
 {
+	ID3D12CommandAllocator* cmdAlloc = GetCommandAllocForCmdList(CommandListType::DEFAULT);
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
 	Vertex_PCU triangleVertices[] =
 	{
 		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.0f, 0.0f)),
@@ -832,29 +847,29 @@ void Renderer::BeginFrame()
 	// Command list allocators can only be reset when the associated 
    // command lists have finished execution on the GPU; apps should use 
    // fences to determine GPU execution progress.
-	ThrowIfFailed(m_commandAllocator->Reset(), "FAILED TO RESET COMMMAND ALLOCATOR");
+	ThrowIfFailed(cmdAlloc->Reset(), "FAILED TO RESET COMMMAND ALLOCATOR");
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()), "FAILED TO RESET COMMAND LIST");
+	ThrowIfFailed(cmdList->Reset(cmdAlloc, m_pipelineState.Get()), "FAILED TO RESET COMMAND LIST");
 
 	// Set necessary state.
-	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-	m_commandList->RSSetViewports(1, &m_viewport);
-	m_commandList->RSSetScissorRects(1, &m_scissorRect);
+	cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
+	cmdList->RSSetViewports(1, &m_viewport);
+	cmdList->RSSetScissorRects(1, &m_scissorRect);
 
 	Texture* currentBackBuffer = m_backBuffers[m_currentBackBuffer];
-	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList);
+	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, cmdList);
 
 	Texture* floatRT = m_floatRenderTargets[m_currentBackBuffer];
-	floatRT->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, m_commandList);
+	floatRT->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, cmdList);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_backBuffers[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_floatRenderTargets[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvHandle, secrtvHandle };
-	m_commandList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
+	cmdList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
 
 	BufferView vBufferView =  m_vBuffer->GetBufferView();
 	D3D12_VERTEX_BUFFER_VIEW dxBufferView = LocalToD3D12(vBufferView);
@@ -862,21 +877,23 @@ void Renderer::BeginFrame()
 	// Record commands.
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-	m_commandList->ClearRenderTargetView(secrtvHandle, secClearColor, 0, nullptr);
-	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_commandList->IASetVertexBuffers(0, 1, &dxBufferView);
-	m_commandList->DrawInstanced(3, 1, 0, 0);
+	cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	cmdList->ClearRenderTargetView(secrtvHandle, secClearColor, 0, nullptr);
+	cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	cmdList->IASetVertexBuffers(0, 1, &dxBufferView);
+	cmdList->DrawInstanced(3, 1, 0, 0);
 
-	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, m_commandList.Get());
+	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, cmdList);
 
-	ThrowIfFailed(m_commandList->Close(), "FAILED TO CLOSE COMMAND LIST");
+	ThrowIfFailed(cmdList->Close(), "FAILED TO CLOSE COMMAND LIST");
 }
 
 void Renderer::EndFrame()
 {
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
 	// Execute the command list.
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+	ID3D12CommandList* ppCommandLists[] = { cmdList };
 	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Present the frame.
@@ -922,12 +939,16 @@ void Renderer::Shutdown()
 	m_commandQueue.Reset();
 	m_swapChain.Reset();
 
-	m_commandAllocator.Reset();
+	for(unsigned int index = 0; index < m_commandAllocators.size(); index++){
+		DX_SAFE_RELEASE(m_commandAllocators[index]);
+		DX_SAFE_RELEASE(m_commandLists[index]);
+	}
+
+	m_commandAllocators.resize(0);
+	m_commandLists.resize(0);
 
 	m_rootSignature.Reset();
 	m_pipelineState.Reset();
-
-	m_commandList.Reset();
 
 	// App resources.
 	delete m_vBuffer;
@@ -1287,8 +1308,14 @@ void Renderer::SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue)
 
 ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
 {
-	return nullptr;
+	size_t accessIndex = ((size_t)m_currentBackBuffer * 2) + size_t(cmdListType);
+	return m_commandAllocators[accessIndex];
+}
 
+ID3D12GraphicsCommandList6* Renderer::GetCurrentCommandList(CommandListType cmdListType)
+{
+	size_t accessIndex = ((size_t)m_currentBackBuffer * 2) + size_t(cmdListType);
+	return m_commandLists[accessIndex];
 }
 
 void Renderer::FlushPendingWork()

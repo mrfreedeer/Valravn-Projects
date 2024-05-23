@@ -203,9 +203,7 @@ public:
 	void RemoveResource(Resource* newResource);
 	void SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue);
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
-	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
-	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
-
+	ID3D12GraphicsCommandList6* GetCurrentCommandList(CommandListType cmdListType);
 
 	void FlushPendingWork();
 	void ResetGPUState();
@@ -253,11 +251,14 @@ private:
 	ComPtr<IDXGIFactory4> m_DXGIFactory;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
-	ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 	
 	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
+	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
+	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
+
+
 	std::vector<Texture*> m_backBuffers;
 	Texture* m_floatRenderTargets[2] = {};
 	ComPtr<ID3D12RootSignature> m_rootSignature;
