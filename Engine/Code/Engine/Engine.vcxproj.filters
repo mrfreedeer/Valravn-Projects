@@ -756,6 +756,9 @@
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
     <None Include="packages.config" />
+    <None Include="Renderer\Materials\Shaders\FirstTriangle.hlsli">
+      <Filter>Renderer\Materials\Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Xml Include="Renderer\Materials\Default2DMaterial.xml">
@@ -793,6 +796,9 @@
     </Xml>
     <Xml Include="Renderer\Materials\LinearDepthVisualizer.xml">
       <Filter>Renderer\Materials</Filter>
+    </Xml>
+    <Xml Include="Renderer\Materials\FirstTriangleMaterial.xml">
+      <Filter>Renderer\Materials\Shaders</Filter>
     </Xml>
   </ItemGroup>
   <ItemGroup>
@@ -842,6 +848,12 @@
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
     <FxCompile Include="Renderer\Materials\Shaders\Stages\LinearDepthVisualizer_v.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_p.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_v.hlsl">
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>

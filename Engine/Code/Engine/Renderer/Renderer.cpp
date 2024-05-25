@@ -35,11 +35,6 @@ using namespace DirectX;
 #pragma comment( lib, "dxguid.lib" )
 
 MaterialSystem* g_theMaterialSystem = nullptr;
-struct VertexTest
-{
-	XMFLOAT3 position;
-	XMFLOAT4 color;
-};
 
 std::wstring GetAssetFullPath(LPCWSTR assetName)
 {
@@ -602,7 +597,7 @@ void Renderer::Startup()
 			ID3D12GraphicsCommandList6*& cmdList = m_commandLists[accessIndex];
 
 			ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator)), "FAILED TO CREATE COMMAND ALLOCATOR");
-			ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator, m_pipelineState.Get(), IID_PPV_ARGS(&cmdList)), "FAILED TO CREATE COMMAND LIST");
+			ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAllocator, nullptr, IID_PPV_ARGS(&cmdList)), "FAILED TO CREATE COMMAND LIST");
 
 			cmdList->Close();
 		}
@@ -610,70 +605,25 @@ void Renderer::Startup()
 
 	CreateBackBuffers();
 
+	MaterialSystemConfig matSystemConfig = {
+	this // Renderer
+	};
+	g_theMaterialSystem = new MaterialSystem(matSystemConfig);
+	g_theMaterialSystem->Startup();
 
-	// Create the pipeline state, which includes compiling and loading shaders.
-	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-
-		std::vector<unsigned char> vertexBytecode;
-		std::vector<unsigned char> pixelBytecode;
-
-		std::string shaderStr = ENGINE_DIR;
-		shaderStr += "Renderer/Materials/Shaders/shaders.hlsl";
-
-		ShaderLoadInfo shaderLoadInfo = {};
-		shaderLoadInfo.m_shaderEntryPoint = "VSMain";
-		shaderLoadInfo.m_shaderSrc = shaderStr;
-		shaderLoadInfo.m_shaderName = "VertexShader";
-		shaderLoadInfo.m_shaderType = ShaderType::Vertex;
-
-		CompileShaderToByteCode(vertexBytecode, shaderLoadInfo);
-
-		shaderLoadInfo.m_shaderEntryPoint = "PSMain";
-		shaderLoadInfo.m_shaderName = "PixelShader";
-		shaderLoadInfo.m_shaderType = ShaderType::Pixel;
-		CompileShaderToByteCode(pixelBytecode, shaderLoadInfo);
-
-		/*	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr), "FAILED TO COMPILE VSHADER");
-			ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"shaders.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr), "FAILED TO COMPILE PSHADER");*/
-
-			// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = m_rootSignature.Get();
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexBytecode.data(), vertexBytecode.size());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelBytecode.data(), pixelBytecode.size());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 2;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.RTVFormats[1] = DXGI_FORMAT_R32_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)), "FAILED TO CREATE PSO");
-	}
-
+	m_default3DMaterial = GetMaterialForName("Default3DMaterial");
+	m_default2DMaterial = GetMaterialForName("Default2DMaterial");
+	
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
 	// Create the vertex buffer.
 	{
 		// Define the geometry for a triangle.
-		VertexTest triangleVertices[] =
+		Vertex_PCU triangleVertices[] =
 		{
-			{ { 0.0f, 0.25f * 2.0f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ { 0.25f, -0.25f * 2.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-			{ { -0.25f, -0.25f * 2.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
+			Vertex_PCU(Vec3(0.0f, 0.25f * 2.0f, 0.0f), Rgba8(255, 0, 0, 255), Vec2::ZERO),
+			Vertex_PCU(Vec3(0.25f, -0.25f * 2.0f, 0.0f ), Rgba8(0, 255, 0, 255 ), Vec2::ZERO),
+			Vertex_PCU(Vec3(-0.25f, -0.25f * 2.0f, 0.0f ), Rgba8(0, 0, 255, 255 ), Vec2::ZERO)
 		};
 
 		BufferDesc bufDescTest = {};
@@ -682,7 +632,7 @@ void Renderer::Startup()
 		bufDescTest.memoryUsage = MemoryUsage::Upload;
 		bufDescTest.owner = this;
 		bufDescTest.size = sizeof(triangleVertices);
-		bufDescTest.stride = sizeof(VertexTest);
+		bufDescTest.stride = sizeof(Vertex_PCU);
 
 		m_vBuffer = new VertexBuffer(bufDescTest);
 
@@ -722,7 +672,35 @@ void Renderer::Startup()
 
 void Renderer::CreatePSOForMaterial(Material* material)
 {
+	MaterialConfig& matConfig = material->m_config;
+	std::string baseName = material->GetName();
+	std::string debugName;
+	std::string shaderSource;
 
+
+	for (ShaderLoadInfo& loadInfo : matConfig.m_shaders) {
+		if (loadInfo.m_shaderSrc.empty()) continue;
+
+		ShaderByteCode* shaderByteCode = CompileOrGetShaderBytes(loadInfo);
+		material->m_byteCodes[loadInfo.m_shaderType] = shaderByteCode;
+	}
+	HRESULT psoCreation = {};
+	std::vector<std::string> nameStrings;
+
+	if (material->IsMeshShader()) {
+	
+	}
+	else {
+		
+		CreateGraphicsPSO(material);
+	}
+
+	ThrowIfFailed(psoCreation, "COULD NOT CREATE PSO");
+
+
+	std::string shaderDebugName = "PSO:";
+	shaderDebugName += baseName;
+	SetDebugName(material->m_PSO, shaderDebugName.c_str());
 }
 
 bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo)
@@ -832,6 +810,234 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 	return true;
 }
 
+void Renderer::CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std::vector<D3D12_SIGNATURE_PARAMETER_DESC>& elementsDescs, std::vector<std::string>& semanticNames)
+{
+	ComPtr<IDxcUtils> pUtils;
+	DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&pUtils));
+
+	ComPtr<IDxcBlobEncoding> sourceBlob{};
+	ComPtr<IDxcBlob> pShader;
+	HRESULT blobCreation = pUtils->CreateBlob(shaderByteCode.data(), (UINT32)shaderByteCode.size(), DXC_CP_ACP, &sourceBlob);
+	ThrowIfFailed(blobCreation, "COULD NOT CREATE BLOB FOR SHADER REFLECTION");
+	ComPtr<IDxcResult> results = {};
+
+	DxcBuffer bufferSource = {};
+	bufferSource.Ptr = sourceBlob->GetBufferPointer();
+	bufferSource.Size = sourceBlob->GetBufferSize();
+	bufferSource.Encoding = DXC_CP_ACP; // Assume BOM says UTF8 or UTF16 or this is ANSI text.
+
+	ComPtr<IDxcResult> pResults;
+	ID3D12ShaderReflection* pShaderReflection = NULL;
+	HRESULT reflectOp = pUtils->CreateReflection(&bufferSource, IID_PPV_ARGS(&pShaderReflection));
+	ThrowIfFailed(reflectOp, "FAILED TO GET REFLECTION OUT OF SHADER");
+	//// Reflect shader info
+	////ID3D12ShaderReflection* pShaderReflection = NULL;
+	////IDxcResult::GetOutput
+	//	HRESULT reflectOp = D3DReflect((void*)shaderByteCode.data(), shaderByteCode.size(), IID_ID3D12ShaderReflection, (void**)&pShaderReflection);
+	//ThrowIfFailed(reflectOp, "FAILED TO GET REFLECTION OUT OF SHADER");
+
+	//// Get shader info
+	D3D12_SHADER_DESC shaderDesc;
+	pShaderReflection->GetDesc(&shaderDesc);
+
+
+	// Read input layout description from shader info
+	for (UINT i = 0; i < shaderDesc.InputParameters; i++)
+	{
+		D3D12_SIGNATURE_PARAMETER_DESC paramDesc;
+		pShaderReflection->GetInputParameterDesc(i, &paramDesc);
+		semanticNames.push_back(std::string(paramDesc.SemanticName));
+		//save element desc
+		//
+		elementsDescs.emplace_back(D3D12_SIGNATURE_PARAMETER_DESC{
+		paramDesc.SemanticName,			// Name of the semantic
+		paramDesc.SemanticIndex,		// Index of the semantic
+		paramDesc.Register,				// Number of member variables
+		paramDesc.SystemValueType,		// A predefined system value, or D3D_NAME_UNDEFINED if not applicable
+		paramDesc.ComponentType,		// Scalar type (e.g. uint, float, etc.)
+		paramDesc.Mask,					// Mask to indicate which components of the register
+										// are used (combination of D3D10_COMPONENT_MASK values)
+		paramDesc.ReadWriteMask,		// Mask to indicate whether a given component is 
+										// never written (if this is an output signature) or
+										// always read (if this is an input signature).
+										// (combination of D3D_MASK_* values)
+		paramDesc.Stream,			// Stream index
+		paramDesc.MinPrecision			// Minimum desired interpolation precision
+			});
+	}
+	DX_SAFE_RELEASE(pShaderReflection);
+}
+
+ShaderByteCode* Renderer::CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo)
+{
+	ShaderByteCode* retByteCode = GetByteCodeForShaderSrc(shaderLoadInfo);
+	//ShaderByteCode* retByteCode = nullptr;
+
+	if (retByteCode) return retByteCode;
+
+	retByteCode = new ShaderByteCode();
+	retByteCode->m_src = shaderLoadInfo.m_shaderSrc;
+	retByteCode->m_shaderType = shaderLoadInfo.m_shaderType;
+	retByteCode->m_shaderName = shaderLoadInfo.m_shaderName;
+
+	//std::string shaderSource;
+	//FileReadToString(shaderSource, shaderLoadInfo.m_shaderSrc);
+	CompileShaderToByteCode(retByteCode->m_byteCode, shaderLoadInfo);
+
+	m_shaderByteCodes.push_back(retByteCode);
+	return retByteCode;
+}
+
+ShaderByteCode* Renderer::GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo)
+{
+	for (ShaderByteCode*& byteCode : m_shaderByteCodes) {
+		if (AreStringsEqualCaseInsensitive(shaderLoadInfo.m_shaderName, byteCode->m_shaderName)) {
+			return byteCode;
+		}
+	}
+
+	return nullptr;
+}
+
+void Renderer::CreateGraphicsPSO(Material* material)
+{
+	std::vector<D3D12_SIGNATURE_PARAMETER_DESC> reflectInputDesc;
+
+	ShaderByteCode* vsByteCode = material->m_byteCodes[ShaderType::Vertex];
+	std::vector<std::string> nameStrings;
+	CreateInputLayoutFromVS(vsByteCode->m_byteCode, reflectInputDesc, nameStrings);
+
+	// Const Char* copying from D3D12_SIGNATURE_PARAMETER_DESC is quite problematic
+	std::vector<D3D12_INPUT_ELEMENT_DESC>& inputLayoutDesc = material->m_inputLayout;
+	inputLayoutDesc.resize(reflectInputDesc.size());
+
+	for (int inputIndex = 0; inputIndex < reflectInputDesc.size(); inputIndex++) {
+		D3D12_INPUT_ELEMENT_DESC& elementDesc = inputLayoutDesc[inputIndex];
+		D3D12_SIGNATURE_PARAMETER_DESC& paramDesc = reflectInputDesc[inputIndex];
+		std::string& currentString = nameStrings[inputIndex];
+
+		paramDesc.SemanticName = currentString.c_str();
+		elementDesc.Format = GetFormatForComponent(paramDesc.ComponentType, currentString.c_str(), paramDesc.Mask);
+		elementDesc.SemanticName = currentString.c_str();
+		elementDesc.SemanticIndex = paramDesc.SemanticIndex;
+		elementDesc.InputSlot = 0;
+		elementDesc.AlignedByteOffset = (inputIndex == 0) ? 0 : D3D12_APPEND_ALIGNED_ELEMENT;
+		elementDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		elementDesc.InstanceDataStepRate = 0;
+	}
+
+	MaterialConfig const& matConfig = material->m_config;
+
+	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
+		LocalToD3D12(matConfig.m_fillMode),			// Fill mode
+		LocalToD3D12(matConfig.m_cullMode),			// Cull mode
+		LocalToD3D12(matConfig.m_windingOrder),		// Winding order
+		D3D12_DEFAULT_DEPTH_BIAS,					// Depth bias
+		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,				// Bias clamp
+		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,		// Slope scaled bias
+		TRUE,										// Depth Clip enable
+		FALSE,										// Multi sample (MSAA)
+		FALSE,										// Anti aliased line enable
+		0,											// Force sample count
+		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF	// Conservative Rasterization
+	);
+
+	D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
+	ShaderByteCode* gsByteCode = material->m_byteCodes[ShaderType::Geometry];
+	ShaderByteCode* hsByteCode = material->m_byteCodes[ShaderType::Hull];
+	ShaderByteCode* dsByteCode = material->m_byteCodes[ShaderType::Domain];
+
+	psoDesc.InputLayout.NumElements = (UINT)reflectInputDesc.size();
+	psoDesc.InputLayout.pInputElementDescs = inputLayoutDesc.data();
+	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
+
+	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsByteCode->m_byteCode.data(), vsByteCode->m_byteCode.size());
+	if (gsByteCode) {
+		psoDesc.GS = CD3DX12_SHADER_BYTECODE(gsByteCode->m_byteCode.data(), gsByteCode->m_byteCode.size());
+	}
+
+	if (hsByteCode) {
+		psoDesc.HS = CD3DX12_SHADER_BYTECODE(hsByteCode->m_byteCode.data(), hsByteCode->m_byteCode.size());
+	}
+
+	if (dsByteCode) {
+		psoDesc.DS = CD3DX12_SHADER_BYTECODE(dsByteCode->m_byteCode.data(), dsByteCode->m_byteCode.size());
+	}
+
+	psoDesc.RasterizerState = rasterizerDesc;
+	psoDesc.BlendState = blendDesc;
+	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
+	psoDesc.DepthStencilState.DepthFunc = LocalToD3D12(matConfig.m_depthFunc);
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = // a stencil operation structure, does not really matter since stencil testing is turned off
+	{ D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
+	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
+	psoDesc.NumRenderTargets = (UINT)matConfig.m_numRenderTargets;
+
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		TextureFormat const& format = matConfig.m_renderTargetFormats[rtIndex];
+		if (format == TextureFormat::INVALID) continue;
+		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
+	}
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
+	psoDesc.SampleDesc.Count = 1;
+
+
+	HRESULT psoCreationResult = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&material->m_PSO));
+	ThrowIfFailed(psoCreationResult, Stringf("FAILED TO CREATE PSO FOR MATERIAL %s", material->GetName().c_str()).c_str());
+}
+
+void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
+{
+	/*
+		WARNING!!!!!
+		IF THE RT IS SINGLE CHANNEL I.E: FLOATR_32,
+		PICKING ALPHA WILL GET THE SRC ALPHA (DOES NOT EXIST)
+		MAKES ALL WRITES TO RENDER TARGET INVALID!!!!
+	
+	*/
+	blendDesc.IndependentBlendEnable = TRUE;
+	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		D3D12_RENDER_TARGET_BLEND_DESC& rtBlendDesc = blendDesc.RenderTarget[rtIndex];
+		rtBlendDesc.BlendEnable = true;
+		rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		rtBlendDesc.BlendOp = D3D12_BLEND_OP_ADD;
+		rtBlendDesc.SrcBlendAlpha = D3D12_BLEND_ONE;
+		rtBlendDesc.DestBlendAlpha = D3D12_BLEND_ONE;
+		rtBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+
+		switch (blendMode) {
+		case BlendMode::ALPHA:
+			rtBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+			rtBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+			break;
+		case BlendMode::ADDITIVE:
+			rtBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+			rtBlendDesc.DestBlend = D3D12_BLEND_ONE;
+			break;
+		case BlendMode::OPAQUE:
+			rtBlendDesc.SrcBlend = D3D12_BLEND_ONE;
+			rtBlendDesc.DestBlend = D3D12_BLEND_ZERO;
+			break;
+		default:
+			ERROR_AND_DIE(Stringf("Unknown / unsupported blend mode #%i", blendMode));
+			break;
+		}
+	}
+}
+
 void Renderer::BeginFrame()
 {
 	ID3D12CommandAllocator* cmdAlloc = GetCommandAllocForCmdList(CommandListType::DEFAULT);
@@ -852,8 +1058,11 @@ void Renderer::BeginFrame()
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	ThrowIfFailed(cmdList->Reset(cmdAlloc, m_pipelineState.Get()), "FAILED TO RESET COMMAND LIST");
+	ThrowIfFailed(cmdList->Reset(cmdAlloc, nullptr), "FAILED TO RESET COMMAND LIST");
 
+	Material* firstTriangleMat = g_theMaterialSystem->GetMaterialForName("FirstTriangle");
+	ID3D12PipelineState* pso = firstTriangleMat->m_PSO;
+	cmdList->SetPipelineState(pso);
 	// Set necessary state.
 	cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
 	cmdList->RSSetViewports(1, &m_viewport);
@@ -876,7 +1085,7 @@ void Renderer::BeginFrame()
 	
 	// Record commands.
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	cmdList->ClearRenderTargetView(secrtvHandle, secClearColor, 0, nullptr);
 	cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -906,6 +1115,7 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
+	g_theMaterialSystem->Shutdown();
 	for (unsigned int textureInd = 0; textureInd < m_createdTextures.size(); textureInd++) {
 		Texture* tex = m_createdTextures[textureInd];
 		DestroyTexture(tex);
@@ -948,7 +1158,6 @@ void Renderer::Shutdown()
 	m_commandLists.resize(0);
 
 	m_rootSignature.Reset();
-	m_pipelineState.Reset();
 
 	// App resources.
 	delete m_vBuffer;
@@ -982,7 +1191,7 @@ void Renderer::ClearDepth(float clearDepth /*= 1.0f*/)
 
 Material* Renderer::CreateOrGetMaterial(std::filesystem::path materialPathNoExt)
 {
-	return nullptr;
+	return g_theMaterialSystem->CreateOrGetMaterial(materialPathNoExt);
 }
 
 Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
@@ -1092,13 +1301,13 @@ BitmapFont* Renderer::CreateOrGetBitmapFont(std::filesystem::path bitmapPath)
 
 Material* Renderer::GetMaterialForName(char const* materialName)
 {
-	return nullptr;
+	return g_theMaterialSystem->GetMaterialForName(materialName);
 
 }
 
 Material* Renderer::GetMaterialForPath(std::filesystem::path const& materialPath)
 {
-	return nullptr;
+	return g_theMaterialSystem->GetMaterialForPath(materialPath);
 
 }
 

@@ -1,0 +1,18 @@
+<Material name="FirstTriangle">
+	<VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="FirstTriangle_v" src="Shaders/Stages/FirstTriangle_v.hlsl" entryPoint="VertexMain"/>
+	<PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="FirstTriangle_p" src="Shaders/Stages/FirstTriangle_p.hlsl" entryPoint="PixelMain"/>
+	<BlendMode value="Opaque"/>
+	<!-- CCW - CounterClockwise
+    CW - ClockWise -->
+	<WindingOrder value="CCW"/>
+	<CullMode value="None"/>
+	<FillMode value="Solid"/>
+	<Topology value="TriangleList"/>
+	<DepthStencil depthFunction="LESSEQUAL" writeDepth="false"/>
+	<Antialiasing value="8"/>
+	<Metadata src="material.mtl"/>
+	<RenderTargets count="2">
+		<!-- Default 0 and RT 1-->
+		<RenderTarget index="1" format="R32_FLOAT"/>
+	</RenderTargets>
+</Material>

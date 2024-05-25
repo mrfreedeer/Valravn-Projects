@@ -236,8 +236,11 @@ private:
 	// Material and Compilation
 	void CreatePSOForMaterial(Material* material);
 	bool CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo);
-
-
+	void CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std::vector<D3D12_SIGNATURE_PARAMETER_DESC>& elementsDescs, std::vector<std::string>& semanticNames);
+	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
+	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
+	void CreateGraphicsPSO(Material* material);
+	void SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc);
 private:
 	RendererConfig m_config = {};
 	// This object must be first ALWAYS!!!!!
@@ -260,10 +263,12 @@ private:
 
 
 	std::vector<Texture*> m_backBuffers;
+	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	Texture* m_floatRenderTargets[2] = {};
 	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12PipelineState> m_pipelineState;
 
+	Material* m_default2DMaterial = nullptr;
+	Material* m_default3DMaterial = nullptr;
 	VertexBuffer* m_vBuffer = nullptr;
 	// App resources.
 	Fence* m_fence = nullptr;
