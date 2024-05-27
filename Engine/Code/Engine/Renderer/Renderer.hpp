@@ -232,6 +232,12 @@ private:
 	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
 	// Textures
 	void DestroyTexture(Texture* textureToDestroy);
+	void CreateDefaultTextureTargets();
+	Texture* CreateTextureFromImage(Image const& image);
+	Texture* GetActiveRenderTarget() const;
+	Texture* GetBackUpRenderTarget() const;
+	Texture* GetActiveBackBuffer() const;
+	Texture* GetBackUpBackBuffer() const;
 
 	// Material and Compilation
 	void CreatePSOForMaterial(Material* material);
@@ -240,41 +246,58 @@ private:
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
 	void CreateGraphicsPSO(Material* material);
-	void SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc);
+	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
+
+	void UploadPendingResources();
 private:
-	RendererConfig m_config = {};
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
-
+	RendererConfig m_config = {};
+	D3D12_VIEWPORT m_viewport = {};
+	D3D12_RECT m_scissorRect = {};
 	Mat44 m_lightRenderTransform;
-	unsigned int m_currentBackBuffer = 0;
 
-	std::vector<Texture*> m_createdTextures;
+	unsigned int m_currentBackBuffer = 0;
+	unsigned int m_currentRenderTarget = 0;
+
+	/*=================== ComPtrs =================== */
 	ComPtr<ID3D12Device2> m_device;
 	ComPtr<IDXGIFactory4> m_DXGIFactory;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
-	
 	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
-	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
-	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
+
+	/*=================== Vectors =================== */
+	std::vector<Texture*> m_createdTextures;
 	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
 	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
 
-
+	std::vector<Texture*> m_defaultRenderTargets;
 	std::vector<Texture*> m_backBuffers;
+	std::vector<Resource*> m_pendingRscBarriers;
+	std::vector<D3D12_RESOURCE_BARRIER> m_pendingCopyRscBarriers;
+	std::vector<Buffer*> m_pendingRscCopy;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
-	Texture* m_floatRenderTargets[2] = {};
-	ComPtr<ID3D12RootSignature> m_rootSignature;
 
+	/*=================== Raw Pointers =================== */ 
+	//	Internal resources
+	Fence* m_fence = nullptr;
+	Fence* m_resourcesFence = nullptr;
+
+	//	Default resources
+	Texture* m_defaultDepthTarget = nullptr;
+	Texture* m_defaultTexture = nullptr;
 	Material* m_default2DMaterial = nullptr;
 	Material* m_default3DMaterial = nullptr;
-	VertexBuffer* m_vBuffer = nullptr;
-	// App resources.
-	Fence* m_fence = nullptr;
 
-	D3D12_VIEWPORT m_viewport;
-	D3D12_RECT m_scissorRect;
+	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
+	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
+	Texture* m_floatRenderTargets[2] = {};
+
+	Camera const* m_currentCamera = nullptr;
+
+	VertexBuffer* m_vBuffer = nullptr;
+
 };
 
 template<typename T_Object>

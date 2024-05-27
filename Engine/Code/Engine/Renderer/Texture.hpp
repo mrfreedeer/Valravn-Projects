@@ -57,5 +57,6 @@ private:
 	std::string m_name = "Unammed Texture";
 	TextureCreateInfo m_creationInfo;
 	Resource* m_handle = nullptr;
+	Resource* m_uploadRsc = nullptr;
 	std::vector<ResourceView*> m_views;
 };

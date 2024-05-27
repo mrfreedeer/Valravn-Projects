@@ -1,7 +1,7 @@
 <Material name="FirstTriangle">
 	<VertexShader  EngineShader="true" headerSrc="Shaders/" shaderName="FirstTriangle_v" src="Shaders/Stages/FirstTriangle_v.hlsl" entryPoint="VertexMain"/>
 	<PixelShader   EngineShader="true" headerSrc="Shaders/" shaderName="FirstTriangle_p" src="Shaders/Stages/FirstTriangle_p.hlsl" entryPoint="PixelMain"/>
-	<BlendMode value="Opaque"/>
+	<BlendMode value="Alpha"/> <!-- Default-->
 	<!-- CCW - CounterClockwise
     CW - ClockWise -->
 	<WindingOrder value="CCW"/>
@@ -13,6 +13,6 @@
 	<Metadata src="material.mtl"/>
 	<RenderTargets count="2">
 		<!-- Default 0 and RT 1-->
-		<RenderTarget index="1" format="R32_FLOAT"/>
+		<RenderTarget index="1" format="R32_FLOAT" blendMode="Opaque"/>
 	</RenderTargets>
 </Material>

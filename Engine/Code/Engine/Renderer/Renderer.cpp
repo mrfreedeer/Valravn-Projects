@@ -209,7 +209,6 @@ void Renderer::CreateDevice()
 	ComPtr<ID3D12InfoQueue> d3dInfoQueue;
 	if (SUCCEEDED(m_device.As(&d3dInfoQueue)))
 	{
-
 		D3D12_MESSAGE_ID hide[] =
 		{
 			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
@@ -234,11 +233,7 @@ void Renderer::EnableDebugLayer()
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
 		{
 			debugController->EnableDebugLayer();
-
-
 		}
-
-
 	}
 #endif
 }
@@ -308,6 +303,7 @@ void Renderer::CreateDescriptorHeaps()
 void Renderer::CreateFences()
 {
 	m_fence = new Fence(m_device.Get(), m_commandQueue.Get());
+	m_resourcesFence = new Fence(m_device.Get(), m_commandQueue.Get());
 }
 
 void Renderer::CreateDefaultRootSignature()
@@ -355,8 +351,8 @@ void Renderer::CreateDefaultRootSignature()
 
 	HRESULT rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&rootSignature, signature.GetAddressOf(), error.GetAddressOf());
 	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
-	ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
-	SetDebugName(m_rootSignature, "DEFAULTROOTSIGNATURE");
+	ThrowIfFailed(m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_defaultRootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
+	SetDebugName(m_defaultRootSignature, "DEFAULTROOTSIGNATURE");
 
 	rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&MSRootSignature, MSsignature.GetAddressOf(), error.GetAddressOf());
 	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
@@ -467,8 +463,9 @@ ResourceView* Renderer::CreateConstantBufferView(ResourceViewInfo const& viewInf
 /// <returns></returns>
 Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 {
-	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::RESOURCES);
 	Resource*& handle = creationInfo.m_handle;
+	ID3D12Resource2* textureUploadHeap = nullptr;
 
 	if (handle) {
 		handle->m_resource->AddRef();
@@ -522,7 +519,6 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 		);
 
 		if (creationInfo.m_initialData) {
-			ID3D12Resource* textureUploadHeap;
 			UINT64  const uploadBufferSize = GetRequiredIntermediateSize(handle->m_resource, 0, 1);
 			CD3DX12_RESOURCE_DESC uploadHeapDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
 			CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
@@ -536,26 +532,25 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 				IID_PPV_ARGS(&textureUploadHeap));
 
 			ThrowIfFailed(createUploadHeap, "FAILED TO CREATE TEXTURE UPLOAD HEAP");
-			SetDebugName(textureUploadHeap, "UplHeap");
+			SetDebugName(textureUploadHeap, "Texture Upload Heap");
 
 			D3D12_SUBRESOURCE_DATA imageData = {};
 			imageData.pData = creationInfo.m_initialData;
 			imageData.RowPitch = creationInfo.m_stride * creationInfo.m_dimensions.x;
 			imageData.SlicePitch = creationInfo.m_stride * creationInfo.m_dimensions.y * creationInfo.m_dimensions.x;
-			//UpdateResource(m_commandList.Get(), handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
-			handle->TransitionTo(D3D12_RESOURCE_STATE_COMMON, cmdList);
 
-			/*	m_frameUploadHeaps.push_back(textureUploadHeap);
-				if (!m_isCommandListOpen) {
-					m_uploadRequested = true;
-				}*/
+			UpdateSubresources(cmdList, handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
+			handle->m_currentState = D3D12_RESOURCE_STATE_COMMON;
 		}
 
 		std::string const errorMsg = Stringf("COULD NOT CREATE TEXTURE WITH NAME %s", creationInfo.m_name.c_str());
 		ThrowIfFailed(textureCreateHR, errorMsg.c_str());
 	}
-	//WaitForGPU();
 	Texture* newTexture = new Texture(creationInfo);
+	if(textureUploadHeap){
+		newTexture->m_uploadRsc = new Resource(m_device.Get());
+		newTexture->m_uploadRsc->m_resource = textureUploadHeap;
+	}
 	newTexture->m_handle = handle;
 	SetDebugName(newTexture->m_handle->m_resource, creationInfo.m_name.c_str());
 
@@ -568,11 +563,88 @@ void Renderer::DestroyTexture(Texture* textureToDestroy)
 {
 	if (textureToDestroy) {
 		Resource* texResource = textureToDestroy->m_handle;
+		Resource* uploadResource = textureToDestroy->m_uploadRsc;
+
 		delete textureToDestroy;
 		if (texResource) {
 			delete texResource;
 		}
+
+		if (uploadResource) {
+			delete uploadResource;
+		}
 	}
+}
+
+/// <summary>
+/// These are the default textures to render to.
+/// They're separate textures than the back buffers,
+/// as post processing effects require processing the 
+/// image first then copying into the back buffers
+/// </summary>
+void Renderer::CreateDefaultTextureTargets()
+{
+	IntVec2 texDimensions = Window::GetWindowContext()->GetClientDimensions();
+	TextureCreateInfo defaultRTInfo = {};
+	defaultRTInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	defaultRTInfo.m_dimensions = texDimensions;
+	defaultRTInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
+	defaultRTInfo.m_owner = this;
+	defaultRTInfo.m_clearColour = Rgba8(0, 0, 0, 255);
+
+	for (unsigned int rtTargetInd = 0; rtTargetInd < m_config.m_backBuffersCount; rtTargetInd++) {
+		defaultRTInfo.m_name = Stringf("DefaultRenderTarget %d", rtTargetInd);
+		defaultRTInfo.m_handle = nullptr;
+		m_defaultRenderTargets.push_back(CreateTexture(defaultRTInfo));
+	}
+
+	TextureCreateInfo defaultDSTInfo = {};
+	defaultDSTInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	defaultDSTInfo.m_dimensions = texDimensions;
+	defaultDSTInfo.m_format = TextureFormat::R24G8_TYPELESS;
+	defaultDSTInfo.m_clearFormat = TextureFormat::D24_UNORM_S8_UINT;
+	defaultDSTInfo.m_name = "DefaultDepthTarget";
+	defaultDSTInfo.m_owner = this;
+	defaultDSTInfo.m_clearColour = Rgba8(255, 255, 255, 255);
+
+	m_defaultDepthTarget = CreateTexture(defaultDSTInfo);
+}
+
+Texture* Renderer::CreateTextureFromImage(Image const& image)
+{
+	TextureCreateInfo ci{};
+	ci.m_owner = this;
+	ci.m_name = image.GetImageFilePath();
+	ci.m_dimensions = image.GetDimensions();
+	ci.m_initialData = image.GetRawData();
+	ci.m_stride = sizeof(Rgba8);
+
+	Texture* newTexture = CreateTexture(ci);
+	SetDebugName(newTexture->GetResource()->m_resource, newTexture->m_name.c_str());
+
+	return newTexture;
+}
+
+Texture* Renderer::GetActiveRenderTarget() const
+{
+	return m_defaultRenderTargets[m_currentRenderTarget];
+}
+
+Texture* Renderer::GetBackUpRenderTarget() const
+{
+	int otherInd = (m_currentRenderTarget + 1) % 2;
+	return m_defaultRenderTargets[otherInd];
+}
+
+Texture* Renderer::GetActiveBackBuffer() const
+{
+	return m_backBuffers[m_currentBackBuffer];
+}
+
+Texture* Renderer::GetBackUpBackBuffer() const
+{
+	int otherInd = (m_currentRenderTarget + 1) % 2;
+	return m_backBuffers[otherInd];
 }
 
 void Renderer::Startup()
@@ -591,7 +663,7 @@ void Renderer::Startup()
 	m_commandLists.resize(totalCmdList);
 
 	for (unsigned int frameIndex = 0; frameIndex < m_config.m_backBuffersCount; frameIndex++) {
-		for (unsigned int cmdListType = 0; cmdListType < (unsigned int) CommandListType::NUM_COMMAND_LIST_TYPES; cmdListType++) {
+		for (unsigned int cmdListType = 0; cmdListType < (unsigned int)CommandListType::NUM_COMMAND_LIST_TYPES; cmdListType++) {
 			size_t accessIndex = (((size_t)frameIndex * 2) + (size_t)cmdListType);
 			ID3D12CommandAllocator*& cmdAllocator = m_commandAllocators[accessIndex];
 			ID3D12GraphicsCommandList6*& cmdList = m_commandLists[accessIndex];
@@ -604,6 +676,13 @@ void Renderer::Startup()
 	}
 
 	CreateBackBuffers();
+	CreateDefaultTextureTargets();
+
+	m_defaultTexture = new Texture();
+	Image whiteTexelImg(IntVec2(1, 1), Rgba8::WHITE);
+	whiteTexelImg.m_imageFilePath = "DefaultTexture";
+	m_defaultTexture = CreateTextureFromImage(whiteTexelImg);
+
 
 	MaterialSystemConfig matSystemConfig = {
 	this // Renderer
@@ -613,7 +692,7 @@ void Renderer::Startup()
 
 	m_default3DMaterial = GetMaterialForName("Default3DMaterial");
 	m_default2DMaterial = GetMaterialForName("Default2DMaterial");
-	
+
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
 	// Create the vertex buffer.
@@ -622,8 +701,8 @@ void Renderer::Startup()
 		Vertex_PCU triangleVertices[] =
 		{
 			Vertex_PCU(Vec3(0.0f, 0.25f * 2.0f, 0.0f), Rgba8(255, 0, 0, 255), Vec2::ZERO),
-			Vertex_PCU(Vec3(0.25f, -0.25f * 2.0f, 0.0f ), Rgba8(0, 255, 0, 255 ), Vec2::ZERO),
-			Vertex_PCU(Vec3(-0.25f, -0.25f * 2.0f, 0.0f ), Rgba8(0, 0, 255, 255 ), Vec2::ZERO)
+			Vertex_PCU(Vec3(0.25f, -0.25f * 2.0f, 0.0f), Rgba8(0, 255, 0, 255), Vec2::ZERO),
+			Vertex_PCU(Vec3(-0.25f, -0.25f * 2.0f, 0.0f), Rgba8(0, 0, 255, 255), Vec2::ZERO)
 		};
 
 		BufferDesc bufDescTest = {};
@@ -688,10 +767,10 @@ void Renderer::CreatePSOForMaterial(Material* material)
 	std::vector<std::string> nameStrings;
 
 	if (material->IsMeshShader()) {
-	
+
 	}
 	else {
-		
+
 		CreateGraphicsPSO(material);
 	}
 
@@ -953,7 +1032,7 @@ void Renderer::CreateGraphicsPSO(Material* material)
 
 	psoDesc.InputLayout.NumElements = (UINT)reflectInputDesc.size();
 	psoDesc.InputLayout.pInputElementDescs = inputLayoutDesc.data();
-	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.pRootSignature = m_defaultRootSignature.Get();
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 
 	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsByteCode->m_byteCode.data(), vsByteCode->m_byteCode.size());
@@ -999,17 +1078,18 @@ void Renderer::CreateGraphicsPSO(Material* material)
 	ThrowIfFailed(psoCreationResult, Stringf("FAILED TO CREATE PSO FOR MATERIAL %s", material->GetName().c_str()).c_str());
 }
 
-void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc)
+void Renderer::SetBlendModeSpecs(BlendMode const* blendModes, D3D12_BLEND_DESC& blendDesc)
 {
 	/*
 		WARNING!!!!!
 		IF THE RT IS SINGLE CHANNEL I.E: FLOATR_32,
 		PICKING ALPHA WILL GET THE SRC ALPHA (DOES NOT EXIST)
 		MAKES ALL WRITES TO RENDER TARGET INVALID!!!!
-	
+
 	*/
 	blendDesc.IndependentBlendEnable = TRUE;
 	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		BlendMode currentRtBlendMode = blendModes[rtIndex];
 		D3D12_RENDER_TARGET_BLEND_DESC& rtBlendDesc = blendDesc.RenderTarget[rtIndex];
 		rtBlendDesc.BlendEnable = true;
 		rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -1018,7 +1098,7 @@ void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDes
 		rtBlendDesc.DestBlendAlpha = D3D12_BLEND_ONE;
 		rtBlendDesc.BlendOpAlpha = D3D12_BLEND_OP_ADD;
 
-		switch (blendMode) {
+		switch (currentRtBlendMode) {
 		case BlendMode::ALPHA:
 			rtBlendDesc.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 			rtBlendDesc.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -1032,10 +1112,32 @@ void Renderer::SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDes
 			rtBlendDesc.DestBlend = D3D12_BLEND_ZERO;
 			break;
 		default:
-			ERROR_AND_DIE(Stringf("Unknown / unsupported blend mode #%i", blendMode));
+			ERROR_AND_DIE(Stringf("Unknown / unsupported blend mode #%i", currentRtBlendMode));
 			break;
 		}
 	}
+}
+
+void Renderer::UploadPendingResources()
+{
+	if(m_pendingCopyRscBarriers.size() <= 0) return;
+	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+	currentCmdList->ResourceBarrier(m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
+
+	for (Buffer* buffer : m_pendingRscCopy) {
+		Resource* uploadRsc = buffer->m_uploadBuffer;
+		Resource* defaultRsc = buffer->m_buffer;
+
+		currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
+	}
+
+	ID3D12CommandList* cmdLists[] = { currentCmdList };
+	m_commandQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+	
+	// Wait until resources are uploaded
+	m_resourcesFence->Signal();
+	m_resourcesFence->Wait();
+
 }
 
 void Renderer::BeginFrame()
@@ -1064,7 +1166,7 @@ void Renderer::BeginFrame()
 	ID3D12PipelineState* pso = firstTriangleMat->m_PSO;
 	cmdList->SetPipelineState(pso);
 	// Set necessary state.
-	cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
+	cmdList->SetGraphicsRootSignature(m_defaultRootSignature.Get());
 	cmdList->RSSetViewports(1, &m_viewport);
 	cmdList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -1080,9 +1182,9 @@ void Renderer::BeginFrame()
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvHandle, secrtvHandle };
 	cmdList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
 
-	BufferView vBufferView =  m_vBuffer->GetBufferView();
+	BufferView vBufferView = m_vBuffer->GetBufferView();
 	D3D12_VERTEX_BUFFER_VIEW dxBufferView = LocalToD3D12(vBufferView);
-	
+
 	// Record commands.
 	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -1143,13 +1245,18 @@ void Renderer::Shutdown()
 		m_fence = nullptr;
 	}
 
+	if (m_resourcesFence) {
+		delete m_resourcesFence;
+		m_resourcesFence = nullptr;
+	}
+
 
 	m_device.Reset();
 	m_DXGIFactory.Reset();
 	m_commandQueue.Reset();
 	m_swapChain.Reset();
 
-	for(unsigned int index = 0; index < m_commandAllocators.size(); index++){
+	for (unsigned int index = 0; index < m_commandAllocators.size(); index++) {
 		DX_SAFE_RELEASE(m_commandAllocators[index]);
 		DX_SAFE_RELEASE(m_commandLists[index]);
 	}
@@ -1157,21 +1264,25 @@ void Renderer::Shutdown()
 	m_commandAllocators.resize(0);
 	m_commandLists.resize(0);
 
-	m_rootSignature.Reset();
+	m_defaultRootSignature.Reset();
 
 	// App resources.
 	delete m_vBuffer;
-
+	m_defaultTexture = nullptr;
+	m_defaultDepthTarget = nullptr;
 }
 
 void Renderer::BeginCamera(Camera const& camera)
 {
-
+	m_currentCamera = &camera;
 }
 
 void Renderer::EndCamera(Camera const& camera)
 {
-
+	if (m_currentCamera != &camera) {
+		ERROR_AND_DIE("ENDING WITH A DIFFERENT CAMERA");
+	}
+	UploadPendingResources();
 }
 
 void Renderer::ClearScreen(Rgba8 const& color)
@@ -1475,13 +1586,19 @@ void Renderer::SetSamplerMode(SamplerMode samplerMode)
 
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
 {
+	// Add to state tracking vector
+	m_pendingRscCopy.push_back(bufferToUpdate);
 
+	// Clumping all copy rsc barriers for execution all at once
+	bufferToUpdate->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, m_pendingCopyRscBarriers);
+	bufferToUpdate->m_uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, m_pendingCopyRscBarriers);
 }
 
 Texture* Renderer::GetCurrentRenderTarget() const
 {
-	return nullptr;
-
+	if (!m_currentCamera) return GetActiveRenderTarget();
+	Texture* cameraColorTarget = m_currentCamera->GetRenderTarget();
+	return  (cameraColorTarget) ? cameraColorTarget : GetActiveRenderTarget();
 }
 
 Texture* Renderer::GetCurrentDepthTarget() const

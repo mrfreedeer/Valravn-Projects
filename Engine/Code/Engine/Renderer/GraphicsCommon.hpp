@@ -146,6 +146,7 @@ constexpr char const* EnumToString(TopologyType topologyType) {
 	return TopologyTypeStrings[(int)topologyType];
 }
 
+
 /*
 * Since SRV UAV AND CBV share heap, the start and end of each needs to be managed
 */
@@ -164,7 +165,8 @@ constexpr unsigned int UAV_HANDLE_START = SRV_HANDLE_END + 1;
 constexpr unsigned int UAV_HANDLE_END = SRV_UAV_CBV_DEFAULT_SIZE - 1;
 constexpr unsigned int UAV_DESCRIPTORS_AMOUNT = UAV_HANDLE_END - UAV_HANDLE_START + 1;
 
-TextureFormat ParseFromString(std::string const& text);
+TextureFormat ParseFromString(std::string const& text, TextureFormat defaultFormat);
+BlendMode ParseFromString(std::string const& strBlendMode, BlendMode defaultBlendMode);
 
 
 

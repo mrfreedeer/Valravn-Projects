@@ -119,7 +119,9 @@ Material* MaterialSystem::GetSiblingMaterial(Material* material, SiblingMatTypes
 	{
 	case SiblingMatTypes::BLEND_MODE_SIBLING:
 		siblingMat = material->m_siblings.m_blendModeSiblings[newSiblingAccessor];
-		newConfig.m_blendMode = (BlendMode)newSiblingAccessor;
+		for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+			newConfig.m_blendMode[rtIndex] = (BlendMode)newSiblingAccessor;
+		}
 		newConfig.m_name += Stringf("RunTSibBlend(%s)", EnumToString((BlendMode)newSiblingAccessor));
 		break;
 	case SiblingMatTypes::DEPTH_FUNC_SIBLING:

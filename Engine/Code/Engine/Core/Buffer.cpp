@@ -112,6 +112,10 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 		m_uploadBuffer = new Resource(m_device);
 
 		CreateBuffer(m_uploadBuffer, true);
+
+		if (!m_isPendingCopy) {
+			m_owner->AddToUpdateQueue(this);
+		}
 		m_isPendingCopy = true;
 		usedBuffer = m_uploadBuffer;
 
@@ -123,6 +127,8 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	usedBuffer->Map(mappedData);
 	memcpy(mappedData, data, sizeInBytes);
 	usedBuffer->Unmap();
+
+	
 
 }
 
