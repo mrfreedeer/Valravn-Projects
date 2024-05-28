@@ -36,6 +36,24 @@ using namespace DirectX;
 
 MaterialSystem* g_theMaterialSystem = nullptr;
 
+constexpr int g_cameraBufferSlot = 0;
+constexpr int g_modelBufferSlot = 1;
+constexpr int g_lightBufferSlot = 2;
+constexpr int g_engineBufferCount = 3;
+
+struct LightConstants {
+	Vec3 DirectionalLight = Vec3::ZERO;
+	float PaddingDirectionalLight = 0.0f;
+	float DirectionalLightIntensity[4];
+	float AmbientIntensity[4];
+	Light Lights[MAX_LIGHTS];
+	//------------- 16 bytes SSAO Related variables
+	float MaxOcclusionPerSample = 0.00000175f;
+	float SSAOFalloff = 0.00000001f;
+	float SampleRadius = 0.00001f;
+	int SampleSize = 64;
+};
+
 std::wstring GetAssetFullPath(LPCWSTR assetName)
 {
 	std::string engineStr = ENGINE_DIR;
@@ -554,7 +572,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 	newTexture->m_handle = handle;
 	SetDebugName(newTexture->m_handle->m_resource, creationInfo.m_name.c_str());
 
-	m_createdTextures.push_back(newTexture);
+	m_loadedTextures.push_back(newTexture);
 
 	return newTexture;
 }
@@ -610,6 +628,18 @@ void Renderer::CreateDefaultTextureTargets()
 	m_defaultDepthTarget = CreateTexture(defaultDSTInfo);
 }
 
+Texture* Renderer::GetTextureForFileName(char const* imageFilePath)
+{
+	Texture* textureToGet = nullptr;
+
+	for (Texture*& loadedTexture : m_loadedTextures) {
+		if (loadedTexture->GetImageFilePath() == imageFilePath) {
+			return loadedTexture;
+		}
+	}
+	return textureToGet;
+}
+
 Texture* Renderer::CreateTextureFromImage(Image const& image)
 {
 	TextureCreateInfo ci{};
@@ -621,6 +651,14 @@ Texture* Renderer::CreateTextureFromImage(Image const& image)
 
 	Texture* newTexture = CreateTexture(ci);
 	SetDebugName(newTexture->GetResource()->m_resource, newTexture->m_name.c_str());
+
+	return newTexture;
+}
+
+Texture* Renderer::CreateTextureFromFile(char const* imageFilePath)
+{
+	Image loadedImage(imageFilePath);
+	Texture* newTexture = CreateTextureFromImage(loadedImage);
 
 	return newTexture;
 }
@@ -657,6 +695,7 @@ void Renderer::Startup()
 	CreateDescriptorHeaps();
 	CreateFences(); // Has to go after creating command queue
 	CreateDefaultRootSignature();
+	InitializeCBufferArrays();
 
 	size_t totalCmdList = size_t(m_config.m_backBuffersCount * (size_t)CommandListType::NUM_COMMAND_LIST_TYPES);
 	m_commandAllocators.resize(totalCmdList);
@@ -678,11 +717,14 @@ void Renderer::Startup()
 	CreateBackBuffers();
 	CreateDefaultTextureTargets();
 
+
+
 	m_defaultTexture = new Texture();
 	Image whiteTexelImg(IntVec2(1, 1), Rgba8::WHITE);
 	whiteTexelImg.m_imageFilePath = "DefaultTexture";
 	m_defaultTexture = CreateTextureFromImage(whiteTexelImg);
 
+	m_immediateContexts = new ImmediateContext[m_config.m_immediateCtxCount];
 
 	MaterialSystemConfig matSystemConfig = {
 	this // Renderer
@@ -1118,6 +1160,36 @@ void Renderer::SetBlendModeSpecs(BlendMode const* blendModes, D3D12_BLEND_DESC& 
 	}
 }
 
+void Renderer::InitializeCBufferArrays()
+{
+	// Max amount of cbuffers existing if we used all descriptors
+	// and all were a unique cbuffer for a draw pass
+	constexpr unsigned int maxCbufferLimit = CBV_DESCRIPTORS_AMOUNT / g_engineBufferCount;
+
+	BufferDesc cameraBufferDesc = {};
+	cameraBufferDesc.data = nullptr;
+	cameraBufferDesc.memoryUsage = MemoryUsage::Default;
+	cameraBufferDesc.owner = this;
+	cameraBufferDesc.size = sizeof(CameraConstants);
+	cameraBufferDesc.stride = sizeof(CameraConstants);
+	cameraBufferDesc.debugName = "CameraCBuffer";
+
+	BufferDesc modelBufferDesc = cameraBufferDesc;
+	modelBufferDesc.size = sizeof(ModelConstants);
+	modelBufferDesc.stride = sizeof(ModelConstants);
+	modelBufferDesc.debugName = "ModelCBuffer";
+
+	BufferDesc lightBufferDesc = cameraBufferDesc;
+	lightBufferDesc.size = sizeof(LightConstants);
+	lightBufferDesc.stride = sizeof(LightConstants);
+	lightBufferDesc.debugName = "LightCBuffer";
+
+	m_cameraCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, cameraBufferDesc);
+	m_modelCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, modelBufferDesc);
+	m_lightCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, modelBufferDesc);
+
+}
+
 void Renderer::UploadPendingResources()
 {
 	if(m_pendingCopyRscBarriers.size() <= 0) return;
@@ -1140,27 +1212,54 @@ void Renderer::UploadPendingResources()
 
 }
 
+ImmediateContext& Renderer::GetCurrentDrawCtx()
+{
+	return m_immediateContexts[m_currentDrawCtx];
+}
+
+ConstantBuffer* Renderer::GetNextCBufferSlot(ConstantBufferType cBufferType)
+{
+	ConstantBuffer* nextCBuffer = nullptr;
+	switch (cBufferType)
+	{
+	case ConstantBufferType::CAMERA:
+		if(m_currentCameraBufferSlot > m_cameraCBOArray.size()) ERROR_AND_DIE("OUT OF BOUNDS CAMERA CBUFFER SLOT");
+		nextCBuffer = &m_cameraCBOArray[m_currentCameraBufferSlot++];
+		break;
+	case ConstantBufferType::MODEL:
+		if (m_currentModelBufferSlot > m_modelCBOArray.size()) ERROR_AND_DIE("OUT OF BOUNDS MODEL CBUFFER SLOT");
+		nextCBuffer = &m_modelCBOArray[m_currentCameraBufferSlot++];
+		break;
+	case ConstantBufferType::LIGHT:
+		if (m_currentLightBufferSlot > m_lightCBOArray.size()) ERROR_AND_DIE("OUT OF BOUNDS LIGHT CBUFFER SLOT");
+		nextCBuffer = &m_lightCBOArray[m_currentLightBufferSlot++];
+		break;
+	case ConstantBufferType::NUM_CONSTANT_BUFFER_TYPES:
+	default:
+		ERROR_AND_DIE("UNDEFINED TYPE OF ENGINE CONSTANT BUFFER")
+		break;
+	}
+
+	nextCBuffer->Initialize();
+	return nextCBuffer;
+}
+
 void Renderer::BeginFrame()
 {
 	ID3D12CommandAllocator* cmdAlloc = GetCommandAllocForCmdList(CommandListType::DEFAULT);
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
-	Vertex_PCU triangleVertices[] =
-	{
-		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(1.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.5f, 1.0f))
-	};
-
 	// Command list allocators can only be reset when the associated 
-   // command lists have finished execution on the GPU; apps should use 
-   // fences to determine GPU execution progress.
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
 	ThrowIfFailed(cmdAlloc->Reset(), "FAILED TO RESET COMMMAND ALLOCATOR");
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	ThrowIfFailed(cmdList->Reset(cmdAlloc, nullptr), "FAILED TO RESET COMMAND LIST");
+
+	
 
 	Material* firstTriangleMat = g_theMaterialSystem->GetMaterialForName("FirstTriangle");
 	ID3D12PipelineState* pso = firstTriangleMat->m_PSO;
@@ -1217,9 +1316,10 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
+	delete[] m_immediateContexts;
 	g_theMaterialSystem->Shutdown();
-	for (unsigned int textureInd = 0; textureInd < m_createdTextures.size(); textureInd++) {
-		Texture* tex = m_createdTextures[textureInd];
+	for (unsigned int textureInd = 0; textureInd < m_loadedTextures.size(); textureInd++) {
+		Texture* tex = m_loadedTextures[textureInd];
 		DestroyTexture(tex);
 	}
 
@@ -1285,14 +1385,37 @@ void Renderer::EndCamera(Camera const& camera)
 	UploadPendingResources();
 }
 
+void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
+{
+	float colorAsArray[4];
+	color.GetAsFloats(colorAsArray);
+
+	Resource* rtResource = tex->GetResource();
+	rtResource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = tex->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();;
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
+	cmdList->ClearRenderTargetView(currentRTVHandle, colorAsArray, 0, nullptr);
+}
+
+
 void Renderer::ClearScreen(Rgba8 const& color)
 {
-
+	Texture* currentRt = GetActiveBackBuffer();
+	ClearTexture(color, currentRt);
 }
 
 void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+	Texture* tex = currentDrawCtx.m_renderTargets[slot];
+	if (!tex)return;
+	Resource* resource = tex->GetResource();
+	resource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
 
+	currentDrawCtx.SetRenderTargetClear(slot, true);
+	ClearTexture(color, tex);
 }
 
 void Renderer::ClearDepth(float clearDepth /*= 1.0f*/)
@@ -1307,7 +1430,15 @@ Material* Renderer::CreateOrGetMaterial(std::filesystem::path materialPathNoExt)
 
 Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 {
-	return nullptr;
+	Texture* existingTexture = GetTextureForFileName(imageFilePath);
+	if (existingTexture)
+	{
+		return existingTexture;
+	}
+
+	// Never seen this texture before!  Let's load it.
+	Texture* newTexture = CreateTextureFromFile(imageFilePath);
+	return newTexture;
 }
 
 
@@ -1318,17 +1449,14 @@ void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+
 
 }
 
 void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
 {
-
-}
-
-void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes)
-{
-
+	DrawVertexArray(vertexes.size(), vertexes.data());
 }
 
 void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes, unsigned int numIndices, unsigned int const* indices)
@@ -1338,12 +1466,27 @@ void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU
 
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PCU> const& vertexes, std::vector<unsigned int> const& indices)
 {
+	DrawIndexedVertexArray(vertexes.size(), vertexes.data(), indices.size(), indices.data());
+}
 
+void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes)
+{
+
+}
+
+void Renderer::DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes)
+{
+	DrawVertexArray(vertexes.size(), vertexes.data());
 }
 
 void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices)
 {
 
+}
+
+void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices)
+{
+	DrawIndexedVertexArray(vertexes.size(), vertexes.data(), indices.size(), indices.data());
 }
 
 void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/, unsigned int slot /*= 0*/)
@@ -1452,7 +1595,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 
 void Renderer::BindMaterial(Material* mat)
 {
-
+	
 }
 
 void Renderer::BindMaterialByName(char const* materialName)

@@ -53,6 +53,7 @@ extern MaterialSystem* g_theMaterialSystem;
 
 struct RendererConfig {
 	Window* m_window = nullptr;
+	unsigned int m_immediateCtxCount = (2 << 13); // 16384
 	unsigned int m_backBuffersCount = 2;
 };
 
@@ -230,10 +231,14 @@ private:
 
 	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
 	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+
 	// Textures
 	void DestroyTexture(Texture* textureToDestroy);
 	void CreateDefaultTextureTargets();
+	void ClearTexture(Rgba8 const& color, Texture* tex);
+	Texture* GetTextureForFileName(char const* imageFilePath);
 	Texture* CreateTextureFromImage(Image const& image);
+	Texture* CreateTextureFromFile(char const* imageFilePath);
 	Texture* GetActiveRenderTarget() const;
 	Texture* GetBackUpRenderTarget() const;
 	Texture* GetActiveBackBuffer() const;
@@ -248,7 +253,11 @@ private:
 	void CreateGraphicsPSO(Material* material);
 	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
 
+	// Internal Resource Management
+	void InitializeCBufferArrays();
 	void UploadPendingResources();
+	ImmediateContext& GetCurrentDrawCtx();
+	ConstantBuffer* GetNextCBufferSlot(ConstantBufferType cBufferType);
 private:
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
@@ -259,6 +268,10 @@ private:
 
 	unsigned int m_currentBackBuffer = 0;
 	unsigned int m_currentRenderTarget = 0;
+	unsigned int m_currentDrawCtx = 0;
+	unsigned int m_currentCameraBufferSlot = 0;
+	unsigned int m_currentModelBufferSlot = 0;
+	unsigned int m_currentLightBufferSlot = 0;
 
 	/*=================== ComPtrs =================== */
 	ComPtr<ID3D12Device2> m_device;
@@ -268,16 +281,17 @@ private:
 	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 
 	/*=================== Vectors =================== */
-	std::vector<Texture*> m_createdTextures;
+	std::vector<Texture*> m_loadedTextures;
 	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
 	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
 
 	std::vector<Texture*> m_defaultRenderTargets;
 	std::vector<Texture*> m_backBuffers;
-	std::vector<Resource*> m_pendingRscBarriers;
+	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingCopyRscBarriers;
 	std::vector<Buffer*> m_pendingRscCopy;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
+	std::vector<Vertex_PCU> m_immediateVertexes;
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources
@@ -293,6 +307,11 @@ private:
 	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
 	Texture* m_floatRenderTargets[2] = {};
+	ImmediateContext* m_immediateContexts = nullptr;
+
+	std::vector<ConstantBuffer> m_cameraCBOArray = {};
+	std::vector<ConstantBuffer> m_lightCBOArray = {};
+	std::vector<ConstantBuffer> m_modelCBOArray = {};
 
 	Camera const* m_currentCamera = nullptr;
 

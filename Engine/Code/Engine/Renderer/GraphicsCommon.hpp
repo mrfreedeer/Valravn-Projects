@@ -117,6 +117,13 @@ enum class CommandListType {
 	NUM_COMMAND_LIST_TYPES
 };
 
+enum class ConstantBufferType {
+	CAMERA,
+	MODEL,
+	LIGHT,
+	NUM_CONSTANT_BUFFER_TYPES
+};
+
 
 constexpr char const* EnumToString(BlendMode blendMode) {
 	return BlendModeStrings[(int)blendMode];
