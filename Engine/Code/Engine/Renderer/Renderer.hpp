@@ -147,16 +147,13 @@ public:
 
 	void SetModelMatrix(Mat44 const& modelMat);
 	void SetModelColor(Rgba8 const& modelColor);
-	void ExecuteCommandLists(ID3D12CommandList** commandLists, unsigned int count);
-	void WaitForGPU();
 
 	ResourceView* CreateResourceView(ResourceViewInfo const& resourceViewInfo) const;
 	BitmapFont* CreateOrGetBitmapFont(std::filesystem::path bitmapPath);
 	Material* GetMaterialForName(char const* materialName);
 	Material* GetMaterialForPath(std::filesystem::path const& materialPath);
-	Material* GetDefaultMaterial() const;
-	Material* GetDefault2DMaterial() const;
-	Material* GetDefault3DMaterial() const;
+	Material* GetDefaultMaterial(bool isUsing3D = true) const;
+
 	// Binds
 	void BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot = 0);
 	void BindTexture(Texture const* texture, unsigned int slot = 0);
@@ -169,7 +166,6 @@ public:
 
 	// Setters
 	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
-	void SetMaterialPSO(Material* mat);
 	void SetBlendMode(BlendMode newBlendMode);
 	void SetCullMode(CullMode newCullMode);
 	void SetFillMode(FillMode newFillMode);
@@ -233,6 +229,7 @@ private:
 	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
 
 	// Textures
+	BitmapFont*CreateBitmapFont(std::filesystem::path bitmapPath);
 	void DestroyTexture(Texture* textureToDestroy);
 	void CreateDefaultTextureTargets();
 	void ClearTexture(Rgba8 const& color, Texture* tex);
@@ -255,9 +252,23 @@ private:
 
 	// Internal Resource Management
 	void InitializeCBufferArrays();
-	void UploadPendingResources();
+	/// <summary>
+	/// // Uploads pending resources and inserts resource barriers before drawing
+	/// </summary>
+	void FinishPendingPrePassResourceTasks();
 	ImmediateContext& GetCurrentDrawCtx();
 	ConstantBuffer* GetNextCBufferSlot(ConstantBufferType cBufferType);
+	void SetContextDescriptorStarts(ImmediateContext& ctx);
+
+	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes);
+	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
+
+	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes);
+	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
+
+	void CopyCurrentDrawCtxToNext();
+
+	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
 private:
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
@@ -265,13 +276,20 @@ private:
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};
 	Mat44 m_lightRenderTransform;
-
+	// Lighting
+	Light m_lights[MAX_LIGHTS];
+	Vec3 m_directionalLight = Vec3(0.0f, 0.0f, -1.0f);
+	Rgba8 m_directionalLightIntensity = Rgba8::WHITE;
+	Rgba8 m_ambientIntensity = Rgba8::WHITE;
+	Mat44 m_lightRenderTransform = Mat44();
 	unsigned int m_currentBackBuffer = 0;
 	unsigned int m_currentRenderTarget = 0;
 	unsigned int m_currentDrawCtx = 0;
 	unsigned int m_currentCameraBufferSlot = 0;
 	unsigned int m_currentModelBufferSlot = 0;
 	unsigned int m_currentLightBufferSlot = 0;
+	unsigned int m_srvHandleStart = 0;
+	unsigned int m_cbvHandleStart = 0;
 
 	/*=================== ComPtrs =================== */
 	ComPtr<ID3D12Device2> m_device;
@@ -282,6 +300,7 @@ private:
 
 	/*=================== Vectors =================== */
 	std::vector<Texture*> m_loadedTextures;
+	std::vector<BitmapFont*> m_loadedFonts;
 	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
 	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
 
@@ -290,8 +309,14 @@ private:
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingCopyRscBarriers;
 	std::vector<Buffer*> m_pendingRscCopy;
+	std::vector<Buffer*> m_boundBuffers;
+	std::vector<Texture const*> m_boundTextures;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	std::vector<Vertex_PCU> m_immediateVertexes;
+	std::vector<Vertex_PCU> m_immediateIndices;
+
+	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
+	std::vector<Vertex_PNCU> m_immediateDiffuseIndices;
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources

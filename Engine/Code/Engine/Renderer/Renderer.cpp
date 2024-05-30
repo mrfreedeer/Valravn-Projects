@@ -789,6 +789,16 @@ void Renderer::Startup()
 
 		m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 	}
+
+	DebugRenderConfig debugRenderConfig = {};
+
+	DebugRenderConfig debugSystemConfig;
+	debugSystemConfig.m_renderer = this;
+	debugSystemConfig.m_startHidden = false;
+	debugSystemConfig.m_fontName = "Data/Images/SquirrelFixedFont";
+
+	DebugRenderSystemStartup(debugSystemConfig);
+	InitializeImGui();
 }
 
 void Renderer::CreatePSOForMaterial(Material* material)
@@ -1190,7 +1200,7 @@ void Renderer::InitializeCBufferArrays()
 
 }
 
-void Renderer::UploadPendingResources()
+void Renderer::FinishPendingPrePassResourceTasks()
 {
 	if(m_pendingCopyRscBarriers.size() <= 0) return;
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
@@ -1202,6 +1212,9 @@ void Renderer::UploadPendingResources()
 
 		currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
 	}
+
+	// Insert pending resource barriers
+	currentCmdList->ResourceBarrier(m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 
 	ID3D12CommandList* cmdLists[] = { currentCmdList };
 	m_commandQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
@@ -1244,62 +1257,123 @@ ConstantBuffer* Renderer::GetNextCBufferSlot(ConstantBufferType cBufferType)
 	return nextCBuffer;
 }
 
+void Renderer::SetContextDescriptorStarts(ImmediateContext& ctx)
+{
+	ctx.m_srvHandleStart = m_srvHandleStart;
+	ctx.m_cbvHandleStart = m_cbvHandleStart;
+
+	UpdateDescriptorsHandleStarts(ctx);
+}
+
+void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes)
+{
+	ctx.m_vertexCount = numVertexes;
+	ctx.m_vertexStart = m_immediateVertexes.size();
+	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
+
+	ctx.SetDrawCallUsage(true);
+}
+
+void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes)
+{
+	ctx.m_vertexCount = numVertexes;
+	ctx.m_vertexStart = m_immediateDiffuseVertexes.size();
+	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
+
+	ctx.SetDrawCallUsage(true);
+}
+
+void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes, unsigned int indexCount, unsigned int const* indexes)
+{
+	ctx.m_vertexCount = numVertexes;
+	ctx.m_vertexStart = m_immediateVertexes.size();
+	ctx.m_indexCount = indexCount;
+	ctx.m_indexStart = m_immediateIndices.size();
+
+	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
+	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
+
+	ctx.SetIndexDrawFlag(true);
+	ctx.SetDrawCallUsage(true);
+}
+
+void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes)
+{
+	ctx.m_vertexCount = numVertexes;
+	ctx.m_vertexStart = m_immediateVertexes.size();
+	ctx.m_indexCount = indexCount;
+	ctx.m_indexStart = m_immediateIndices.size();
+
+	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
+	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
+
+	ctx.SetIndexDrawFlag(true);
+	ctx.SetDrawCallUsage(true);
+}
+
+/// <summary>
+/// Through copying the context onto the next, we can keep resources bound between render passes
+/// </summary>
+void Renderer::CopyCurrentDrawCtxToNext()
+{
+	// Copy relevant information into the next context
+
+	if (m_currentDrawCtx <= IMMEDIATE_CTX_AMOUNT - 1) {
+		ImmediateContext& nextCtx = m_immediateContexts[m_currentDrawCtx + 1];
+
+		nextCtx = ImmediateContext(m_immediateContexts[m_currentDrawCtx]);
+		nextCtx.ResetExternalBuffers();
+		nextCtx.SetIndexDrawFlag(false);
+		nextCtx.SetPipelineTypeFlag(false);
+		nextCtx.SetDepthTextureSRVFlag(false);
+	}
+	m_currentDrawCtx++;
+}
+
+void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
+{
+	static auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValSRVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
+
+
+	// Find the max value to skip that amount of slots
+	// Empty slots must be respected even if wasteful
+	// Buffers bound as SRV share handle start with textures
+	auto texMaxIt = std::max_element(ctx.m_boundTextures.begin(), ctx.m_boundTextures.end(), findHighestValTex);
+	auto cBufferMaxIt = std::max_element(ctx.m_boundCBuffers.begin(), ctx.m_boundCBuffers.end(), findHighestValCbuffer);
+	auto SRVBufferMaxIt = std::max_element(ctx.m_boundBuffers.begin(), ctx.m_boundBuffers.end(), findHighestValSRVBuffer);
+
+	unsigned int texMax = (texMaxIt != ctx.m_boundTextures.end()) ? texMaxIt->first : 0;
+	unsigned int srvBufferMax = (SRVBufferMaxIt != ctx.m_boundBuffers.end()) ? SRVBufferMaxIt->first : 0;
+	unsigned int cBufferMax = (cBufferMaxIt != ctx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+
+	unsigned int SRVMax = (srvBufferMax > texMax) ? srvBufferMax : texMax;
+
+	// This is accounting for the Engine's constant buffers
+	// slot 0: Camera
+	// slot 1: Model
+	// slot 2: Light
+	if (cBufferMax < 2) cBufferMax = 2;
+
+	m_srvHandleStart += SRVMax + 1;
+	m_cbvHandleStart += cBufferMax + 1;
+}
+
 void Renderer::BeginFrame()
 {
-	ID3D12CommandAllocator* cmdAlloc = GetCommandAllocForCmdList(CommandListType::DEFAULT);
-	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	g_theMaterialSystem->BeginFrame();
+	DebugRenderBeginFrame();
+	BeginFrameImGui();
 
-	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
-	ThrowIfFailed(cmdAlloc->Reset(), "FAILED TO RESET COMMMAND ALLOCATOR");
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ThrowIfFailed(cmdList->Reset(cmdAlloc, nullptr), "FAILED TO RESET COMMAND LIST");
-
-	
-
-	Material* firstTriangleMat = g_theMaterialSystem->GetMaterialForName("FirstTriangle");
-	ID3D12PipelineState* pso = firstTriangleMat->m_PSO;
-	cmdList->SetPipelineState(pso);
-	// Set necessary state.
-	cmdList->SetGraphicsRootSignature(m_defaultRootSignature.Get());
-	cmdList->RSSetViewports(1, &m_viewport);
-	cmdList->RSSetScissorRects(1, &m_scissorRect);
-
-	Texture* currentBackBuffer = m_backBuffers[m_currentBackBuffer];
-	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, cmdList);
-
-	Texture* floatRT = m_floatRenderTargets[m_currentBackBuffer];
-	floatRT->TransitionTo(D3D12_RESOURCE_STATE_RENDER_TARGET, cmdList);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_backBuffers[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE secrtvHandle = m_floatRenderTargets[m_currentBackBuffer]->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
-
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvHandle, secrtvHandle };
-	cmdList->OMSetRenderTargets(2, rtvHandles, FALSE, nullptr);
-
-	BufferView vBufferView = m_vBuffer->GetBufferView();
-	D3D12_VERTEX_BUFFER_VIEW dxBufferView = LocalToD3D12(vBufferView);
-
-	// Record commands.
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	const float secClearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-	cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-	cmdList->ClearRenderTargetView(secrtvHandle, secClearColor, 0, nullptr);
-	cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	cmdList->IASetVertexBuffers(0, 1, &dxBufferView);
-	cmdList->DrawInstanced(3, 1, 0, 0);
-
-	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, cmdList);
-
-	ThrowIfFailed(cmdList->Close(), "FAILED TO CLOSE COMMAND LIST");
+	ResetGPUState();
 }
 
 void Renderer::EndFrame()
 {
+	DebugRenderEndFrame();
+	g_theMaterialSystem->EndFrame();
+
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
 	// Execute the command list.
@@ -1316,12 +1390,27 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
-	delete[] m_immediateContexts;
+	ShutdownImGui();
+	DebugRenderSystemShutdown();
 	g_theMaterialSystem->Shutdown();
+
+	delete[] m_immediateContexts;
+	m_immediateContexts = nullptr;
+
 	for (unsigned int textureInd = 0; textureInd < m_loadedTextures.size(); textureInd++) {
 		Texture* tex = m_loadedTextures[textureInd];
 		DestroyTexture(tex);
 	}
+	m_loadedTextures.clear();
+
+	for (unsigned int fontInd = 0; fontInd < m_loadedFonts.size(); fontInd++) {
+		BitmapFont* font = m_loadedFonts[fontInd];
+		if (font) {
+			delete font;
+		}
+	}
+
+	m_loadedFonts.clear();
 
 	for (unsigned int heapIndex = 0; heapIndex < (unsigned int)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS; heapIndex++) {
 		DescriptorHeap*& cpuHeap = m_CPUDescriptorHeaps[heapIndex];
@@ -1382,7 +1471,11 @@ void Renderer::EndCamera(Camera const& camera)
 	if (m_currentCamera != &camera) {
 		ERROR_AND_DIE("ENDING WITH A DIFFERENT CAMERA");
 	}
-	UploadPendingResources();
+
+	// Uploads pending resources and inserts resource barriers before drawing
+	FinishPendingPrePassResourceTasks();
+
+
 }
 
 void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
@@ -1451,7 +1544,9 @@ void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* verte
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 
-
+	SetContextDescriptorStarts(ctx);
+	SetContextDrawInfo(ctx, numVertexes, vertexes);
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
@@ -1459,9 +1554,13 @@ void Renderer::DrawVertexArray(std::vector<Vertex_PCU> const& vertexes)
 	DrawVertexArray(vertexes.size(), vertexes.data());
 }
 
-void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes, unsigned int numIndices, unsigned int const* indices)
+void Renderer::DrawIndexedVertexArray(unsigned int numVertexes,  Vertex_PCU const* vertexes, unsigned int numIndices, unsigned int const* indices)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
 
+	SetContextDescriptorStarts(ctx);
+	SetContextIndexedDrawInfo(ctx, numVertexes, vertexes, numIndices, indices);
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PCU> const& vertexes, std::vector<unsigned int> const& indices)
@@ -1471,7 +1570,11 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PCU> const& vertexes, s
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
 
+	SetContextDescriptorStarts(ctx);
+	SetContextDrawInfo(ctx, numVertexes, vertexes);
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes)
@@ -1481,7 +1584,11 @@ void Renderer::DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes)
 
 void Renderer::DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
 
+	SetContextDescriptorStarts(ctx);
+	SetContextIndexedDrawInfo(ctx, numVertexes, vertexes, numIndices, indices);
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices)
@@ -1496,23 +1603,30 @@ void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/, unsigned i
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	ctx.m_modelConstants.ModelMatrix = modelMat;
 
+	if(ctx.WasUsedForDrawCall()){
+		ctx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
+	}
+	ConstantBuffer*& modelCBO = ctx.m_modelCBO;
+
+	modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 }
 
 void Renderer::SetModelColor(Rgba8 const& modelColor)
 {
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	modelColor.GetAsFloats(ctx.m_modelConstants.ModelColor);
 
+	if (ctx.WasUsedForDrawCall()) {
+		ctx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
+	}
+	ConstantBuffer*& modelCBO = ctx.m_modelCBO;
+
+	modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 }
 
-void Renderer::ExecuteCommandLists(ID3D12CommandList** commandLists, unsigned int count)
-{
-
-}
-
-void Renderer::WaitForGPU()
-{
-
-}
 
 DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
 {
@@ -1522,6 +1636,17 @@ DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeap
 DescriptorHeap* Renderer::GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
 {
 	return m_CPUDescriptorHeaps[(unsigned int)descriptorHeapType];
+}
+
+BitmapFont* Renderer::CreateBitmapFont(std::filesystem::path bitmapPath)
+{
+	std::string filename = bitmapPath.string();
+	std::string filePathString = bitmapPath.replace_extension(".png").string();
+	Texture* bitmapTexture = CreateOrGetTextureFromFile(filePathString.c_str());
+	BitmapFont* newBitmapFont = new BitmapFont(filename.c_str(), *bitmapTexture);
+
+	m_loadedFonts.push_back(newBitmapFont);
+	return newBitmapFont;
 }
 
 ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewInfo) const
@@ -1549,7 +1674,14 @@ ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewI
 
 BitmapFont* Renderer::CreateOrGetBitmapFont(std::filesystem::path bitmapPath)
 {
-	return nullptr;
+	for (int loadedFontIndex = 0; loadedFontIndex < m_loadedFonts.size(); loadedFontIndex++) {
+		BitmapFont*& bitmapFont = m_loadedFonts[loadedFontIndex];
+		if (bitmapFont->m_fontFilePathNameWithNoExtension == bitmapPath.string()) {
+			return bitmapFont;
+		}
+	}
+
+	return CreateBitmapFont(bitmapPath);
 
 }
 
@@ -1565,135 +1697,218 @@ Material* Renderer::GetMaterialForPath(std::filesystem::path const& materialPath
 
 }
 
-Material* Renderer::GetDefaultMaterial() const
+Material* Renderer::GetDefaultMaterial(bool isUsing3D) const
 {
-	return nullptr;
-
-}
-
-Material* Renderer::GetDefault2DMaterial() const
-{
-	return nullptr;
-
-}
-
-Material* Renderer::GetDefault3DMaterial() const
-{
-	return nullptr;
-
+	if(isUsing3D) return m_default3DMaterial;
+	return m_default2DMaterial;
 }
 
 void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*= 0*/)
 {
-
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	ctx.m_boundCBuffers[slot] = cBuffer;
+	m_boundBuffers.push_back(cBuffer);
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	currentDrawCtx.m_boundTextures[slot] = texture;
+	if (texture) {
+		// if it is depth texture, special code handles resource barriers at DrawImmediateCtx
+		if (texture->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT)) return;
+		m_boundTextures.push_back(texture);
+	}
 }
 
 void Renderer::BindMaterial(Material* mat)
 {
-	
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+
+	if (!mat) mat = GetDefaultMaterial(true);
+	currentDrawCtx.m_material = mat;
 }
 
 void Renderer::BindMaterialByName(char const* materialName)
 {
+	Material* material = g_theMaterialSystem->GetMaterialForName(materialName);
+	if (!material) material = GetDefaultMaterial();
 
+	BindMaterial(material);
 }
 
 void Renderer::BindMaterialByPath(std::filesystem::path materialPath)
 {
+	materialPath.replace_extension("xml");
+	Material* material = g_theMaterialSystem->GetMaterialForPath(materialPath);
+	if (!material) material = GetDefaultMaterial();
 
+	BindMaterial(material);
 }
 
 void Renderer::BindVertexBuffer(VertexBuffer* const& vertexBuffer)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	currentDrawCtx.m_externalVBO = vertexBuffer;
+	currentDrawCtx.m_vertexStart = 0;
+	currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
+	m_boundBuffers.push_back(vertexBuffer);
 }
 
 void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	currentDrawCtx.m_externalIBO = indexBuffer;
+	currentDrawCtx.m_indexStart = 0;
+	currentDrawCtx.m_indexCount = indexCount;
+	m_boundBuffers.push_back(indexBuffer);
 }
 
 void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	currentDrawCtx.m_boundBuffers[slot] = buffer;
+	m_boundBuffers.push_back(buffer);
 }
 
 void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
 {
+	if (slot > 7) {
+		ERROR_RECOVERABLE("TRYING TO SET RENDER TARGET INDEX > 8");
+		return;
+	}
+	else if (slot < 0) {
+		ERROR_RECOVERABLE("TRYING TO SET RENDER TARGET INDEX < 0");
+		return;
+	}
 
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+	currentDrawCtx.m_renderTargets[slot] = dst;
 }
 
-void Renderer::SetMaterialPSO(Material* mat)
-{
-
-}
 
 void Renderer::SetBlendMode(BlendMode newBlendMode)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::BLEND_MODE_SIBLING, (unsigned int)newBlendMode);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetCullMode(CullMode newCullMode)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::CULL_MODE_SIBLING, (unsigned int)newCullMode);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetFillMode(FillMode newFillMode)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::FILL_MODE_SIBLING, (unsigned int)newFillMode);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetWindingOrder(WindingOrder newWindingOrder)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::WINDING_ORDER_SIBLING, (unsigned int)newWindingOrder);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetRasterizerState(CullMode cullMode, FillMode fillMode, WindingOrder windingOrder)
 {
-
+	SetCullMode(cullMode);
+	SetFillMode(fillMode);
+	SetWindingOrder(windingOrder);
 }
 
 void Renderer::SetDepthFunction(DepthFunc newDepthFunc)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::DEPTH_FUNC_SIBLING, (unsigned int)newDepthFunc);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetWriteDepth(bool writeDepth)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::DEPTH_ENABLING_SIBLING, (unsigned int)writeDepth);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetDepthStencilState(DepthFunc newDepthFunc, bool writeDepth)
 {
-
+	SetDepthFunction(newDepthFunc);
+	SetWriteDepth(writeDepth);
 }
 
 void Renderer::SetTopology(TopologyType newTopologyType)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
+	Material* currentMaterial = (currentDrawCtx.m_material) ? currentDrawCtx.m_material : GetDefaultMaterial();
+	Material* siblingMat = g_theMaterialSystem->GetSiblingMaterial(currentMaterial, SiblingMatTypes::TOPOLOGY_SIBLING, (unsigned int)newTopologyType);
+	currentDrawCtx.m_material = siblingMat;
 }
 
 void Renderer::SetDirectionalLight(Vec3 const& direction)
 {
-
+	m_directionalLight = direction;
 }
 
 void Renderer::SetDirectionalLightIntensity(Rgba8 const& intensity)
 {
-
+	m_directionalLightIntensity = intensity;
 }
 
 void Renderer::SetAmbientIntensity(Rgba8 const& intensity)
 {
-
+	m_ambientIntensity = intensity;
 }
+
 
 bool Renderer::SetLight(Light const& light, int index)
 {
+	if (index < MAX_LIGHTS) {
+		EulerAngles eulerAngle = EulerAngles::CreateEulerAngleFromForward(light.Direction);
+		Mat44 viewMatrix = eulerAngle.GetMatrix_XFwd_YLeft_ZUp();
+		Vec3 fwd = light.Direction.GetNormalized();
+		Vec3 translation = Vec3::ZERO;
+
+		// This is to work with shadow maps, taken of the Real-Time shadows book
+		translation.x = -DotProduct3D(light.Position, viewMatrix.GetIBasis3D());
+		translation.y = -DotProduct3D(light.Position, viewMatrix.GetJBasis3D());
+		translation.z = -DotProduct3D(light.Position, viewMatrix.GetKBasis3D());
+
+		viewMatrix = viewMatrix.GetOrthonormalInverse();
+		viewMatrix.SetTranslation3D(translation);
+
+		Mat44 projectionMatrix = Mat44::CreatePerspectiveProjection(light.SpotAngle, 2.0f, 0.01f, 100.0f);
+		projectionMatrix.Append(m_lightRenderTransform);
+
+		Light& assignedSlot = m_lights[index];
+		assignedSlot = light;
+		assignedSlot.ViewMatrix = viewMatrix;
+		assignedSlot.ProjectionMatrix = projectionMatrix;
+
+		return true;
+	}
 	return false;
 }
 
@@ -1794,7 +2009,36 @@ void Renderer::FlushPendingWork()
 
 void Renderer::ResetGPUState()
 {
+	m_fence->Signal();
+	m_fence->Wait();
 
+	m_resourcesFence->Signal();
+	m_resourcesFence->Wait();
+
+	// Command list allocators can only be reset when the associated 
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
+	m_currentCameraBufferSlot = 0;
+	m_currentModelBufferSlot = 0;
+	m_currentLightBufferSlot = 0;
+
+	m_currentDrawCtx = 0;
+	m_srvHandleStart = SRV_HANDLE_START;
+	m_cbvHandleStart = CBV_HANDLE_START;
+
+	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DEFAULT);
+	ThrowIfFailed(cmdAllocator->Reset(), "FAILED TO RESET COMMAND ALLOCATOR");
+	auto rscCmdAlloc = GetCommandAllocForCmdList(CommandListType::RESOURCES);
+	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
+
+	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
+	ThrowIfFailed(rscCmdList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
+	ThrowIfFailed(defaultCmdList->Reset(cmdAllocator, m_default2DMaterial->m_PSO), "COULD NOT RESET COMMAND LIST");
+
+	m_immediateVertexes.clear();
+	m_immediateIndices.clear();
 }
 
 void Renderer::InitializeImGui()
