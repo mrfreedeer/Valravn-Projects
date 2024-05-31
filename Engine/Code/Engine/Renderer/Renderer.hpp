@@ -132,6 +132,9 @@ public:
 	// Mesh Shaders
 	void DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ);
 
+	void DrawVertexBuffer(VertexBuffer* const& vertexBuffer);
+	void DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount);
+
 	// Unlit vertex array
 	void DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes);
 	void DrawVertexArray(std::vector<Vertex_PCU> const& vertexes);
@@ -182,9 +185,6 @@ public:
 	void SetLightRenderMatrix(Mat44 gameToRenderMatrix) { m_lightRenderTransform = gameToRenderMatrix; }
 	void BindLightConstants();
 
-	void DrawVertexBuffer(VertexBuffer* const& vertexBuffer);
-	void DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount);
-
 	// General
 	void SetDebugName(ID3D12Object* object, char const* name);
 	template<typename T_Object>
@@ -198,11 +198,9 @@ public:
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
 	void TrackResource(Resource* newResource);
 	void RemoveResource(Resource* newResource);
-	void SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue);
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
 	ID3D12GraphicsCommandList6* GetCurrentCommandList(CommandListType cmdListType);
 
-	void FlushPendingWork();
 	void ResetGPUState();
 private:
 	// ImGui
@@ -266,6 +264,9 @@ private:
 	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes);
 	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
 
+	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+
 	void CopyCurrentDrawCtxToNext();
 
 	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
@@ -282,6 +283,7 @@ private:
 	Rgba8 m_directionalLightIntensity = Rgba8::WHITE;
 	Rgba8 m_ambientIntensity = Rgba8::WHITE;
 	Mat44 m_lightRenderTransform = Mat44();
+
 	unsigned int m_currentBackBuffer = 0;
 	unsigned int m_currentRenderTarget = 0;
 	unsigned int m_currentDrawCtx = 0;

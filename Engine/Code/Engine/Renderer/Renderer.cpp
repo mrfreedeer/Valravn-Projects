@@ -487,7 +487,6 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 
 	if (handle) {
 		handle->m_resource->AddRef();
-		//handle->m_resource->
 	}
 	else {
 		D3D12_RESOURCE_DESC textureDesc = {};
@@ -961,11 +960,6 @@ void Renderer::CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std
 	ID3D12ShaderReflection* pShaderReflection = NULL;
 	HRESULT reflectOp = pUtils->CreateReflection(&bufferSource, IID_PPV_ARGS(&pShaderReflection));
 	ThrowIfFailed(reflectOp, "FAILED TO GET REFLECTION OUT OF SHADER");
-	//// Reflect shader info
-	////ID3D12ShaderReflection* pShaderReflection = NULL;
-	////IDxcResult::GetOutput
-	//	HRESULT reflectOp = D3DReflect((void*)shaderByteCode.data(), shaderByteCode.size(), IID_ID3D12ShaderReflection, (void**)&pShaderReflection);
-	//ThrowIfFailed(reflectOp, "FAILED TO GET REFLECTION OUT OF SHADER");
 
 	//// Get shader info
 	D3D12_SHADER_DESC shaderDesc;
@@ -1241,7 +1235,7 @@ ConstantBuffer* Renderer::GetNextCBufferSlot(ConstantBufferType cBufferType)
 		break;
 	case ConstantBufferType::MODEL:
 		if (m_currentModelBufferSlot > m_modelCBOArray.size()) ERROR_AND_DIE("OUT OF BOUNDS MODEL CBUFFER SLOT");
-		nextCBuffer = &m_modelCBOArray[m_currentCameraBufferSlot++];
+		nextCBuffer = &m_modelCBOArray[m_currentModelBufferSlot++];
 		break;
 	case ConstantBufferType::LIGHT:
 		if (m_currentLightBufferSlot > m_lightCBOArray.size()) ERROR_AND_DIE("OUT OF BOUNDS LIGHT CBUFFER SLOT");
@@ -1309,6 +1303,19 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 	ctx.SetIndexDrawFlag(true);
 	ctx.SetDrawCallUsage(true);
+}
+
+DescriptorHeap* Renderer::GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
+{
+	return m_CPUDescriptorHeaps[(size_t)descriptorHeapType];
+}
+
+DescriptorHeap* Renderer::GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const
+{
+	size_t typeAsIndex = (size_t)descriptorHeapType;
+	if(typeAsIndex > (size_t)DescriptorHeapType::MAX_GPU_VISIBLE) return nullptr;
+
+	return m_GPUDescriptorHeaps[(size_t)descriptorHeapType];
 }
 
 /// <summary>
@@ -1390,6 +1397,12 @@ void Renderer::EndFrame()
 
 void Renderer::Shutdown()
 {
+	m_fence->Signal();
+	m_fence->Wait();
+
+	m_resourcesFence->Signal();
+	m_resourcesFence->Wait();
+
 	ShutdownImGui();
 	DebugRenderSystemShutdown();
 	g_theMaterialSystem->Shutdown();
@@ -1429,6 +1442,41 @@ void Renderer::Shutdown()
 		}
 	}
 
+
+	m_device.Reset();
+	m_DXGIFactory.Reset();
+	m_commandQueue.Reset();
+	m_swapChain.Reset();
+	m_defaultRootSignature.Reset();
+
+	// Clearing cmd lists and allocators
+	for (unsigned int index = 0; index < m_commandAllocators.size(); index++) {
+		DX_SAFE_RELEASE(m_commandAllocators[index]);
+		DX_SAFE_RELEASE(m_commandLists[index]);
+	}
+
+	m_commandAllocators.resize(0);
+	m_commandLists.resize(0);
+
+	m_defaultRenderTargets.clear();
+	m_backBuffers.clear();
+	m_pendingRscBarriers.clear();
+	m_pendingCopyRscBarriers.clear();
+	m_pendingRscCopy.clear();
+	m_boundBuffers.clear();
+	m_boundTextures.clear();
+
+	for(unsigned int byteCodeInd = 0; byteCodeInd < m_shaderByteCodes.size(); byteCodeInd++){
+		ShaderByteCode* byteCode = m_shaderByteCodes[byteCodeInd];
+		if(byteCode) delete byteCode;
+	}
+	m_shaderByteCodes.clear();
+	m_immediateVertexes.clear();
+	m_immediateDiffuseVertexes.clear();
+	m_immediateIndices.clear();
+	m_immediateDiffuseIndices.cend();
+
+
 	if (m_fence) {
 		delete m_fence;
 		m_fence = nullptr;
@@ -1439,21 +1487,23 @@ void Renderer::Shutdown()
 		m_resourcesFence = nullptr;
 	}
 
+	m_defaultDepthTarget = nullptr;
+	m_defaultTexture = nullptr;
+	m_default2DMaterial = nullptr;
+	m_default3DMaterial = nullptr;
 
-	m_device.Reset();
-	m_DXGIFactory.Reset();
-	m_commandQueue.Reset();
-	m_swapChain.Reset();
+	m_cameraCBOArray.clear();
+	m_lightCBOArray.clear();
+	m_modelCBOArray.clear();
 
-	for (unsigned int index = 0; index < m_commandAllocators.size(); index++) {
-		DX_SAFE_RELEASE(m_commandAllocators[index]);
-		DX_SAFE_RELEASE(m_commandLists[index]);
-	}
-
-	m_commandAllocators.resize(0);
-	m_commandLists.resize(0);
-
-	m_defaultRootSignature.Reset();
+	m_currentBackBuffer = 0;
+	m_currentRenderTarget = 0;
+	m_currentDrawCtx = 0;
+	m_currentCameraBufferSlot = 0;
+	m_currentModelBufferSlot = 0;
+	m_currentLightBufferSlot = 0;
+	m_srvHandleStart = 0;
+	m_cbvHandleStart = 0;
 
 	// App resources.
 	delete m_vBuffer;
@@ -1513,7 +1563,16 @@ void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
 
 void Renderer::ClearDepth(float clearDepth /*= 1.0f*/)
 {
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+	ResourceView* dsvView = m_defaultDepthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
+	Resource* dsvRsc = m_defaultDepthTarget->GetResource();
+	dsvRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_pendingRscBarriers);
 
+	D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH;
+	currentDrawCtx.SetDepthRenderTargetClear(true);
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
+	defaultCmdList->ClearDepthStencilView(dsvView->GetHandle(), clearFlags, clearDepth, 0, 0, NULL);
 }
 
 Material* Renderer::CreateOrGetMaterial(std::filesystem::path materialPathNoExt)
@@ -1537,7 +1596,26 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
+	// #TODO
+}
 
+void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
+{
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	BindVertexBuffer(vertexBuffer);
+	SetContextDescriptorStarts(ctx);
+	ctx.SetDrawCallUsage(true);
+	CopyCurrentDrawCtxToNext();
+}
+
+void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount)
+{
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	BindVertexBuffer(vertexBuffer);
+	BindIndexBuffer(indexBuffer, indexCount);
+	SetContextDescriptorStarts(ctx);
+	ctx.SetDrawCallUsage(true);
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes)
@@ -1867,6 +1945,66 @@ void Renderer::SetTopology(TopologyType newTopologyType)
 	currentDrawCtx.m_material = siblingMat;
 }
 
+void Renderer::SetSamplerMode(SamplerMode samplerMode)
+{
+	D3D12_SAMPLER_DESC samplerDesc = {};
+	switch (samplerMode)
+	{
+	case SamplerMode::POINTCLAMP:
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+		break;
+	case SamplerMode::POINTWRAP:
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+		break;
+	case SamplerMode::BILINEARCLAMP:
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+		break;
+	case SamplerMode::BILINEARWRAP:
+		samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		break;
+
+	case SamplerMode::SHADOWMAPS:
+		samplerDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		samplerDesc.BorderColor[0] = 0.0f;
+		samplerDesc.BorderColor[1] = 0.0f;
+		samplerDesc.BorderColor[2] = 0.0f;
+		samplerDesc.BorderColor[3] = 0.0f;
+
+		break;
+	default:
+		break;
+	}
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	DescriptorHeap* samplerHeap = GetCPUDescriptorHeap(DescriptorHeapType::SAMPLER);
+
+	m_device->CreateSampler(&samplerDesc, samplerHeap->GetHandleAtOffset(0));
+	DescriptorHeap* gpuSamplerHeap = GetGPUDescriptorHeap(DescriptorHeapType::SAMPLER);
+	m_device->CopyDescriptorsSimple(1, gpuSamplerHeap->GetCPUHandleForHeapStart(), samplerHeap->GetHandleAtOffset(0), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+}
+
 void Renderer::SetDirectionalLight(Vec3 const& direction)
 {
 	m_directionalLight = direction;
@@ -1914,17 +2052,23 @@ bool Renderer::SetLight(Light const& light, int index)
 
 void Renderer::BindLightConstants()
 {
+	LightConstants lightConstants = {};
+	lightConstants.DirectionalLight = m_directionalLight;
+	m_directionalLightIntensity.GetAsFloats(lightConstants.DirectionalLightIntensity);
+	m_ambientIntensity.GetAsFloats(lightConstants.AmbientIntensity);
 
-}
+	//lightConstants.MaxOcclusionPerSample = m_SSAOMaxOcclusionPerSample;
+	//lightConstants.SampleRadius = m_SSAOSampleRadius;
+	//lightConstants.SampleSize = m_SSAOSampleSize;
+	//lightConstants.SSAOFalloff = m_SSAOFalloff;
 
-void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
-{
+	memcpy(&lightConstants.Lights, &m_lights, sizeof(m_lights));
 
-}
+	ConstantBuffer* lightBuffer = GetNextCBufferSlot(ConstantBufferType::LIGHT);
 
-void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount)
-{
+	lightBuffer->CopyCPUToGPU(&lightConstants, sizeof(lightConstants));
 
+	BindConstantBuffer(lightBuffer, g_lightBufferSlot);
 }
 
 void Renderer::SetDebugName(ID3D12Object* object, char const* name)
@@ -1935,11 +2079,6 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 	UNUSED(object);
 	UNUSED(name);
 #endif
-}
-
-void Renderer::SetSamplerMode(SamplerMode samplerMode)
-{
-
 }
 
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
@@ -1961,8 +2100,9 @@ Texture* Renderer::GetCurrentRenderTarget() const
 
 Texture* Renderer::GetCurrentDepthTarget() const
 {
-	return nullptr;
-
+	if (!m_currentCamera) return m_defaultDepthTarget;
+	Texture* cameraDepthTarget = m_currentCamera->GetDepthTarget();
+	return  (cameraDepthTarget) ? cameraDepthTarget : m_defaultDepthTarget;
 }
 
 void Renderer::ApplyEffect(Material* effect, Camera const* camera /*= nullptr*/, Texture* customDepth /*= nullptr*/)
@@ -1985,10 +2125,6 @@ void Renderer::RemoveResource(Resource* newResource)
 
 }
 
-void Renderer::SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue)
-{
-
-}
 
 ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
 {
@@ -2000,11 +2136,6 @@ ID3D12GraphicsCommandList6* Renderer::GetCurrentCommandList(CommandListType cmdL
 {
 	size_t accessIndex = ((size_t)m_currentBackBuffer * 2) + size_t(cmdListType);
 	return m_commandLists[accessIndex];
-}
-
-void Renderer::FlushPendingWork()
-{
-
 }
 
 void Renderer::ResetGPUState()
