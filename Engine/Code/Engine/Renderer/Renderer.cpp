@@ -496,9 +496,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 
 		CD3DX12_HEAP_PROPERTIES heapType(D3D12_HEAP_TYPE_DEFAULT);
 		D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON;
-		if (creationInfo.m_initialData) {
-			initialResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
-		}
+	
 		handle = new Resource(m_device.Get());
 		handle->m_currentState = initialResourceState;
 
@@ -551,12 +549,12 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 			imageData.SlicePitch = creationInfo.m_stride * creationInfo.m_dimensions.y * creationInfo.m_dimensions.x;
 
 			UpdateSubresources(cmdList, handle->m_resource, textureUploadHeap, 0, 0, 1, &imageData);
-			handle->m_currentState = D3D12_RESOURCE_STATE_COMMON;
 		}
 
 		std::string const errorMsg = Stringf("COULD NOT CREATE TEXTURE WITH NAME %s", creationInfo.m_name.c_str());
 		ThrowIfFailed(textureCreateHR, errorMsg.c_str());
 	}
+	handle->m_currentState = D3D12_RESOURCE_STATE_COMMON;
 	Texture* newTexture = new Texture(creationInfo);
 	if (textureUploadHeap) {
 		newTexture->m_uploadRsc = new Resource(m_device.Get());
@@ -1171,32 +1169,32 @@ void Renderer::FinishPendingPrePassResourceTasks()
 {
 	UploadImmediateVertexes();
 
-	if (m_pendingCopyRscBarriers.size() <= 0) return;
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
-	currentCmdList->ResourceBarrier((UINT)m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
+	if (m_pendingCopyRscBarriers.size() > 0) {
+		currentCmdList->ResourceBarrier((UINT)m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
 
-	for (Buffer* buffer : m_pendingRscCopy) {
-		Resource* uploadRsc = buffer->m_uploadBuffer;
-		Resource* defaultRsc = buffer->m_buffer;
+		for (Buffer* buffer : m_pendingRscCopy) {
+			Resource* uploadRsc = buffer->m_uploadBuffer;
+			Resource* defaultRsc = buffer->m_buffer;
 
-		currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
+			currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
+		}
 	}
 
-	Texture* currentBackBuffer = GetActiveBackBuffer();
-	Resource* backBuffer = currentBackBuffer->GetResource();
-	backBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
+	Texture* activeRT = GetActiveBackBuffer();
+	Resource* rtRsc = activeRT->GetResource();
+
+	Resource* depthRsc = m_defaultDepthTarget->GetResource();
+	depthRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_pendingRscBarriers);
+	rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
+
+	if (m_pendingRscBarriers.size() > 0) {
+		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
+	}
 
 	// Insert pending resource barriers
-	currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
-	currentCmdList->Close();
-
-	ID3D12CommandList* cmdLists[] = { currentCmdList };
-	m_commandQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
-
-	// Wait until resources are uploaded
 	m_resourcesFence->Signal();
 	m_resourcesFence->Wait();
-
 }
 
 void Renderer::UploadImmediateVertexes()
@@ -1561,8 +1559,8 @@ void Renderer::EndFrame()
 	rscCmdList->Close();
 
 	// Execute the command list.
-	ID3D12CommandList* ppCommandLists[] = { rscCmdList, cmdList };
-	ExecuteCommandLists(2, ppCommandLists);
+	ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
+	ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
 
 	// Present the frame.
 	ThrowIfFailed(m_swapChain->Present(1, 0), "FAILED TO PRESENT");
@@ -1723,10 +1721,6 @@ void Renderer::BeginCamera(Camera const& camera)
 	BindTexture(m_defaultTexture);
 	SetSamplerMode(SamplerMode::POINTCLAMP);
 
-	Texture* activeRT = GetActiveBackBuffer();
-	Resource* rtRsc = activeRT->GetResource();
-	rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
-
 	ctx.SetRenderTarget(0, GetActiveBackBuffer());
 	ctx.SetDepthRenderTarget(m_defaultDepthTarget);
 
@@ -1758,10 +1752,12 @@ void Renderer::EndCamera(Camera const& camera)
 	DrawAllImmediateContexts();
 
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+	rscCmdList->Close();
 	cmdList->Close();
-	
-	ID3D12CommandList* ppCmdLists[] = {cmdList};
-	ExecuteCommandLists(1, ppCmdLists);
+
+	ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
+	ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
 
 	ResetGPUState();
 }
@@ -2383,8 +2379,7 @@ void Renderer::ResetGPUState()
 	m_resourcesFence->Wait();
 
 	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
+	// command lists have finished execution on the GPU
 	m_currentCameraBufferSlot = 0;
 	m_currentModelBufferSlot = 0;
 	m_currentLightBufferSlot = 0;
@@ -2403,7 +2398,7 @@ void Renderer::ResetGPUState()
 	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
 	ThrowIfFailed(rscCmdList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
 
-	
+
 
 	m_immediateVertexes.clear();
 	m_immediateDiffuseVertexes.clear();
