@@ -42,8 +42,24 @@ void ImmediateContext::SetDepthRenderTargetClear(bool isCleared)
 	m_isDRTCleared = isCleared;
 }
 
+void ImmediateContext::SetRenderTarget(unsigned int index, Texture* renderTarget)
+{
+	m_renderTargets[index] = renderTarget;
+}
+
+void ImmediateContext::SetDepthRenderTarget(Texture* depthRenderTarget)
+{
+	m_depthTarget = depthRenderTarget;
+}
+
+void ImmediateContext::SetVertexType(VertexType vertexType)
+{
+	m_vertexType = vertexType;
+}
+
 void ImmediateContext::Reset()
 {
+	m_vertexType = VertexType::PCU;
 	m_drawFlags = 0;
 	m_clearRtFlags = 0;
 	m_isDRTCleared = false;

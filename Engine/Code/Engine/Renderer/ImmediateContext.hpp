@@ -47,9 +47,10 @@ public:
 	bool WasUsedForDrawCall() const { return m_drawFlags & DRAW_CALLED_BIT_MASK; }
 	bool UsesDiffuseShaders() const { return m_drawFlags & DIFFUSE_BIT_MASK; }
 	bool UsesExternalBuffers() const { return (m_externalVBO || m_externalIBO); }
-	Texture const* GetDepthSRV()  { return m_boundTextures[m_depthSRVSlot]; }
+	Texture const* GetDepthSRV() { return m_boundTextures[m_depthSRVSlot]; }
 	bool IsRenderTargetCleared(unsigned int slot) const { return m_clearRtFlags & (1 << slot); }
 	bool IsDRTCleared() const { return m_isDRTCleared; }
+	VertexType GetVertexType() const { return m_vertexType; }
 
 	// Setters
 	void SetIndexDrawFlag(bool isIndexedDraw);
@@ -59,6 +60,9 @@ public:
 	void SetDiffuseShaderUsage(bool usesDiffuseShaders);
 	void SetRenderTargetClear(unsigned int slot, bool isCleared);
 	void SetDepthRenderTargetClear(bool isCleared);
+	void SetRenderTarget(unsigned int index, Texture* renderTarget);
+	void SetDepthRenderTarget(Texture* depthRenderTarget);
+	void SetVertexType(VertexType vertexType);
 
 	void Reset();
 	void ResetExternalBuffers();
@@ -70,6 +74,7 @@ private:
 	unsigned int m_clearRtFlags = 0;
 	bool m_isDRTCleared = false;
 
+	VertexType m_vertexType = VertexType::PCU;
 	Material* m_material = nullptr;
 	Texture* m_renderTargets[8] = {};
 	Texture* m_depthTarget = nullptr;

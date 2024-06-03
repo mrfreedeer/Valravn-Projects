@@ -44,6 +44,7 @@ public:
 	size_t GetSize() const { return m_size; }
 	bool IsPendingCopy() const { return m_isPendingCopy;}
 	void ClearPendingCopies();
+	Resource* GetResource();
 protected:
 	virtual void Initialize();
 	virtual void CreateBuffer(Resource* const& buffer, bool isUpload = false);

@@ -188,7 +188,7 @@ void MaterialSystem::SetSibling(Material* material, Material* siblingMaterial, S
 	{
 	case SiblingMatTypes::BLEND_MODE_SIBLING:
 		material->m_siblings.m_blendModeSiblings[newSiblingAccessor] = siblingMaterial;
-		siblingMaterial->m_siblings.m_blendModeSiblings[(size_t)material->m_config.m_blendMode] = material;
+		siblingMaterial->m_siblings.m_blendModeSiblings[(size_t)material->m_config.m_blendMode[0]] = material;
 		break;
 	case SiblingMatTypes::DEPTH_FUNC_SIBLING:
 		material->m_siblings.m_depthFuncSiblings[newSiblingAccessor] = siblingMaterial;

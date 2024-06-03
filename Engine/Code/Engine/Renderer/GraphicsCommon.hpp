@@ -125,6 +125,19 @@ enum class ConstantBufferType {
 };
 
 
+/// <summary>
+/// P: Position
+/// C: Color
+/// U: UV
+/// N: Normal
+/// B: Bitangent
+/// T: Tangent
+/// </summary>
+enum class VertexType {
+	PCU, // Unlit 
+	PNCU
+};
+
 constexpr char const* EnumToString(BlendMode blendMode) {
 	return BlendModeStrings[(int)blendMode];
 }

@@ -250,10 +250,14 @@ private:
 
 	// Internal Resource Management
 	void InitializeCBufferArrays();
+	void CreateDefaultBufferObjects();
 	/// <summary>
 	/// // Uploads pending resources and inserts resource barriers before drawing
 	/// </summary>
 	void FinishPendingPrePassResourceTasks();
+	void UploadImmediateVertexes();
+	void DrawAllImmediateContexts();
+	void DrawImmediateContext(ImmediateContext& ctx);
 	ImmediateContext& GetCurrentDrawCtx();
 	ConstantBuffer* GetNextCBufferSlot(ConstantBufferType cBufferType);
 	void SetContextDescriptorStarts(ImmediateContext& ctx);
@@ -264,26 +268,30 @@ private:
 	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes);
 	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
 
-	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-
 	void CopyCurrentDrawCtxToNext();
-
+	void CopyTextureToDescriptorHeap(Texture const* texture, unsigned int handleStart, unsigned int slot);
+	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot);
+	void CopyEngineCBuffersToGPUHeap(ImmediateContext& ctx);
+	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);
 	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
+	VertexBuffer* GetImmediateVBO(VertexType vertexType);
+	void ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLists);
 private:
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
 	RendererConfig m_config = {};
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};
-	Mat44 m_lightRenderTransform;
+
 	// Lighting
 	Light m_lights[MAX_LIGHTS];
 	Vec3 m_directionalLight = Vec3(0.0f, 0.0f, -1.0f);
 	Rgba8 m_directionalLightIntensity = Rgba8::WHITE;
 	Rgba8 m_ambientIntensity = Rgba8::WHITE;
 	Mat44 m_lightRenderTransform = Mat44();
+	bool m_is3DDefault = true;
 
+	unsigned int m_currentCmdListIndex = 0;
 	unsigned int m_currentBackBuffer = 0;
 	unsigned int m_currentRenderTarget = 0;
 	unsigned int m_currentDrawCtx = 0;
@@ -315,10 +323,10 @@ private:
 	std::vector<Texture const*> m_boundTextures;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	std::vector<Vertex_PCU> m_immediateVertexes;
-	std::vector<Vertex_PCU> m_immediateIndices;
+	std::vector<unsigned int> m_immediateIndices;
 
 	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
-	std::vector<Vertex_PNCU> m_immediateDiffuseIndices;
+	std::vector<unsigned int> m_immediateDiffuseIndices;
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources
@@ -333,7 +341,6 @@ private:
 
 	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
-	Texture* m_floatRenderTargets[2] = {};
 	ImmediateContext* m_immediateContexts = nullptr;
 
 	std::vector<ConstantBuffer> m_cameraCBOArray = {};
@@ -342,7 +349,11 @@ private:
 
 	Camera const* m_currentCamera = nullptr;
 
-	VertexBuffer* m_vBuffer = nullptr;
+	VertexBuffer* m_immediateVBO = nullptr;
+	VertexBuffer* m_immediateDiffuseVBO = nullptr;
+
+	IndexBuffer* m_immediateIBO = nullptr;
+	IndexBuffer* m_immediateDiffuseIBO = nullptr;
 
 };
 

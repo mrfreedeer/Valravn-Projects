@@ -50,7 +50,7 @@ void AttractScreenMode::Render() const
 
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
-	
+		g_theRenderer->DrawVertexArray(3, triangleVertices);
 	}
 	g_theRenderer->EndCamera(m_UICamera);
 

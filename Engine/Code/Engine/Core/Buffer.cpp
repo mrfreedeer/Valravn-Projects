@@ -58,9 +58,14 @@ bool Buffer::GuaranteeBufferSize(size_t newsize)
 {
 	if (m_size >= newsize) return false;
 
-	DX_SAFE_RELEASE(m_buffer->m_resource);
+	if (m_buffer) {
+		DX_SAFE_RELEASE(m_buffer->m_resource);
+	}
+
 	m_size = newsize;
-	CreateBuffer(m_buffer);
+	if (m_memoryUsage == MemoryUsage::Default) {
+		CreateBuffer(m_buffer);
+	}
 
 	return true;
 }
@@ -108,7 +113,7 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	Resource* usedBuffer = nullptr;
 
 	if (m_memoryUsage == MemoryUsage::Default) {
-		if(m_uploadBuffer) DX_SAFE_RELEASE(m_uploadBuffer->m_resource);
+		if (m_uploadBuffer) DX_SAFE_RELEASE(m_uploadBuffer->m_resource);
 		m_uploadBuffer = new Resource(m_device);
 
 		CreateBuffer(m_uploadBuffer, true);
@@ -128,7 +133,7 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	memcpy(mappedData, data, sizeInBytes);
 	usedBuffer->Unmap();
 
-	
+
 
 }
 
@@ -138,6 +143,13 @@ void Buffer::ClearPendingCopies()
 	m_isPendingCopy = false;
 }
 
+
+Resource* Buffer::GetResource()
+{
+	if (m_memoryUsage == MemoryUsage::Upload) return m_uploadBuffer;
+
+	return m_buffer;
+}
 
 void Buffer::CreateBuffer(Resource* const& buffer, bool isUpload)
 {
