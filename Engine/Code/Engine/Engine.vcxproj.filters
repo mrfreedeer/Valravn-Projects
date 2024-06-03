@@ -798,7 +798,7 @@
       <Filter>Renderer\Materials</Filter>
     </Xml>
     <Xml Include="Renderer\Materials\FirstTriangleMaterial.xml">
-      <Filter>Renderer\Materials\Shaders</Filter>
+      <Filter>Renderer\Materials</Filter>
     </Xml>
   </ItemGroup>
   <ItemGroup>

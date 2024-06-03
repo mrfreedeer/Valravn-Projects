@@ -29,4 +29,5 @@ private:
 	float m_textAnimationTime = g_gameConfigBlackboard.GetValue("TEXT_ANIMATION_TIME", 4.0f);
 	float m_textMovementPhaseTimePercentage = g_gameConfigBlackboard.GetValue("TEXT_MOVEMENT_PHASE_TIME_PERCENTAGE", 0.25f);
 	float m_timeTextAnimation = 0.0f;
+	Texture* m_floatRT = nullptr;
 };

@@ -496,7 +496,7 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 
 		CD3DX12_HEAP_PROPERTIES heapType(D3D12_HEAP_TYPE_DEFAULT);
 		D3D12_RESOURCE_STATES initialResourceState = D3D12_RESOURCE_STATE_COMMON;
-	
+
 		handle = new Resource(m_device.Get());
 		handle->m_currentState = initialResourceState;
 
@@ -553,8 +553,8 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 
 		std::string const errorMsg = Stringf("COULD NOT CREATE TEXTURE WITH NAME %s", creationInfo.m_name.c_str());
 		ThrowIfFailed(textureCreateHR, errorMsg.c_str());
+		handle->m_currentState = D3D12_RESOURCE_STATE_COPY_DEST;
 	}
-	handle->m_currentState = D3D12_RESOURCE_STATE_COMMON;
 	Texture* newTexture = new Texture(creationInfo);
 	if (textureUploadHeap) {
 		newTexture->m_uploadRsc = new Resource(m_device.Get());
@@ -707,7 +707,7 @@ void Renderer::Startup()
 
 	CreateBackBuffers();
 	CreateDefaultTextureTargets();
-
+	ResetGPUState();
 
 
 	m_defaultTexture = new Texture();
@@ -725,18 +725,7 @@ void Renderer::Startup()
 
 	m_default3DMaterial = GetMaterialForName("Default3DMaterial");
 	m_default2DMaterial = GetMaterialForName("Default2DMaterial");
-
-	Window* window = Window::GetWindowContext();
-	IntVec2 clientDims = window->GetClientDimensions();
-	// Create synchronization objects and wait until assets have been uploaded to the GPU.
-	{
-		m_fence->Signal();
-		m_fence->Wait();
-
-		m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
-	}
-
-	DebugRenderConfig debugRenderConfig = {};
+	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 
 	DebugRenderConfig debugSystemConfig;
 	debugSystemConfig.m_renderer = this;
@@ -746,6 +735,7 @@ void Renderer::Startup()
 	DebugRenderSystemStartup(debugSystemConfig);
 	InitializeImGui();
 	CreateDefaultBufferObjects();
+
 }
 
 void Renderer::CreatePSOForMaterial(Material* material)
@@ -1537,6 +1527,19 @@ void Renderer::ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLi
 
 void Renderer::BeginFrame()
 {
+	// In the first frame, it's most likely that textures are being created
+	if (m_currentFrame == 0) {
+		ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+		ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+
+		cmdList->Close();
+		rscCmdList->Close();
+
+		// Execute the command list.
+		ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
+		ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
+	}
+
 	g_theMaterialSystem->BeginFrame();
 	DebugRenderBeginFrame();
 	BeginFrameImGui();
@@ -1568,6 +1571,7 @@ void Renderer::EndFrame()
 	m_fence->Wait();
 
 	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
+	m_currentFrame++;
 }
 
 void Renderer::Shutdown()
@@ -1681,6 +1685,7 @@ void Renderer::Shutdown()
 	m_currentLightBufferSlot = 0;
 	m_srvHandleStart = 0;
 	m_cbvHandleStart = 0;
+	m_currentFrame = 0;
 
 	m_defaultTexture = nullptr;
 	m_defaultDepthTarget = nullptr;
@@ -2397,8 +2402,6 @@ void Renderer::ResetGPUState()
 	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
 	ThrowIfFailed(rscCmdAlloc->Reset(), "FAILED TO RESET RESOURCES COMMAND ALLOCATOR");
 	ThrowIfFailed(rscCmdList->Reset(rscCmdAlloc, nullptr), "COULD NOT RESET RESOURCES COMMAND LIST");
-
-
 
 	m_immediateVertexes.clear();
 	m_immediateDiffuseVertexes.clear();

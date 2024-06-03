@@ -21,6 +21,18 @@ void AttractScreenMode::Startup()
 		g_soundPlaybackIDs[GAME_SOUND::CLAIRE_DE_LUNE] = g_theAudio->StartSound(g_sounds[GAME_SOUND::CLAIRE_DE_LUNE]);
 	}
 
+	TextureCreateInfo secRtvDesc = {};
+	secRtvDesc.m_bindFlags = RESOURCE_BIND_RENDER_TARGET_BIT;
+	secRtvDesc.m_clearColour = Rgba8::BLACK;
+	secRtvDesc.m_clearFormat = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_dimensions = Window::GetWindowContext()->GetClientDimensions();
+	secRtvDesc.m_format = TextureFormat::R32_FLOAT;
+	secRtvDesc.m_initialData = nullptr;
+	secRtvDesc.m_name = "FLOAT RT";
+	secRtvDesc.m_owner = g_theRenderer;
+
+	m_floatRT = g_theRenderer->CreateTexture(secRtvDesc);
+
 }
 
 void AttractScreenMode::Update(float deltaSeconds)
@@ -37,19 +49,24 @@ void AttractScreenMode::Update(float deltaSeconds)
 
 	UpdateInput(deltaSeconds);
 	m_timeAlive += deltaSeconds;
+	m_UICamera.SetOrthoView(Vec2(-1.0f, -1.0f), Vec2(1.0f, 1.0f));
 }
 
 void AttractScreenMode::Render() const
 {
+	float aspectRatio = Window::GetWindowContext()->GetConfig().m_clientAspect;
 	Vertex_PCU triangleVertices[] =
 	{
-		Vertex_PCU(Vec3(-0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.25f, -0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(1.0f, 0.0f)),
-		Vertex_PCU(Vec3(0.0f, 0.25f, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.5f, 1.0f))
+		Vertex_PCU(Vec3(0.0f, 0.25f * aspectRatio, 0.0f), Rgba8(255, 0, 0, 255), Vec2(0.5f, 0.0f)),
+		Vertex_PCU(Vec3(0.25f, -0.25f * aspectRatio, 0.0f), Rgba8(0, 255, 0, 255), Vec2(1.0f, 1.0f)),
+		Vertex_PCU(Vec3(-0.25f, -0.25f * aspectRatio, 0.0f), Rgba8(0, 0, 255, 255), Vec2(0.0f, 1.0f))
 	};
 
+	Material* firstTriangleMat = g_theRenderer->GetMaterialForName("FirstTriangle");
 	g_theRenderer->BeginCamera(m_UICamera);
-	{
+	{	
+		g_theRenderer->BindMaterial(firstTriangleMat);
+		g_theRenderer->SetRenderTarget(m_floatRT, 1);
 		g_theRenderer->DrawVertexArray(3, triangleVertices);
 	}
 	g_theRenderer->EndCamera(m_UICamera);

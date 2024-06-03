@@ -300,6 +300,7 @@ private:
 	unsigned int m_currentLightBufferSlot = 0;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
+	unsigned int m_currentFrame = 0;
 
 	/*=================== ComPtrs =================== */
 	ComPtr<ID3D12Device2> m_device;
