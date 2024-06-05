@@ -23,6 +23,14 @@ struct BufferDesc {
 	void const* data = nullptr;
 };
 
+enum class BufferType {
+	UNKNOWN = -1,
+	VertexBuffer,
+	IndexBuffer,
+	ConstantBuffer,
+	NUM_BUFFER_TYPES
+};
+
 class Buffer {
 	friend class Renderer;
 public:
@@ -45,6 +53,7 @@ public:
 	bool IsPendingCopy() const { return m_isPendingCopy;}
 	void ClearPendingCopies();
 	Resource* GetResource();
+	void ResetCopyState();
 protected:
 	virtual void Initialize();
 	virtual void CreateBuffer(Resource* const& buffer, bool isUpload = false);
@@ -62,6 +71,7 @@ protected:
 	std::vector<ResourceView*> m_views;
 	std::string m_name = "";
 	bool m_isPendingCopy = false;
+	BufferType m_bufferType = BufferType::UNKNOWN;
 
 };
 

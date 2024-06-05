@@ -276,6 +276,7 @@ private:
 	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
 	VertexBuffer* GetImmediateVBO(VertexType vertexType);
 	void ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLists);
+	void AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3D12_RESOURCE_BARRIER>& barriersArray);
 private:
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
@@ -318,8 +319,7 @@ private:
 	std::vector<Texture*> m_defaultRenderTargets;
 	std::vector<Texture*> m_backBuffers;
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;
-	std::vector<D3D12_RESOURCE_BARRIER> m_pendingCopyRscBarriers;
-	std::vector<Buffer*> m_pendingRscCopy;
+	std::set<Buffer*> m_pendingRscCopy;
 	std::vector<Buffer*> m_boundBuffers;
 	std::vector<Texture const*> m_boundTextures;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;

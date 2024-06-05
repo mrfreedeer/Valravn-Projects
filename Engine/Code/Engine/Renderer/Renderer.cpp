@@ -1160,14 +1160,25 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	UploadImmediateVertexes();
 
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
-	if (m_pendingCopyRscBarriers.size() > 0) {
-		currentCmdList->ResourceBarrier((UINT)m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
+	if (m_pendingRscCopy.size() > 0) {
+
+		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
+		copyRscBarriers.reserve(m_pendingRscCopy.size() * 2);
+		for(Buffer* buffer: m_pendingRscCopy){
+			buffer->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, copyRscBarriers);
+			buffer->m_uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, copyRscBarriers);
+		}
+
+		//currentCmdList->ResourceBarrier((UINT)m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
+		currentCmdList->ResourceBarrier((UINT)copyRscBarriers.size(), copyRscBarriers.data());
 
 		for (Buffer* buffer : m_pendingRscCopy) {
+			buffer->ResetCopyState();
 			Resource* uploadRsc = buffer->m_uploadBuffer;
 			Resource* defaultRsc = buffer->m_buffer;
 
 			currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
+			AddBufferBindResourceBarrier(buffer, m_pendingRscBarriers);
 		}
 	}
 
@@ -1181,45 +1192,43 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
-
-	// Insert pending resource barriers
-	m_resourcesFence->Signal();
-	m_resourcesFence->Wait();
 }
 
 void Renderer::UploadImmediateVertexes()
 {
-	// Unlit vertexes. This is a giant buffer with all vertexes for better performance
-	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
-	m_immediateVBO->GuaranteeBufferSize(vertexesSize);
-	m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
-
-	// Single buffer for any indexed draw calls
-	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
-	m_immediateIBO->GuaranteeBufferSize(indexSize);
-	m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
-
-	// Lit vertexes also get their own buffer
-	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
-	m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
-	m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
-
-	// Single buffer for any indexed draw calls
-	m_immediateDiffuseIBO->GuaranteeBufferSize(indexSize);
-	m_immediateDiffuseIBO->CopyCPUToGPU(m_immediateDiffuseIndices.data(), indexSize);
-
 	Resource* VBORsc = m_immediateVBO->GetResource();
 	Resource* IBORsc = m_immediateIBO->GetResource();
 
 	Resource* diffuseVBORsc = m_immediateDiffuseVBO->GetResource();
 	Resource* diffuseIBORsc = m_immediateDiffuseIBO->GetResource();
 
-	// Add to pending rsc barriers
-	VBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, m_pendingRscBarriers);
-	diffuseVBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, m_pendingRscBarriers);
+	// Unlit vertexes. This is a giant buffer with all vertexes for better performance
+	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
+	if (vertexesSize > 0) {
+		m_immediateVBO->GuaranteeBufferSize(vertexesSize);
+		m_immediateVBO->CopyCPUToGPU(m_immediateVertexes.data(), vertexesSize);
+	}
 
-	IBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, m_pendingRscBarriers);
-	diffuseIBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, m_pendingRscBarriers);
+	// Single buffer for any indexed draw calls
+	size_t indexSize = sizeof(unsigned) * m_immediateIndices.size();
+	if (indexSize > 0) {
+		m_immediateIBO->GuaranteeBufferSize(indexSize);
+		m_immediateIBO->CopyCPUToGPU(m_immediateIndices.data(), indexSize);
+	}
+
+	// Lit vertexes also get their own buffer
+	size_t vertexesDiffuseSize = sizeof(Vertex_PNCU) * m_immediateDiffuseVertexes.size();
+	if (vertexesDiffuseSize > 0) {
+		m_immediateDiffuseVBO->GuaranteeBufferSize(vertexesDiffuseSize);
+		m_immediateDiffuseVBO->CopyCPUToGPU(m_immediateDiffuseVertexes.data(), vertexesDiffuseSize);
+	}
+
+	// Single buffer for any indexed draw calls
+	size_t diffuseIndexSize = sizeof(unsigned) * m_immediateDiffuseIndices.size();
+	if (diffuseIndexSize > 0) {
+		m_immediateDiffuseIBO->GuaranteeBufferSize(diffuseIndexSize);
+		m_immediateDiffuseIBO->CopyCPUToGPU(m_immediateDiffuseIndices.data(), diffuseIndexSize);
+	}
 }
 
 void Renderer::DrawAllImmediateContexts()
@@ -1238,7 +1247,9 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 
 	// Copy Descriptors into the GPU Descriptor heap
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
-		CopyTextureToDescriptorHeap(texture, ctx.m_srvHandleStart, slot);
+		Texture const* boundTex = texture;
+		if (!boundTex) boundTex = m_defaultTexture;
+		CopyTextureToDescriptorHeap(boundTex, ctx.m_srvHandleStart, slot);
 	}
 
 	for (auto& [slot, pBuffer] : ctx.m_boundBuffers) {
@@ -1369,6 +1380,7 @@ void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexe
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 
 	ctx.SetDrawCallUsage(true);
 }
@@ -1378,6 +1390,7 @@ void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexe
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateDiffuseVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 
 	ctx.SetDrawCallUsage(true);
 }
@@ -1391,6 +1404,7 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
 	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 
 	ctx.SetIndexDrawFlag(true);
 	ctx.SetDrawCallUsage(true);
@@ -1405,6 +1419,7 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
 	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 
 	ctx.SetIndexDrawFlag(true);
 	ctx.SetDrawCallUsage(true);
@@ -1439,6 +1454,7 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx.SetPipelineTypeFlag(false);
 		nextCtx.SetDepthTextureSRVFlag(false);
 		nextCtx.SetVertexType(VertexType::PCU); // PCU is default
+		nextCtx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
 	}
 	m_currentDrawCtx++;
 }
@@ -1523,6 +1539,23 @@ void Renderer::ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLi
 {
 	m_commandQueue->ExecuteCommandLists(count, cmdLists);
 	m_currentCmdListIndex = (m_currentCmdListIndex + 1) % 2;
+}
+
+void Renderer::AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3D12_RESOURCE_BARRIER>& barriersArray)
+{
+	switch (bufferToBind->m_bufferType)
+	{	
+		case BufferType::VertexBuffer:
+		case BufferType::ConstantBuffer:
+			bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, barriersArray);
+			break;
+		case BufferType::IndexBuffer:
+			bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, barriersArray);
+			break;
+	default:
+		ERROR_AND_DIE("UNRECOGNIZED BUFFER TYPE");
+		break;
+	}
 }
 
 void Renderer::BeginFrame()
@@ -1641,7 +1674,6 @@ void Renderer::Shutdown()
 	m_defaultRenderTargets.clear();
 	m_backBuffers.clear();
 	m_pendingRscBarriers.clear();
-	m_pendingCopyRscBarriers.clear();
 	m_pendingRscCopy.clear();
 	m_boundBuffers.clear();
 	m_boundTextures.clear();
@@ -1786,6 +1818,7 @@ void Renderer::ClearScreen(Rgba8 const& color)
 {
 	Texture* currentRt = GetActiveBackBuffer();
 	ClearTexture(color, currentRt);
+	ClearDepth();
 }
 
 void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
@@ -1844,6 +1877,8 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 	BindVertexBuffer(vertexBuffer);
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+
 	CopyCurrentDrawCtxToNext();
 }
 
@@ -1854,6 +1889,8 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	BindIndexBuffer(indexBuffer, indexCount);
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
+	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+
 	CopyCurrentDrawCtxToNext();
 }
 
@@ -1924,26 +1961,12 @@ void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	ctx.m_modelConstants.ModelMatrix = modelMat;
-
-	if (ctx.WasUsedForDrawCall()) {
-		ctx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
-	}
-	ConstantBuffer*& modelCBO = ctx.m_modelCBO;
-
-	modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 }
 
 void Renderer::SetModelColor(Rgba8 const& modelColor)
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	modelColor.GetAsFloats(ctx.m_modelConstants.ModelColor);
-
-	if (ctx.WasUsedForDrawCall()) {
-		ctx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
-	}
-	ConstantBuffer*& modelCBO = ctx.m_modelCBO;
-
-	modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
 }
 
 BitmapFont* Renderer::CreateBitmapFont(std::filesystem::path bitmapPath)
@@ -2321,11 +2344,7 @@ void Renderer::SetDebugName(ID3D12Object* object, char const* name)
 void Renderer::AddToUpdateQueue(Buffer* bufferToUpdate)
 {
 	// Add to state tracking vector
-	m_pendingRscCopy.push_back(bufferToUpdate);
-
-	// Clumping all copy rsc barriers for execution all at once
-	bufferToUpdate->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, m_pendingCopyRscBarriers);
-	bufferToUpdate->m_uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, m_pendingCopyRscBarriers);
+	m_pendingRscCopy.insert(bufferToUpdate);
 }
 
 Texture* Renderer::GetCurrentRenderTarget() const
@@ -2407,7 +2426,6 @@ void Renderer::ResetGPUState()
 	m_immediateDiffuseVertexes.clear();
 	m_immediateIndices.clear();
 	m_immediateDiffuseIndices.clear();
-	m_pendingCopyRscBarriers.clear();
 	m_pendingRscBarriers.clear();
 	m_pendingRscCopy.clear();
 }

@@ -113,8 +113,12 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	Resource* usedBuffer = nullptr;
 
 	if (m_memoryUsage == MemoryUsage::Default) {
-		if (m_uploadBuffer) DX_SAFE_RELEASE(m_uploadBuffer->m_resource);
-		m_uploadBuffer = new Resource(m_device);
+		if (m_uploadBuffer) {
+			DX_SAFE_RELEASE(m_uploadBuffer->m_resource);
+		}
+		else {
+			m_uploadBuffer = new Resource(m_device);
+		}
 
 		CreateBuffer(m_uploadBuffer, true);
 
@@ -134,7 +138,6 @@ void Buffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 	usedBuffer->Unmap();
 
 
-
 }
 
 void Buffer::ClearPendingCopies()
@@ -149,6 +152,11 @@ Resource* Buffer::GetResource()
 	if (m_memoryUsage == MemoryUsage::Upload) return m_uploadBuffer;
 
 	return m_buffer;
+}
+
+void Buffer::ResetCopyState()
+{
+	m_isPendingCopy = false;
 }
 
 void Buffer::CreateBuffer(Resource* const& buffer, bool isUpload)
@@ -169,7 +177,7 @@ void Buffer::CreateBuffer(Resource* const& buffer, bool isUpload)
 		IID_PPV_ARGS(&resource)), "COULD NOT CREATE GPU BUFFER");
 	char const* debugName = (isUpload) ? " UPLOAD BUFFER" : " GPU BUFFER";
 	std::string fullDebugName = m_name + debugName;
-
+	
 	m_owner->SetDebugName(resource, fullDebugName.c_str());
 }
 

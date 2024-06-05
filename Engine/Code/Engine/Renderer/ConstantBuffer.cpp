@@ -6,6 +6,7 @@
 ConstantBuffer::ConstantBuffer(BufferDesc const& bufferDesc) :
 	Buffer(bufferDesc)
 {
+	m_bufferType = BufferType::ConstantBuffer;
 	size_t newSize = AlignToCBufferStride(m_size);
 	m_size = newSize;
 	m_stride = m_size;
