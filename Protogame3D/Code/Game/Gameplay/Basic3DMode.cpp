@@ -141,6 +141,14 @@ void Basic3DMode::Shutdown()
 	pointerToSelf = nullptr;
 
 	GameMode::Shutdown();
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireSphere", DebugSpawnWorldWireSphere);
+	UnsubscribeEventCallbackFunction("DebugAddWorldLine", DebugSpawnWorldLine3D);
+	UnsubscribeEventCallbackFunction("DebugRenderClear", DebugClearShapes);
+	UnsubscribeEventCallbackFunction("DebugRenderToggle", DebugToggleRenderMode);
+	UnsubscribeEventCallbackFunction("DebugAddBasis", DebugSpawnPermanentBasis);
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireCylinder", DebugSpawnWorldWireCylinder);
+	UnsubscribeEventCallbackFunction("DebugAddBillboardText", DebugSpawnBillboardText);
+	UnsubscribeEventCallbackFunction("Controls", GetControls);
 
 }
 

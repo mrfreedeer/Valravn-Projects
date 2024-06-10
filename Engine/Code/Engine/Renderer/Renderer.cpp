@@ -1164,7 +1164,7 @@ void Renderer::FinishPendingPrePassResourceTasks()
 
 		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
 		copyRscBarriers.reserve(m_pendingRscCopy.size() * 2);
-		for(Buffer* buffer: m_pendingRscCopy){
+		for (Buffer* buffer : m_pendingRscCopy) {
 			buffer->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, copyRscBarriers);
 			buffer->m_uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, copyRscBarriers);
 		}
@@ -1241,8 +1241,17 @@ void Renderer::DrawAllImmediateContexts()
 
 void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 {
+	std::vector<D3D12_RESOURCE_BARRIER> drawRscBarriers;
+	FillResourceBarriers(ctx, drawRscBarriers);
+
 	Material* material = ctx.m_material;
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
+	unsigned int rscBarrierCount = drawRscBarriers.size();
+	if (rscBarrierCount > 0) {
+		cmdList->ResourceBarrier(rscBarrierCount, drawRscBarriers.data());
+	}
+
 	cmdList->SetPipelineState(material->m_PSO);
 
 	// Copy Descriptors into the GPU Descriptor heap
@@ -1375,28 +1384,47 @@ void Renderer::SetContextDescriptorStarts(ImmediateContext& ctx)
 	UpdateDescriptorsHandleStarts(ctx);
 }
 
+void Renderer::SetModelBufferForCtx(ImmediateContext& ctx)
+{
+	if (m_isModelBufferDirty) {
+		ctx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
+		ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	}
+	m_isModelBufferDirty = false;
+}
+
 void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes)
 {
+	SetModelBufferForCtx(ctx);
+
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	if (m_isModelBufferDirty) {
+		ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	}
 
 	ctx.SetDrawCallUsage(true);
 }
 
 void Renderer::SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes)
 {
+	SetModelBufferForCtx(ctx);
+
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateDiffuseVertexes.size();
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	if (m_isModelBufferDirty) {
+		ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	}
 
 	ctx.SetDrawCallUsage(true);
 }
 
 void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes, unsigned int indexCount, unsigned int const* indexes)
 {
+	SetModelBufferForCtx(ctx);
+
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateVertexes.size();
 	ctx.m_indexCount = indexCount;
@@ -1404,7 +1432,9 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateVertexes));
 	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	if (m_isModelBufferDirty) {
+		ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	}
 
 	ctx.SetIndexDrawFlag(true);
 	ctx.SetDrawCallUsage(true);
@@ -1412,6 +1442,8 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes)
 {
+	SetModelBufferForCtx(ctx);
+
 	ctx.m_vertexCount = numVertexes;
 	ctx.m_vertexStart = m_immediateVertexes.size();
 	ctx.m_indexCount = indexCount;
@@ -1419,7 +1451,9 @@ void Renderer::SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int num
 
 	std::copy(vertexes, vertexes + numVertexes, std::back_inserter(m_immediateDiffuseVertexes));
 	std::copy(indexes, indexes + indexCount, std::back_inserter(m_immediateIndices));
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	if (m_isModelBufferDirty) {
+		ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	}
 
 	ctx.SetIndexDrawFlag(true);
 	ctx.SetDrawCallUsage(true);
@@ -1454,7 +1488,6 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx.SetPipelineTypeFlag(false);
 		nextCtx.SetDepthTextureSRVFlag(false);
 		nextCtx.SetVertexType(VertexType::PCU); // PCU is default
-		nextCtx.m_modelCBO = GetNextCBufferSlot(ConstantBufferType::MODEL);
 	}
 	m_currentDrawCtx++;
 }
@@ -1544,17 +1577,68 @@ void Renderer::ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLi
 void Renderer::AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3D12_RESOURCE_BARRIER>& barriersArray)
 {
 	switch (bufferToBind->m_bufferType)
-	{	
-		case BufferType::VertexBuffer:
-		case BufferType::ConstantBuffer:
-			bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, barriersArray);
-			break;
-		case BufferType::IndexBuffer:
-			bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, barriersArray);
-			break;
+	{
+	case BufferType::VertexBuffer:
+	case BufferType::ConstantBuffer:
+		bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, barriersArray);
+		break;
+	case BufferType::IndexBuffer:
+		bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, barriersArray);
+		break;
 	default:
 		ERROR_AND_DIE("UNRECOGNIZED BUFFER TYPE");
 		break;
+	}
+}
+
+void Renderer::ExecuteMainRenderPass()
+{
+	// Uploads pending resources and inserts resource barriers before drawing
+	FinishPendingPrePassResourceTasks();
+	DrawAllImmediateContexts();
+
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+	rscCmdList->Close();
+	cmdList->Close();
+
+	ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
+	ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
+
+	ResetGPUState();
+}
+
+void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers)
+{
+	// Textures
+	for (auto& [slot, texture] : ctx.m_boundTextures) {
+		Resource* rsc = texture->GetResource();
+		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, out_rscBarriers);
+	}
+
+	// Constant Buffers
+	for (auto& [slot, cBuffer] : ctx.m_boundCBuffers) {
+		Resource* rsc = cBuffer->GetResource();
+		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, out_rscBarriers);
+	}
+
+	// All other buffers e.g: UAVs
+
+	for (auto& [slot, buffer] : ctx.m_boundCBuffers) {
+		Resource* rsc = buffer->GetResource();
+		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, out_rscBarriers);
+	}
+
+	// External VBO, IBO
+
+	if (ctx.m_externalIBO) {
+		Resource* externalIBORsc = ctx.m_externalIBO->GetResource();
+		externalIBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, out_rscBarriers);
+	}
+
+	if (ctx.m_externalVBO) {
+		Resource* externalVBORsc = ctx.m_externalVBO->GetResource();
+		externalVBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, out_rscBarriers);
 	}
 }
 
@@ -1582,7 +1666,10 @@ void Renderer::BeginFrame()
 
 void Renderer::EndFrame()
 {
+
 	DebugRenderEndFrame();
+	ExecuteMainRenderPass();
+
 	g_theMaterialSystem->EndFrame();
 
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
@@ -1769,12 +1856,11 @@ void Renderer::BeginCamera(Camera const& camera)
 	ConstantBuffer* nextCameraBuffer = GetNextCBufferSlot(ConstantBufferType::CAMERA);
 	nextCameraBuffer->CopyCPUToGPU(&cameraConstants, sizeof(CameraConstants));
 
-	ConstantBuffer* nextModelBuffer = GetNextCBufferSlot(ConstantBufferType::MODEL);
 	ModelConstants modelConstants = {};
-	nextModelBuffer->CopyCPUToGPU(&modelConstants, sizeof(ModelConstants));
+	ctx.m_modelConstants = modelConstants;
+	m_isModelBufferDirty = true;
 
 	ctx.m_cameraCBO = nextCameraBuffer;
-	ctx.m_modelCBO = nextModelBuffer;
 }
 
 void Renderer::EndCamera(Camera const& camera)
@@ -1783,20 +1869,6 @@ void Renderer::EndCamera(Camera const& camera)
 		ERROR_AND_DIE("ENDING WITH A DIFFERENT CAMERA");
 	}
 	m_currentCamera = nullptr;
-
-	// Uploads pending resources and inserts resource barriers before drawing
-	FinishPendingPrePassResourceTasks();
-	DrawAllImmediateContexts();
-
-	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
-	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
-	rscCmdList->Close();
-	cmdList->Close();
-
-	ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
-	ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
-
-	ResetGPUState();
 }
 
 void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
@@ -1877,7 +1949,8 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 	BindVertexBuffer(vertexBuffer);
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	SetModelBufferForCtx(ctx);
+
 
 	CopyCurrentDrawCtxToNext();
 }
@@ -1889,7 +1962,8 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	BindIndexBuffer(indexBuffer, indexCount);
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
-	ctx.m_modelCBO->CopyCPUToGPU(&ctx.m_modelConstants, sizeof(ModelConstants));
+	SetModelBufferForCtx(ctx);
+
 
 	CopyCurrentDrawCtxToNext();
 }
@@ -1961,12 +2035,14 @@ void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	ctx.m_modelConstants.ModelMatrix = modelMat;
+	m_isModelBufferDirty = true;
 }
 
 void Renderer::SetModelColor(Rgba8 const& modelColor)
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	modelColor.GetAsFloats(ctx.m_modelConstants.ModelColor);
+	m_isModelBufferDirty = true;
 }
 
 BitmapFont* Renderer::CreateBitmapFont(std::filesystem::path bitmapPath)
@@ -2053,13 +2129,21 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 		Resource* texRsc = texture->GetResource();
 		texRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_pendingRscBarriers);
 	}
+	else {
+		if(slot == 0){
+			currentDrawCtx.m_boundTextures[slot] = m_defaultTexture;
+		}
+		else {
+			currentDrawCtx.m_boundTextures.erase(slot);
+		}
+	}
 }
 
 void Renderer::BindMaterial(Material* mat)
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
-	if (!mat) mat = GetDefaultMaterial(true);
+	if (!mat) mat = GetDefaultMaterial(m_is3DDefault);
 	currentDrawCtx.m_material = mat;
 }
 
@@ -2428,6 +2512,8 @@ void Renderer::ResetGPUState()
 	m_immediateDiffuseIndices.clear();
 	m_pendingRscBarriers.clear();
 	m_pendingRscCopy.clear();
+
+	m_isModelBufferDirty = false;
 }
 
 void Renderer::InitializeImGui()

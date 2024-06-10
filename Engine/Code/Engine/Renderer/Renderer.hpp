@@ -261,7 +261,7 @@ private:
 	ImmediateContext& GetCurrentDrawCtx();
 	ConstantBuffer* GetNextCBufferSlot(ConstantBufferType cBufferType);
 	void SetContextDescriptorStarts(ImmediateContext& ctx);
-
+	void SetModelBufferForCtx(ImmediateContext& ctx);
 	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes);
 	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
 
@@ -277,6 +277,11 @@ private:
 	VertexBuffer* GetImmediateVBO(VertexType vertexType);
 	void ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLists);
 	void AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3D12_RESOURCE_BARRIER>& barriersArray);
+	/// <summary>
+	/// Execute all draw calls issued by Engine users (other Engine systems will be in a consecutive pass)
+	/// </summary>
+	void ExecuteMainRenderPass();
+	void FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers);
 private:
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
@@ -291,6 +296,7 @@ private:
 	Rgba8 m_ambientIntensity = Rgba8::WHITE;
 	Mat44 m_lightRenderTransform = Mat44();
 	bool m_is3DDefault = true;
+	bool m_isModelBufferDirty = false; // Keeping track on whether the model buffer can be reused between draw calls
 
 	unsigned int m_currentCmdListIndex = 0;
 	unsigned int m_currentBackBuffer = 0;

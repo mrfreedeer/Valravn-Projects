@@ -28,7 +28,6 @@ void ConstantBuffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 {
 	sizeInBytes = AlignToCBufferStride(sizeInBytes);
 	Buffer::CopyCPUToGPU(data, sizeInBytes);
-	m_buffer->MarkForVertexAndCBufferBind();
 }
 
 size_t ConstantBuffer::AlignToCBufferStride(size_t size) const

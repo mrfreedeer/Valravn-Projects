@@ -432,8 +432,7 @@ void DebugRenderSystem::RenderScreenShapes(Camera const& camera) const
 	//#TODO DX12 FIXTHIS
 
 	renderer->BeginCamera(camera);
-	Material* default2DMat = renderer->GetMaterialForName("Default2DMaterial");
-	renderer->BindMaterial(default2DMat);
+	renderer->BindMaterial(nullptr);
 
 	RenderFreeScreenText(renderer);
 	RenderTextMessages(renderer, camera);
@@ -453,7 +452,7 @@ void DebugRenderSystem::RenderFreeScreenText(Renderer* renderer) const
 		DebugShape const* shape = debugShapeList[shapeIndex];
 		if (shape) {
 			//#TODO DX12 FIXTHIS
-
+			renderer->SetModelMatrix(shape->GetModelMatrix());
 			renderer->SetModelColor(shape->GetModelColor());
 			shape->Render(renderer);
 		}
@@ -502,6 +501,7 @@ void DebugRenderSystem::RenderTextMessages(Renderer* renderer, Camera const& cam
 	listMutex.unlock();
 	//#TODO DX12 FIXTHIS
 
+	renderer->SetModelMatrix(Mat44());
 	renderer->BindTexture(&font->GetTexture());
 	if (textVerts.size() > 0) {
 		renderer->DrawVertexArray(textVerts);

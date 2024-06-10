@@ -37,8 +37,7 @@ World::World(Game* gamePointer) :
 {
 	BufferDesc newCBODesc = {};
 	newCBODesc.data = nullptr;
-	newCBODesc.descriptorHeap = nullptr;
-	newCBODesc.memoryUsage = MemoryUsage::Dynamic;
+	newCBODesc.memoryUsage = MemoryUsage::Default;
 	newCBODesc.owner = g_theRenderer;
 	newCBODesc.size = sizeof(GameConstants);
 	newCBODesc.stride = sizeof(GameConstants);
