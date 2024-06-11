@@ -914,9 +914,13 @@ void Game::RenderEntities() const
 		}
 	}
 
-	if (m_gameCamera->GetMode() != GameCameraMode::FIRST_PERSON) {
+	bool isVelocityRelevant = (m_gameCamera->GetMode() != GameCameraMode::FIRST_PERSON);
+	isVelocityRelevant = (m_gameCamera->GetMode() != GameCameraMode::SPECTATOR);
+
+	if (isVelocityRelevant) {
 		std::vector<Vertex_PCU> velocityVerts;
 		velocityVerts.reserve(6);
+		g_theRenderer->SetModelMatrix(Mat44());
 		AddVertsForLineSegment3D(velocityVerts, m_player->m_position, m_player->m_position + m_player->m_velocity, Rgba8::GREEN, 0.0025f);
 
 		g_theRenderer->DrawVertexArray(velocityVerts);

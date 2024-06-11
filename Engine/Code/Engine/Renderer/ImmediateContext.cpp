@@ -81,6 +81,8 @@ void ImmediateContext::Reset()
 	m_depthTarget = nullptr;
 	m_srvHandleStart = 0;
 	m_cbvHandleStart = 0;
+	m_externalIBO = nullptr;
+	m_externalVBO = nullptr;
 }
 
 void ImmediateContext::ResetExternalBuffers()

@@ -1261,6 +1261,11 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		CopyTextureToDescriptorHeap(boundTex, ctx.m_srvHandleStart, slot);
 	}
 
+	// Copy Descriptors into the GPU Descriptor heap
+	for (auto& [slot, cBuffer] : ctx.m_boundCBuffers) {
+		CopyBufferToGPUHeap(cBuffer, RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT, ctx.m_cbvHandleStart, slot);
+	}
+
 	for (auto& [slot, pBuffer] : ctx.m_boundBuffers) {
 		CopyBufferToGPUHeap(pBuffer, RESOURCE_BIND_SHADER_RESOURCE_BIT, ctx.m_srvHandleStart, slot);
 	}
@@ -1624,7 +1629,7 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 
 	// All other buffers e.g: UAVs
 
-	for (auto& [slot, buffer] : ctx.m_boundCBuffers) {
+	for (auto& [slot, buffer] : ctx.m_boundBuffers) {
 		Resource* rsc = buffer->GetResource();
 		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, out_rscBarriers);
 	}
@@ -1655,6 +1660,9 @@ void Renderer::BeginFrame()
 		// Execute the command list.
 		ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
 		ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
+
+		m_fence->Signal();
+		m_fence->Wait();
 	}
 
 	g_theMaterialSystem->BeginFrame();
@@ -2182,6 +2190,7 @@ void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCoun
 	currentDrawCtx.m_indexStart = 0;
 	currentDrawCtx.m_indexCount = indexCount;
 	m_boundBuffers.push_back(indexBuffer);
+	currentDrawCtx.SetIndexDrawFlag(true);
 }
 
 void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
@@ -2480,11 +2489,11 @@ ID3D12GraphicsCommandList6* Renderer::GetCurrentCommandList(CommandListType cmdL
 
 void Renderer::ResetGPUState()
 {
-	m_fence->Signal();
+	/*m_fence->Signal();
 	m_fence->Wait();
 
 	m_resourcesFence->Signal();
-	m_resourcesFence->Wait();
+	m_resourcesFence->Wait();*/
 
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU
