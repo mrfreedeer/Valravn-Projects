@@ -1827,8 +1827,6 @@ void Renderer::Shutdown()
 	m_backBuffers.clear();
 	m_pendingRscBarriers.clear();
 	m_pendingRscCopy.clear();
-	m_boundBuffers.clear();
-	m_boundTextures.clear();
 
 	for (unsigned int byteCodeInd = 0; byteCodeInd < m_shaderByteCodes.size(); byteCodeInd++) {
 		ShaderByteCode* byteCode = m_shaderByteCodes[byteCodeInd];
@@ -2175,7 +2173,6 @@ void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*=
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	ctx.m_boundCBuffers[slot] = cBuffer;
-	m_boundBuffers.push_back(cBuffer);
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
@@ -2186,7 +2183,6 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 	if (texture) {
 		// if it is depth texture, special code handles resource barriers at DrawImmediateCtx
 		if (texture->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT)) return;
-		m_boundTextures.push_back(texture);
 		Resource* texRsc = texture->GetResource();
 		texRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_pendingRscBarriers);
 	}
@@ -2232,7 +2228,6 @@ void Renderer::BindVertexBuffer(VertexBuffer* const& vertexBuffer)
 	currentDrawCtx.m_externalVBO = vertexBuffer;
 	currentDrawCtx.m_vertexStart = 0;
 	currentDrawCtx.m_vertexCount = (vertexBuffer->GetSize()) / vertexBuffer->GetStride();
-	m_boundBuffers.push_back(vertexBuffer);
 }
 
 void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount)
@@ -2242,7 +2237,6 @@ void Renderer::BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCoun
 	currentDrawCtx.m_externalIBO = indexBuffer;
 	currentDrawCtx.m_indexStart = 0;
 	currentDrawCtx.m_indexCount = indexCount;
-	m_boundBuffers.push_back(indexBuffer);
 	currentDrawCtx.SetIndexDrawFlag(true);
 }
 
@@ -2251,7 +2245,6 @@ void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
 	currentDrawCtx.m_boundBuffers[slot] = buffer;
-	m_boundBuffers.push_back(buffer);
 }
 
 void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
@@ -2598,9 +2591,6 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	defaultCmdList->OMSetRenderTargets(1, &rtHandle, FALSE, &dstHandle);
 
 	defaultCmdList->DrawInstanced(3, 1, 0, 0);
-	//CD3DX12_RESOURCE_BARRIER resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(dstResource->m_resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
-	//m_commandList->ResourceBarrier(1, &resourceBarrier);
-	//dstResource->m_currentState = D3D12_RESOURCE_STATE_COMMON;
 
 	Material* defaultMat = GetDefaultMaterial();
 
@@ -2712,7 +2702,7 @@ void Renderer::BeginFrameImGui()
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 #endif
 }
 

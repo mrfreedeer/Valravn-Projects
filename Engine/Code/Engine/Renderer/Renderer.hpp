@@ -331,8 +331,6 @@ private:
 	std::vector<Texture*> m_backBuffers;
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;
 	std::set<Buffer*> m_pendingRscCopy;
-	std::vector<Buffer*> m_boundBuffers;
-	std::vector<Texture const*> m_boundTextures;
 	std::vector<ShaderByteCode*> m_shaderByteCodes;
 	std::vector<Vertex_PCU> m_immediateVertexes;
 	std::vector<unsigned int> m_immediateIndices;
