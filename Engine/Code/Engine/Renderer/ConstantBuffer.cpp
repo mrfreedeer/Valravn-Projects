@@ -6,6 +6,7 @@
 ConstantBuffer::ConstantBuffer(BufferDesc const& bufferDesc) :
 	Buffer(bufferDesc)
 {
+	m_bufferType = BufferType::ConstantBuffer;
 	size_t newSize = AlignToCBufferStride(m_size);
 	m_size = newSize;
 	m_stride = m_size;
@@ -27,7 +28,6 @@ void ConstantBuffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 {
 	sizeInBytes = AlignToCBufferStride(sizeInBytes);
 	Buffer::CopyCPUToGPU(data, sizeInBytes);
-	m_buffer->MarkForVertexAndCBufferBind();
 }
 
 size_t ConstantBuffer::AlignToCBufferStride(size_t size) const

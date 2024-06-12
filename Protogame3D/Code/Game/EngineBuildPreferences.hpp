@@ -14,6 +14,7 @@
 #define ENGINE_DEBUG_RENDER
 #endif // _DEBUG
 
+#define ENGINE_USE_IMGUI
 
 //#define ENGINE_DISABLE_VSYNC
 

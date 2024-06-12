@@ -37,8 +37,7 @@ World::World(Game* gamePointer) :
 {
 	BufferDesc newCBODesc = {};
 	newCBODesc.data = nullptr;
-	newCBODesc.descriptorHeap = nullptr;
-	newCBODesc.memoryUsage = MemoryUsage::Dynamic;
+	newCBODesc.memoryUsage = MemoryUsage::Default;
 	newCBODesc.owner = g_theRenderer;
 	newCBODesc.size = sizeof(GameConstants);
 	newCBODesc.stride = sizeof(GameConstants);
@@ -203,7 +202,7 @@ void World::Render() const
 		chunk->Render();
 	}
 
-	
+
 
 
 	IntVec2 const& playerChunkCoords = Chunk::GetChunkCoordsForWorldPos(m_game->m_player->m_position);
@@ -259,9 +258,10 @@ void World::Render() const
 		AddVertsForLineSegment3D(raycastVerts, m_storedRaycast.m_startPosition, m_storedRaycast.m_impactPos, Rgba8::YELLOW);
 	}
 	else {
-		AddVertsForLineSegment3D(raycastVerts, m_latestRaycast.m_startPosition, m_latestRaycast.m_impactPos, Rgba8::YELLOW);
+		if (m_game->m_gameCamera->GetMode() != GameCameraMode::SPECTATOR) {
+			AddVertsForLineSegment3D(raycastVerts, m_latestRaycast.m_startPosition, m_latestRaycast.m_impactPos, Rgba8::YELLOW);
+		}
 	}
-
 
 	g_theRenderer->BindMaterial(nullptr);
 	g_theRenderer->BindTexture(nullptr);
@@ -499,6 +499,7 @@ void World::UpdateRaycast()
 		}
 	}
 	else {
+
 		cameraPos = m_game->m_player->m_position;
 		cameraFwd = m_game->m_player->m_orientation.GetXForward();
 

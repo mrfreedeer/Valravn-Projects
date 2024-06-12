@@ -144,3 +144,13 @@ Rgba8 const Texture::GetClearColour() const
 {
 	return m_creationInfo.m_clearColour;
 }
+
+void Texture::TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsCommandList* commList)
+{
+	m_handle->TransitionTo(newState, commList);
+}
+
+void Texture::TransitionTo(D3D12_RESOURCE_STATES newState, ComPtr<ID3D12GraphicsCommandList> commList)
+{
+	m_handle->TransitionTo(newState, commList);
+}

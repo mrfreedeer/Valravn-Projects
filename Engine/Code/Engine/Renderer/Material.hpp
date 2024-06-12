@@ -33,7 +33,7 @@ struct MaterialConfig
 	std::string m_src = "";
 	ShaderLoadInfo m_shaders[ShaderType::NUM_SHADER_TYPES] = {};
 
-	BlendMode m_blendMode = BlendMode::OPAQUE;
+	BlendMode m_blendMode[8] = {BlendMode::OPAQUE};
 	DepthFunc m_depthFunc = DepthFunc::LESSEQUAL;
 	FillMode m_fillMode = FillMode::SOLID;
 	CullMode m_cullMode = CullMode::BACK;

@@ -1,7 +1,15 @@
 #include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Core/StringUtils.hpp"
 
-TextureFormat ParseFromString(std::string const& text)
+BlendMode ParseFromString(std::string const& strBlendMode, BlendMode defaultBlendMode)
+{
+	if (AreStringsEqualCaseInsensitive(strBlendMode, "ALPHA")) return BlendMode::ALPHA;
+	if (AreStringsEqualCaseInsensitive(strBlendMode, "ADDITIVE")) return BlendMode::ADDITIVE;
+	if (AreStringsEqualCaseInsensitive(strBlendMode, "OPAQUE")) return BlendMode::OPAQUE;
+	return defaultBlendMode;
+}
+
+TextureFormat ParseFromString(std::string const& text, TextureFormat defaultFormat)
 {
 	if(AreStringsEqualCaseInsensitive(text, "R8G8B8A8_UNORM")) return TextureFormat::R8G8B8A8_UNORM;
 	if(AreStringsEqualCaseInsensitive(text, "R32G32B32A32_FLOAT")) return TextureFormat::R32G32B32A32_FLOAT;
@@ -11,5 +19,5 @@ TextureFormat ParseFromString(std::string const& text)
 	if(AreStringsEqualCaseInsensitive(text, "R32_FLOAT")) return TextureFormat::R32_FLOAT;
 	if(AreStringsEqualCaseInsensitive(text, "UNKNOWN")) return TextureFormat::UNKNOWN;
 
-	return TextureFormat::INVALID;
+	return defaultFormat;
 }

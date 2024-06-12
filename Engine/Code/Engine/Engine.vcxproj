@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props')" />
-  <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props')" />
+  <Import Project="..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props" Condition="Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="DebugInline|Win32">
       <Configuration>DebugInline</Configuration>
@@ -52,40 +51,16 @@
     <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='FastBreak|Win32'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_CopyLocation>.\D3D12\</Microsoft_Direct3D_DXC_CopyLocation>
-    <Microsoft_Direct3D_DXC_SkipIncludeDir>false</Microsoft_Direct3D_DXC_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_SkipLibraryCopy>false</Microsoft_Direct3D_DXC_SkipLibraryCopy>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_CopyLocation>.\D3D12\</Microsoft_Direct3D_DXC_CopyLocation>
-    <Microsoft_Direct3D_DXC_SkipIncludeDir>false</Microsoft_Direct3D_DXC_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_SkipLibraryCopy>false</Microsoft_Direct3D_DXC_SkipLibraryCopy>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_CopyLocation>.\D3D12\</Microsoft_Direct3D_DXC_CopyLocation>
-    <Microsoft_Direct3D_DXC_SkipIncludeDir>false</Microsoft_Direct3D_DXC_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_SkipLibraryCopy>false</Microsoft_Direct3D_DXC_SkipLibraryCopy>
   </PropertyGroup>
   <PropertyGroup Label="Globals" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Microsoft_Direct3D_D3D12_D3D12SDKPath>.\D3D12\</Microsoft_Direct3D_D3D12_D3D12SDKPath>
-    <Microsoft_Direct3D_D3D12_SkipIncludeDir>false</Microsoft_Direct3D_D3D12_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_CopyLocation>.\D3D12\</Microsoft_Direct3D_DXC_CopyLocation>
-    <Microsoft_Direct3D_DXC_SkipIncludeDir>false</Microsoft_Direct3D_DXC_SkipIncludeDir>
-    <Microsoft_Direct3D_DXC_SkipLibraryCopy>false</Microsoft_Direct3D_DXC_SkipLibraryCopy>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -306,7 +281,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12/</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -346,6 +321,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -385,6 +361,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -427,6 +404,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4369;26812</DisableSpecificWarnings>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -532,6 +510,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClCompile Include="Renderer\D3D11\D3D11TypeConversions.cpp" />
     <ClCompile Include="Renderer\D3D12\D3D12TypeConversions.cpp" />
     <ClCompile Include="Renderer\D3D12\DescriptorHeap.cpp" />
+    <ClCompile Include="Renderer\D3D12\Fence.cpp" />
     <ClCompile Include="Renderer\D3D12\Resource.cpp" />
     <ClCompile Include="Renderer\DebugRendererSystem.cpp" />
     <ClCompile Include="Renderer\DebugShape.cpp" />
@@ -653,6 +632,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClInclude Include="Renderer\D3D12\d3dx12_root_signature.h" />
     <ClInclude Include="Renderer\D3D12\d3dx12_state_object.h" />
     <ClInclude Include="Renderer\D3D12\DescriptorHeap.hpp" />
+    <ClInclude Include="Renderer\D3D12\Fence.hpp" />
     <ClInclude Include="Renderer\D3D12\Resource.hpp" />
     <ClInclude Include="Renderer\DebugRendererSystem.hpp" />
     <ClInclude Include="Renderer\DebugShape.hpp" />
@@ -686,9 +666,9 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\Binaries\%(Filename).cso</ObjectFileOutput>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\Binaries\%(Filename).cso</ObjectFileOutput>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">PixelMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">PixelMain</EntryPointName>
@@ -725,13 +705,13 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -775,11 +755,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -810,11 +790,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -845,11 +825,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -880,11 +860,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -911,6 +891,26 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       </PreprocessorDefinitions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">-Qembed_debug %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_p.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_v.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
     <FxCompile Include="Renderer\Materials\Shaders\Stages\GrayScaleEffect_p.hlsl">
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\Binaries\%(Filename).cso</ObjectFileOutput>
@@ -929,13 +929,13 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">PixelMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">PixelMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">
@@ -964,13 +964,13 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       </PreprocessorDefinitions>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">
@@ -985,11 +985,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -1020,11 +1020,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -1078,11 +1078,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -1113,11 +1113,11 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">6.5</ShaderModel>
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.5</ShaderModel>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">true</TreatWarningAsError>
       <TreatWarningAsError Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">true</TreatWarningAsError>
@@ -1144,13 +1144,19 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       </PreprocessorDefinitions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">-Qembed_debug %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
-    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli" />
-    <None Include="Renderer\Materials\Shaders\Common\Math.hlsli" />
+    <None Include="packages.config" />
+    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Renderer\Materials\Shaders\Common\Math.hlsli">
+      <FileType>Document</FileType>
+    </None>
     <None Include="Renderer\Materials\Shaders\Default.hlsli" />
     <None Include="Renderer\Materials\Shaders\DefaultDiffuse.hlsli" />
     <None Include="Renderer\Materials\Shaders\DistanceFogEffect.hlsli" />
     <None Include="Renderer\Materials\Shaders\DownsampleDepthBuffer.hlsli" />
     <None Include="Renderer\Materials\Shaders\effect.hlsli" />
+    <None Include="Renderer\Materials\Shaders\FirstTriangle.hlsli" />
     <None Include="Renderer\Materials\Shaders\GrayScaleEffect.hlsli" />
     <None Include="Renderer\Materials\Shaders\InvertedColorEffect.hlsli" />
     <None Include="Renderer\Materials\Shaders\LinearDepthVisualizer.hlsli" />
@@ -1167,6 +1173,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <Xml Include="Renderer\Materials\Default3DDiffuseMaterial.xml" />
     <Xml Include="Renderer\Materials\Default3DMaterial.xml" />
     <Xml Include="Renderer\Materials\DistanceFogFXMaterial.xml" />
+    <Xml Include="Renderer\Materials\FirstTriangleMaterial.xml" />
     <Xml Include="Renderer\Materials\GrayScaleFXMaterial.xml" />
     <Xml Include="Renderer\Materials\InvertedColorFXMaterial.xml" />
     <Xml Include="Renderer\Materials\LinearDepthVisualizer.xml" />
@@ -1174,18 +1181,13 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\..\..\Protogame3D\packages\Microsoft.Direct3D.D3D12.1.611.1\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\Protogame3D\packages\Microsoft.Direct3D.D3D12.1.611.1\build\native\Microsoft.Direct3D.D3D12.targets')" />
-    <Import Project="..\..\..\SimpleMiner\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\SimpleMiner\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />
-    <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" />
-    <Import Project="..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets" Condition="Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets')" />
+    <Import Project="..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.props'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.DXC.1.7.2308.12\build\native\Microsoft.Direct3D.DXC.targets'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.props'))" />
-    <Error Condition="!Exists('..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FluidSimulation\packages\Microsoft.Direct3D.D3D12.1.611.2\build\native\Microsoft.Direct3D.D3D12.targets'))" />
+    <Error Condition="!Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props'))" />
+    <Error Condition="!Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets'))" />
   </Target>
 </Project>

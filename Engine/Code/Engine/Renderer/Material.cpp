@@ -40,7 +40,7 @@ void Material::LoadFromXML(XMLElement const* xmlElement)
 	}
 
 	// Sibling with same config is this same material
-	m_siblings.m_blendModeSiblings[(size_t)m_config.m_blendMode] = this;
+	m_siblings.m_blendModeSiblings[(size_t)m_config.m_blendMode[0]] = this;
 	m_siblings.m_cullModeSiblings[(size_t)m_config.m_cullMode] = this;
 	m_siblings.m_depthFuncSiblings[(size_t)m_config.m_depthFunc] = this;
 	m_siblings.m_depthEnableSiblings[(size_t)m_config.m_depthEnable] = this;
@@ -91,16 +91,13 @@ void Material::ParseShader(std::string const& attributeName, XMLElement const& x
 void Material::ParseBlendMode(XMLElement const& xmlElement)
 {
 	std::string blendModeStr = ParseXmlAttribute(xmlElement, "value", "Opaque");
-	BlendMode& blendMode = m_config.m_blendMode;
 
-	if (AreStringsEqualCaseInsensitive(blendModeStr, "opaque")) {
-		blendMode = BlendMode::OPAQUE;
-	}
-	else if (AreStringsEqualCaseInsensitive(blendModeStr, "alpha")) {
-		blendMode = BlendMode::ALPHA;
-	}
-	else if (AreStringsEqualCaseInsensitive(blendModeStr, "additive")) {
-		blendMode = BlendMode::ADDITIVE;
+	BlendMode defaultBlendMode = ParseFromString(blendModeStr, BlendMode::OPAQUE);
+
+	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		BlendMode& rtBlendMode = m_config.m_blendMode[rtIndex];
+		rtBlendMode = defaultBlendMode;
+
 	}
 }
 
@@ -214,7 +211,11 @@ void Material::ParseRenderTargets(XMLElement const& xmlElement)
 	while (renderTargetDesc) {
 		std::string texFormat = ParseXmlAttribute(*renderTargetDesc, "format", "INVALID");
 		unsigned int rtIndex = ParseXmlAttribute(*renderTargetDesc, "index", 0);
-		m_config.m_renderTargetFormats[rtIndex] = ParseFromString(texFormat);
+		std::string blendModeStr = ParseXmlAttribute(xmlElement, "blendMode", "Opaque");
+
+		m_config.m_renderTargetFormats[rtIndex] = ParseFromString(texFormat, TextureFormat::INVALID);
+		BlendMode customBlendMode = ParseFromString(blendModeStr, BlendMode::OPAQUE);
+		m_config.m_blendMode[rtIndex] = customBlendMode;
 
 		renderTargetDesc = renderTargetDesc->NextSiblingElement();
 	}

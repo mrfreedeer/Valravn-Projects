@@ -18,15 +18,6 @@ void Basic3DMode::Startup()
 {
 	GameMode::Startup();
 
-	if (m_deltaTimeSample) {
-		delete[] m_deltaTimeSample;
-		m_deltaTimeSample = nullptr;
-	}
-
-	m_deltaTimeSample = new double[m_fpsSampleSize];
-	m_storedDeltaTimes = 0;
-	m_totalDeltaTimeSample = 0.0f;
-
 	SubscribeEventCallbackFunction("DebugAddWorldWireSphere", DebugSpawnWorldWireSphere);
 	SubscribeEventCallbackFunction("DebugAddWorldLine", DebugSpawnWorldLine3D);
 	SubscribeEventCallbackFunction("DebugRenderClear", DebugClearShapes);
@@ -104,8 +95,7 @@ void Basic3DMode::Startup()
 void Basic3DMode::Update(float deltaSeconds)
 {
 	GameMode::Update(deltaSeconds);
-	AddDeltaToFPSCounter();
-
+	m_fps = 1.0f / deltaSeconds;
 	UpdateInput(deltaSeconds);
 	Vec2 mouseClientDelta = g_theInput->GetMouseClientDelta();
 
@@ -150,12 +140,15 @@ void Basic3DMode::Shutdown()
 {
 	pointerToSelf = nullptr;
 
-	if (m_deltaTimeSample) {
-		delete[] m_deltaTimeSample;
-	}
-	m_deltaTimeSample = nullptr;
-
 	GameMode::Shutdown();
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireSphere", DebugSpawnWorldWireSphere);
+	UnsubscribeEventCallbackFunction("DebugAddWorldLine", DebugSpawnWorldLine3D);
+	UnsubscribeEventCallbackFunction("DebugRenderClear", DebugClearShapes);
+	UnsubscribeEventCallbackFunction("DebugRenderToggle", DebugToggleRenderMode);
+	UnsubscribeEventCallbackFunction("DebugAddBasis", DebugSpawnPermanentBasis);
+	UnsubscribeEventCallbackFunction("DebugAddWorldWireCylinder", DebugSpawnWorldWireCylinder);
+	UnsubscribeEventCallbackFunction("DebugAddBillboardText", DebugSpawnBillboardText);
+	UnsubscribeEventCallbackFunction("Controls", GetControls);
 
 }
 
@@ -342,38 +335,13 @@ bool Basic3DMode::GetControls(EventArgs& eventArgs)
 	return false;
 }
 
-double Basic3DMode::GetFPS() const
-{
-	if (m_storedDeltaTimes < m_fpsSampleSize) return 1 / Clock::GetSystemClock().GetDeltaTime();
-
-	double fps = m_fpsSampleSize / m_totalDeltaTimeSample;
-
-	return fps;
-}
-
-void Basic3DMode::AddDeltaToFPSCounter()
-{
-	int prevIndex = m_currentFPSAvIndex;
-	m_currentFPSAvIndex++;
-	if (m_currentFPSAvIndex >= m_fpsSampleSize) m_currentFPSAvIndex = 0;
-	m_deltaTimeSample[m_currentFPSAvIndex] = Clock::GetSystemClock().GetDeltaTime();
-
-	m_totalDeltaTimeSample += Clock::GetSystemClock().GetDeltaTime();
-	m_storedDeltaTimes++;
-
-	if (m_storedDeltaTimes > m_fpsSampleSize) {
-		m_totalDeltaTimeSample -= m_deltaTimeSample[prevIndex];
-	}
-
-}
-
 void Basic3DMode::DisplayClocksInfo() const
 {
 	Clock& devClock = g_theConsole->m_clock;
 	Clock const& debugClock = DebugRenderGetClock();
 
 	double devClockFPS = 1.0 / devClock.GetDeltaTime();
-	double gameFPS = GetFPS();
+	double gameFPS = m_fps;
 	double debugClockFPS = 1.0 / debugClock.GetDeltaTime();
 
 	double devClockTotalTime = devClock.GetTotalTime();

@@ -1,6 +1,7 @@
 #include "Engine/Renderer/D3D12/D3D12TypeConversions.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
+#include "Engine/Core/Buffer.hpp"
 
 DXGI_FORMAT LocalToD3D12(TextureFormat textureFormat)
 {
@@ -62,6 +63,11 @@ D3D12_COMPARISON_FUNC LocalToD3D12(DepthFunc depthTest)
 		ERROR_AND_DIE(Stringf("UNSUPPORTED DEPTH TEST %d", (int)depthTest).c_str());
 	}
 
+}
+
+D3D12_VERTEX_BUFFER_VIEW LocalToD3D12(BufferView const& bufferView)
+{
+	return {bufferView.m_bufferLocation, (UINT)bufferView.m_sizeInBytes, (UINT)bufferView.m_strideInBytes};
 }
 
 DXGI_FORMAT LocalToColourD3D12(TextureFormat textureFormat)

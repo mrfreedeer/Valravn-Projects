@@ -42,6 +42,8 @@ public:
 	ID3D12Resource* GetRawResource() const;
 	Rgba8 const GetClearColour() const;
 	std::string const& GetImageFilePath() const { return m_name; }
+	void TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsCommandList* commList);
+	void TransitionTo(D3D12_RESOURCE_STATES newState, ComPtr<ID3D12GraphicsCommandList> commList);
 private:
 	/// Views are created in DX12 but they're not a separate structure
 	ResourceView* CreateShaderResourceView();
@@ -55,5 +57,6 @@ private:
 	std::string m_name = "Unammed Texture";
 	TextureCreateInfo m_creationInfo;
 	Resource* m_handle = nullptr;
+	Resource* m_uploadRsc = nullptr;
 	std::vector<ResourceView*> m_views;
 };

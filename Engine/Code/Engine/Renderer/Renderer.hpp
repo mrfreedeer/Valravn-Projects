@@ -18,7 +18,6 @@
 #include <dxcapi.h>
 #include <d3d12shader.h>
 //#include <d3dcompiler.h>
-#include <wrl.h>
 
 
 #pragma comment (lib, "Engine/Renderer/D3D12/dxcompiler.lib")
@@ -27,10 +26,8 @@
 //#pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "dxguid.lib")
 
-template <typename T>
-using ComPtr = Microsoft::WRL::ComPtr<T>;
 
-
+struct ID3D12Device13;
 
 struct ShaderByteCode;
 struct ShaderLoadInfo;
@@ -47,6 +44,7 @@ class Camera;
 class ConstantBuffer;
 class BitmapFont;
 class ImmediateContext;
+class Fence;
 struct Rgba8;
 struct Vertex_PCU;
 struct TextureCreateInfo;
@@ -55,11 +53,12 @@ extern MaterialSystem* g_theMaterialSystem;
 
 struct RendererConfig {
 	Window* m_window = nullptr;
+	unsigned int m_immediateCtxCount = (2 << 13); // 16384
 	unsigned int m_backBuffersCount = 2;
 };
 
 struct FxContext {
-	CameraConstants m_cameraConstants = {};
+	ConstantBuffer* m_cameraCBO = nullptr;
 	Material* m_fx = nullptr;
 	Texture* m_depthTarget = nullptr;
 };
@@ -133,6 +132,9 @@ public:
 	// Mesh Shaders
 	void DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ);
 
+	void DrawVertexBuffer(VertexBuffer* const& vertexBuffer);
+	void DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount);
+
 	// Unlit vertex array
 	void DrawVertexArray(unsigned int numVertexes, const Vertex_PCU* vertexes);
 	void DrawVertexArray(std::vector<Vertex_PCU> const& vertexes);
@@ -144,21 +146,16 @@ public:
 	void DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes);
 	void DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices);
 	void DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices);
-	void BindDepthAsTexture(Texture* depthTarget = nullptr, unsigned int slot = 0);
 
 	void SetModelMatrix(Mat44 const& modelMat);
 	void SetModelColor(Rgba8 const& modelColor);
-	void ExecuteCommandLists(ID3D12CommandList** commandLists, unsigned int count);
-	void WaitForGPU();
-	DescriptorHeap* GetDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
-	ResourceView* CreateResourceView(ResourceViewInfo const& resourceViewInfo, DescriptorHeap* descriptorHeap = nullptr) const;
+
+	ResourceView* CreateResourceView(ResourceViewInfo const& resourceViewInfo) const;
 	BitmapFont* CreateOrGetBitmapFont(std::filesystem::path bitmapPath);
 	Material* GetMaterialForName(char const* materialName);
 	Material* GetMaterialForPath(std::filesystem::path const& materialPath);
-	Material* GetDefaultMaterial() const;
-	Material* GetDefault2DMaterial() const;
-	Material* GetDefault3DMaterial() const;
+	Material* GetDefaultMaterial(bool isUsing3D = true) const;
+
 	// Binds
 	void BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot = 0);
 	void BindTexture(Texture const* texture, unsigned int slot = 0);
@@ -171,7 +168,6 @@ public:
 
 	// Setters
 	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
-	void SetMaterialPSO(Material* mat);
 	void SetBlendMode(BlendMode newBlendMode);
 	void SetCullMode(CullMode newCullMode);
 	void SetFillMode(FillMode newFillMode);
@@ -188,9 +184,6 @@ public:
 	void SetLightRenderMatrix(Mat44 gameToRenderMatrix) { m_lightRenderTransform = gameToRenderMatrix; }
 	void BindLightConstants();
 
-	void DrawVertexBuffer(VertexBuffer* const& vertexBuffer);
-	void DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexBuffer* const& indexBuffer, size_t indexCount);
-
 	// General
 	void SetDebugName(ID3D12Object* object, char const* name);
 	template<typename T_Object>
@@ -201,174 +194,102 @@ public:
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
-	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
-	void TrackResource(Resource* newResource);
-	void RemoveResource(Resource* newResource);
-	void SignalFence(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue);
+	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect);
+
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
-	ComPtr<ID3D12GraphicsCommandList6> m_commandList;
-	ComPtr<ID3D12GraphicsCommandList6> m_ResourcesCommandList;
+	ID3D12GraphicsCommandList6* GetCurrentCommandList(CommandListType cmdListType);
 
-
-	void FlushPendingWork();
 	void ResetGPUState();
 private:
-
-	// DX12 Initialization & Render Initialization
+	// ImGui
 	void InitializeImGui();
 	void ShutdownImGui();
 	void BeginFrameImGui();
 	void EndFrameImGui();
-	void EnableDebugLayer() const;
-	void CreateDXGIFactory();
-	ComPtr<IDXGIAdapter4> GetAdapter();
-	void CreateDevice(ComPtr<IDXGIAdapter4> adapter);
-	void CreateCommandQueue(D3D12_COMMAND_LIST_TYPE type);
-	bool HasTearingSupport();
+
+	// DX12 Initialization & Render Initialization
+	void CreateDevice();
+	void EnableDebugLayer();
+	void CreateCommandQueue();
 	void CreateSwapChain();
-	void CreateDescriptorHeap(ID3D12DescriptorHeap*& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, unsigned int numDescriptors, bool visibleFromGPU = false);
-	void CreateRenderTargetViewsForBackBuffers();
-	void CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator>& commandAllocator);
-	void CreateCommandList(ComPtr<ID3D12GraphicsCommandList6>& commList, D3D12_COMMAND_LIST_TYPE type, ComPtr<ID3D12CommandAllocator> const& commandAllocator);
-	void CreateFence(ComPtr<ID3D12Fence1>& fence, char const* debugName);
-	void CreateFenceEvent();
+	void CreateDescriptorHeaps();
+	void CreateFences();
 	void CreateDefaultRootSignature();
+	void CreateBackBuffers();
+	ResourceView* CreateShaderResourceView(ResourceViewInfo const& resourceViewInfo) const;
+	ResourceView* CreateRenderTargetView(ResourceViewInfo const& viewInfo) const;
+	ResourceView* CreateDepthStencilView(ResourceViewInfo const& viewInfo) const;
+	ResourceView* CreateConstantBufferView(ResourceViewInfo const& viewInfo) const;
+
+	DescriptorHeap* GetGPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
+
+	// Textures
+	BitmapFont*CreateBitmapFont(std::filesystem::path bitmapPath);
+	void DestroyTexture(Texture* textureToDestroy);
 	void CreateDefaultTextureTargets();
-
-	// Fence signaling
-	unsigned int SignalFence(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int& fenceValue);
-	void WaitForFenceValue(ComPtr<ID3D12Fence1>& fence, unsigned int fenceValue, HANDLE fenceEvent);
-	void FlushAndFinish(ComPtr<ID3D12CommandQueue>& commandQueue, ComPtr<ID3D12Fence1> fence, unsigned int* fenceValues, HANDLE fenceEvent);
-
+	void ClearTexture(Rgba8 const& color, Texture* tex);
+	Texture* GetTextureForFileName(char const* imageFilePath);
+	Texture* CreateTextureFromImage(Image const& image);
+	Texture* CreateTextureFromFile(char const* imageFilePath);
 	Texture* GetActiveRenderTarget() const;
 	Texture* GetBackUpRenderTarget() const;
-
 	Texture* GetActiveBackBuffer() const;
 	Texture* GetBackUpBackBuffer() const;
 
-	// Shaders & Resources
-	bool CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std::vector<D3D12_SIGNATURE_PARAMETER_DESC>& elementsDescs, std::vector<std::string>& semanticNames);
-	bool CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo);
-	void LoadEngineShaderBinaries();
-
+	// Material and Compilation
 	void CreatePSOForMaterial(Material* material);
+	bool CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo);
+	void CreateInputLayoutFromVS(std::vector<uint8_t>& shaderByteCode, std::vector<D3D12_SIGNATURE_PARAMETER_DESC>& elementsDescs, std::vector<std::string>& semanticNames);
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
-	void CreateViewport();
-	void DestroyTexture(Texture* textureToDestroy);
-	Texture* GetTextureForFileName(char const* imageFilePath);
-	Texture* CreateTextureFromFile(char const* imageFilePath);
-	Texture* CreateTextureFromImage(Image const& image);
-	ResourceView* CreateShaderResourceView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateRenderTargetView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateDepthStencilView(ResourceViewInfo const& viewInfo) const;
-	ResourceView* CreateConstantBufferView(ResourceViewInfo const& viewInfo, DescriptorHeap* descriptorHeap) const;
-	void SetBlendModeSpecs(BlendMode blendMode, D3D12_BLEND_DESC& blendDesc);
-	BitmapFont* CreateBitmapFont(std::filesystem::path bitmapPath);
+	void CreateGraphicsPSO(Material* material);
+	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
 
-	void ClearTexture(Rgba8 const& color, Texture* tex);
-	void ResetGPUDescriptorHeaps();
-	void CopyTextureToHeap(Texture const* textureToBind, unsigned int handleStart, unsigned int slot = 0);
-	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot = 0);
-	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);
-
-	// Handling of pre-allocated engine buffers
-	ConstantBuffer& GetNextCameraBuffer();
-	ConstantBuffer& GetNextModelBuffer();
-	ConstantBuffer& GetNextLightBuffer();
-	ConstantBuffer& GetCurrentCameraBuffer();
-	ConstantBuffer& GetCurrentModelBuffer();
-	ConstantBuffer& GetCurrentLightBuffer();
-
-
-	void UploadAllPendingResources();
-	void DrawAllEffects();
-	void DrawEffect(FxContext& ctx);
-	void DrawAllImmediateContexts();
-	void ClearAllImmediateContexts();
-	void DrawImmediateCtx(ImmediateContext& ctx);
-	void CopyCurrentDrawCtxToNext();
+	// Internal Resource Management
+	void InitializeCBufferArrays();
+	void CreateDefaultBufferObjects();
 	/// <summary>
-	/// Update where SRV and CBV handles will start
+	/// // Uploads pending resources and inserts resource barriers before drawing
 	/// </summary>
-	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
-	ComPtr<ID3D12GraphicsCommandList6> GetBufferCommandList();
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetGraphicsPSO(Material* material, std::vector<std::string>& nameStrings);
-	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC GetMeshShaderPSO(Material* material);
+	void FinishPendingPrePassResourceTasks();
+	void FinishPendingPreFxPassResourceTasks();
+	void UploadImmediateVertexes();
+	
+	void DrawAllEffects();
+	void DrawEffect(FxContext& fxCtx);
 
-	void ResetResourcesState();
+	void DrawAllImmediateContexts();
+	void DrawImmediateContext(ImmediateContext& ctx);
+	ImmediateContext& GetCurrentDrawCtx();
+	ConstantBuffer* GetNextCBufferSlot(ConstantBufferType cBufferType);
+	void SetContextDescriptorStarts(ImmediateContext& ctx);
+	void SetModelBufferForCtx(ImmediateContext& ctx);
+	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes);
+	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
+
+	void SetContextDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes);
+	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
+
+	void CopyCurrentDrawCtxToNext();
+	void CopyTextureToDescriptorHeap(Texture const* texture, unsigned int handleStart, unsigned int slot);
+	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot);
+	void CopyEngineCBuffersToGPUHeap(ImmediateContext& ctx);
+	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);
+	void UpdateDescriptorsHandleStarts(ImmediateContext const& ctx);
+	VertexBuffer* GetImmediateVBO(VertexType vertexType);
+	void ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLists);
+	void AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3D12_RESOURCE_BARRIER>& barriersArray);
+	/// <summary>
+	/// Execute all draw calls issued by Engine users (other Engine systems will be in a consecutive pass)
+	/// </summary>
+	void ExecuteMainRenderPass();
+	void ExecuteEffectsRenderPass();
+	void FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers);
 private:
-	RendererConfig m_config = {};
 	// This object must be first ALWAYS!!!!!
 	LiveObjectReporter m_liveObjectReporter;
-
-	ComPtr<ID3D12Device2> m_device;
-	ComPtr<ID3D12RootSignature> m_rootSignature;
-	ComPtr<ID3D12RootSignature> m_MSRootSignature;
-	ComPtr<ID3D12CommandQueue> m_commandQueue;
-	ComPtr<IDXGISwapChain4> m_swapChain;
-	ComPtr<ID3D12Fence1> m_fence;
-	ComPtr<ID3D12Fence1> m_rscFence;
-	ComPtr<IDXGIFactory4> m_dxgiFactory;
-	ComPtr<ID3D12PipelineState> m_pipelineState;
-
-	std::vector<ComPtr<ID3D12CommandAllocator>> m_commandAllocators[2];
-	std::vector<Texture*> m_backBuffers;
-	std::vector<Texture*> m_defaultRenderTargets;
-	std::vector<ShaderByteCode*> m_shaderByteCodes;
-	std::vector<Texture*> m_loadedTextures;
-	std::vector<BitmapFont*> m_loadedFonts;
-	std::set<Resource*> m_resources;
-
-	std::vector<ID3D12Resource*> m_frameUploadHeaps;
-	//ID3D12DescriptorHeap* m_RTVdescriptorHeap;
-	std::vector<DescriptorHeap*> m_defaultDescriptorHeaps;
-	std::vector<DescriptorHeap*> m_defaultGPUDescriptorHeaps;
-	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
-	std::vector<ComPtr<ID3D12GraphicsCommandList6>> m_commandLists;
-
-	ImmediateContext* m_immediateCtxs = nullptr;
-	std::vector<FxContext> m_effectsCtxs;
-	std::vector<ConstantBuffer> m_cameraCBOArray;
-	std::vector<ConstantBuffer> m_modelCBOArray;
-	std::vector<ConstantBuffer> m_lightCBOArray;
-	std::vector<Vertex_PCU> m_immediateVertexes;
-	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
-	std::vector<unsigned int> m_immediateIndices;
-	std::vector<unsigned int> m_fenceValues;
-	std::vector<Buffer*> m_bufferUpdateQueue;
-	std::vector<Buffer*> m_boundOtherResources;
-	unsigned int m_rscFenceValue = 0;
-
-	Material* m_default2DMaterial = nullptr;
-	Material* m_default3DMaterial = nullptr;
-	Texture* m_defaultDepthTarget = nullptr;
-	Texture* m_defaultTexture = nullptr;
-	Camera const* m_currentCamera = nullptr;
-	VertexBuffer* m_immediateVBO = nullptr;
-	VertexBuffer* m_immediateDiffuseVBO = nullptr;
-	IndexBuffer* m_immediateIBO = nullptr;
-	HANDLE m_fenceEvent; // void*
-	HANDLE m_rscFenceEvent;
-
-	bool m_useWARP = false;
-	bool m_uploadRequested = false;
-	bool m_isCommandListOpen = false;
-	bool m_renderPassOpen = false;
-
-	unsigned int m_currentRenderTarget = 0;
-	unsigned int m_currentBackBuffer = 0;
-	unsigned int m_antiAliasingLevel = 0;
-	unsigned int m_currentFrame = 0;
-	unsigned int m_RTVdescriptorSize = 0;
-	unsigned int m_currentCameraCBufferSlot = 0;
-	unsigned int m_currentModelCBufferSlot = 0;
-	unsigned int m_currentLightCBufferSlot = 0;
-	unsigned int m_srvHandleStart = 0;
-	unsigned int m_cbvHandleStart = 0;
-	unsigned int m_immediateCtxCount = IMMEDIATE_CTX_AMOUNT;
-	unsigned int m_currentDrawCtx = 0;
-
+	RendererConfig m_config = {};
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};
 
@@ -378,6 +299,74 @@ private:
 	Rgba8 m_directionalLightIntensity = Rgba8::WHITE;
 	Rgba8 m_ambientIntensity = Rgba8::WHITE;
 	Mat44 m_lightRenderTransform = Mat44();
+	bool m_is3DDefault = true;
+	bool m_isModelBufferDirty = false; // Keeping track on whether the model buffer can be reused between draw calls
+
+	unsigned int m_currentCmdListIndex = 0;
+	unsigned int m_currentBackBuffer = 0;
+	unsigned int m_currentRenderTarget = 0;
+	unsigned int m_currentDrawCtx = 0;
+	unsigned int m_currentCameraBufferSlot = 0;
+	unsigned int m_currentModelBufferSlot = 0;
+	unsigned int m_currentLightBufferSlot = 0;
+	unsigned int m_srvHandleStart = 0;
+	unsigned int m_cbvHandleStart = 0;
+	unsigned int m_currentFrame = 0;
+
+	/*=================== ComPtrs =================== */
+	ComPtr<ID3D12Device2> m_device;
+	ComPtr<IDXGIFactory4> m_DXGIFactory;
+	ComPtr<ID3D12CommandQueue> m_commandQueue;
+	ComPtr<IDXGISwapChain3> m_swapChain;
+	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
+
+	/*=================== Vectors =================== */
+	std::vector<Texture*> m_loadedTextures;
+	std::vector<BitmapFont*> m_loadedFonts;
+	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
+	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
+
+	std::vector<FxContext> m_effectsContexts;
+	std::vector<Texture*> m_defaultRenderTargets;
+	std::vector<Texture*> m_backBuffers;
+	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;
+	std::set<Buffer*> m_pendingRscCopy;
+	std::vector<ShaderByteCode*> m_shaderByteCodes;
+	std::vector<Vertex_PCU> m_immediateVertexes;
+	std::vector<unsigned int> m_immediateIndices;
+
+	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
+	std::vector<unsigned int> m_immediateDiffuseIndices;
+	std::vector<ConstantBuffer> m_cameraCBOArray = {};
+	std::vector<ConstantBuffer> m_lightCBOArray = {};
+	std::vector<ConstantBuffer> m_modelCBOArray = {};
+
+
+	/*=================== Raw Pointers =================== */ 
+	//	Internal resources
+	Fence* m_fence = nullptr;
+	Fence* m_resourcesFence = nullptr;
+
+	//	Default resources
+	Texture* m_defaultDepthTarget = nullptr;
+	Texture* m_defaultTexture = nullptr;
+	Material* m_default2DMaterial = nullptr;
+	Material* m_default3DMaterial = nullptr;
+
+	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
+	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
+	ImmediateContext* m_immediateContexts = nullptr;
+	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
+
+	
+	Camera const* m_currentCamera = nullptr;
+
+	VertexBuffer* m_immediateVBO = nullptr;
+	VertexBuffer* m_immediateDiffuseVBO = nullptr;
+
+	IndexBuffer* m_immediateIBO = nullptr;
+	IndexBuffer* m_immediateDiffuseIBO = nullptr;
+
 };
 
 template<typename T_Object>

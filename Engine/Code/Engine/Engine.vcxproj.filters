@@ -298,9 +298,6 @@
     <ClCompile Include="Renderer\UnorderedAccessBuffer.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
-    <ClCompile Include="Renderer\D3D11\D3D11TypeConversions.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
     <ClCompile Include="Math\Plane2D.cpp">
       <Filter>Math</Filter>
     </ClCompile>
@@ -322,18 +319,6 @@
     <ClCompile Include="Core\Buffer.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="Renderer\D3D12\D3D12TypeConversions.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
-    <ClCompile Include="Renderer\D3D12\DescriptorHeap.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
-    <ClCompile Include="Renderer\ResourceView.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
-    <ClCompile Include="Renderer\D3D12\Resource.cpp">
-      <Filter>Core</Filter>
-    </ClCompile>
     <ClCompile Include="Renderer\MaterialSystem.cpp">
       <Filter>Renderer</Filter>
     </ClCompile>
@@ -345,6 +330,24 @@
     </ClCompile>
     <ClCompile Include="Renderer\ImmediateContext.cpp">
       <Filter>Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\D3D12\D3D12TypeConversions.cpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\D3D12\DescriptorHeap.cpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\D3D11\D3D11TypeConversions.cpp">
+      <Filter>Renderer\D3D11</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\D3D12\Resource.cpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\ResourceView.cpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer\D3D12\Fence.cpp">
+      <Filter>Renderer\D3D12</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -690,9 +693,6 @@
     <ClInclude Include="Renderer\D3D12\D3D12TypeConversions.hpp">
       <Filter>Renderer\D3D12</Filter>
     </ClInclude>
-    <ClInclude Include="Renderer\D3D12\DescriptorHeap.hpp" />
-    <ClInclude Include="Renderer\ResourceView.hpp" />
-    <ClInclude Include="Renderer\D3D12\Resource.hpp" />
     <ClInclude Include="Renderer\MaterialSystem.hpp">
       <Filter>Renderer</Filter>
     </ClInclude>
@@ -702,11 +702,20 @@
     <ClInclude Include="Renderer\ImmediateContext.hpp">
       <Filter>Renderer</Filter>
     </ClInclude>
+    <ClInclude Include="Renderer\D3D12\DescriptorHeap.hpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer\D3D12\Resource.hpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer\ResourceView.hpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer\D3D12\Fence.hpp">
+      <Filter>Renderer\D3D12</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli">
-      <Filter>Renderer\Materials\Shaders</Filter>
-    </None>
     <None Include="Renderer\Materials\Shaders\Default.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
@@ -737,10 +746,17 @@
     <None Include="Renderer\Materials\Shaders\SSAO.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
+    <None Include="Renderer\Materials\Shaders\LinearDepthVisualizer.hlsli">
+      <Filter>Renderer\Materials\Shaders</Filter>
+    </None>
     <None Include="Renderer\Materials\Shaders\Common\Math.hlsli">
       <Filter>Renderer\Materials\Shaders\Common</Filter>
     </None>
-    <None Include="Renderer\Materials\Shaders\LinearDepthVisualizer.hlsli">
+    <None Include="Renderer\Materials\Shaders\ColorBandEffect.hlsli">
+      <Filter>Renderer\Materials\Shaders</Filter>
+    </None>
+    <None Include="packages.config" />
+    <None Include="Renderer\Materials\Shaders\FirstTriangle.hlsli">
       <Filter>Renderer\Materials\Shaders</Filter>
     </None>
   </ItemGroup>
@@ -779,6 +795,9 @@
       <Filter>Renderer\Materials</Filter>
     </Xml>
     <Xml Include="Renderer\Materials\LinearDepthVisualizer.xml">
+      <Filter>Renderer\Materials</Filter>
+    </Xml>
+    <Xml Include="Renderer\Materials\FirstTriangleMaterial.xml">
       <Filter>Renderer\Materials</Filter>
     </Xml>
   </ItemGroup>
@@ -829,6 +848,12 @@
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
     <FxCompile Include="Renderer\Materials\Shaders\Stages\LinearDepthVisualizer_v.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_p.hlsl">
+      <Filter>Renderer\Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="Renderer\Materials\Shaders\Stages\FirstTriangle_v.hlsl">
       <Filter>Renderer\Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>

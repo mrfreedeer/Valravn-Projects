@@ -29,14 +29,8 @@ extern NetworkSystem* g_theNetwork;
 
 enum class MemoryUsage {
 	Default,	// Buffer made to read from multiple times but CPU cannot write to. 
-	Dynamic,	// Buffer that can be read/write from both GPU and CPU. 
+	Upload,		// Buffer that can be read/write from both GPU and CPU. 
 	GPU [[deprecated]],		// cpu read/write, gpu read
-};
-
-enum class CommandListType{
-	DefaultCommandList,
-	ResourcesCommandList,
-	NUM_COMMAND_LISTS
 };
 
 

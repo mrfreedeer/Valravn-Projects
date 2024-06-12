@@ -706,8 +706,7 @@ void Chunk::Update(float deltaSeconds)
 	if (!m_chunkVBO || !m_chunkWaterVBO) {
 		BufferDesc newVBODesc = {};
 		newVBODesc.data = nullptr;
-		newVBODesc.descriptorHeap = nullptr;
-		newVBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newVBODesc.memoryUsage = MemoryUsage::Default;
 		newVBODesc.owner = g_theRenderer;
 		newVBODesc.size = sizeof(Vertex_PCU);
 		newVBODesc.stride = sizeof(Vertex_PCU);
@@ -719,8 +718,7 @@ void Chunk::Update(float deltaSeconds)
 	if (!m_chunkIBO || !m_chunkWaterIBO) {
 		BufferDesc newIBODesc = {};
 		newIBODesc.data = nullptr;
-		newIBODesc.descriptorHeap = nullptr;
-		newIBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newIBODesc.memoryUsage = MemoryUsage::Default;
 		newIBODesc.owner = g_theRenderer;
 		newIBODesc.size = sizeof(unsigned int);
 		newIBODesc.stride = sizeof(unsigned int);
@@ -1105,8 +1103,7 @@ void Chunk::GenerateCPUMesh()
 	if (!m_chunkVBO || !m_chunkWaterVBO) {
 		BufferDesc newVBODesc = {};
 		newVBODesc.data = nullptr;
-		newVBODesc.descriptorHeap = nullptr;
-		newVBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newVBODesc.memoryUsage = MemoryUsage::Default;
 		newVBODesc.owner = g_theRenderer;
 		newVBODesc.size = sizeof(Vertex_PCU);
 		newVBODesc.stride = sizeof(Vertex_PCU);
@@ -1119,8 +1116,7 @@ void Chunk::GenerateCPUMesh()
 
 		BufferDesc newIBODesc = {};
 		newIBODesc.data = nullptr;
-		newIBODesc.descriptorHeap = nullptr;
-		newIBODesc.memoryUsage = MemoryUsage::Dynamic;
+		newIBODesc.memoryUsage = MemoryUsage::Default;
 		newIBODesc.owner = g_theRenderer;
 		newIBODesc.size = sizeof(unsigned int);
 		newIBODesc.stride = sizeof(unsigned int);

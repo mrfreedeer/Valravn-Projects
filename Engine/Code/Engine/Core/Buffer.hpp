@@ -19,9 +19,16 @@ struct BufferDesc {
 	char const* debugName = "GPU Buffer";
 	size_t size = 0;
 	size_t stride = 0;
-	MemoryUsage memoryUsage = MemoryUsage::Dynamic;
+	MemoryUsage memoryUsage = MemoryUsage::Upload;
 	void const* data = nullptr;
-	DescriptorHeap* descriptorHeap = nullptr;
+};
+
+enum class BufferType {
+	UNKNOWN = -1,
+	VertexBuffer,
+	IndexBuffer,
+	ConstantBuffer,
+	NUM_BUFFER_TYPES
 };
 
 class Buffer {
@@ -43,27 +50,28 @@ public:
 
 	virtual void CopyCPUToGPU(void const* data, size_t sizeInBytes);
 	size_t GetSize() const { return m_size; }
-	bool IsMarkedForUpdate() const { return m_markedForUpdate; }
+	bool IsPendingCopy() const { return m_isPendingCopy;}
+	void ClearPendingCopies();
+	Resource* GetResource();
+	void ResetCopyState();
 protected:
 	virtual void Initialize();
-	virtual void CreateDynamicBuffer(void const* data);
-	virtual void CreateBuffer(Resource*& buffer, bool isUpload = false);
-	void CreateAndCopyToUploadBuffer(ID3D12Resource2*& uploadBuffer, void const* data);
+	virtual void CreateBuffer(Resource* const& buffer, bool isUpload = false);
 	ResourceView* CreateShaderResourceView();
 	ResourceView* CreateConstantBufferView();
 protected:
+	BufferDesc m_bufferDesc = {};
 	Renderer* m_owner = nullptr;
+	ID3D12Device2* m_device = nullptr;
 	size_t m_size = 0;
-	bool m_markedForUpdate = false;
 	size_t m_stride = 0;
-	UINT8* m_dataMap = nullptr;
-	MemoryUsage m_memoryUsage = MemoryUsage::Dynamic;
-	void const* m_data = nullptr;
-	DescriptorHeap* m_descriptorHeap = nullptr;
+	MemoryUsage m_memoryUsage = MemoryUsage::Upload;
 	Resource* m_buffer = nullptr;
-	Resource* m_uploadResource = nullptr;
+	Resource* m_uploadBuffer = nullptr;
 	std::vector<ResourceView*> m_views;
 	std::string m_name = "";
+	bool m_isPendingCopy = false;
+	BufferType m_bufferType = BufferType::UNKNOWN;
 
 };
 

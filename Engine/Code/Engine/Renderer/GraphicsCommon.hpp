@@ -1,6 +1,7 @@
 #pragma  once
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Math/Mat44.hpp"
+#include <wrl.h>
 
 #undef OPAQUE
 #define DX_SAFE_RELEASE(dxObject)			\
@@ -24,6 +25,8 @@ struct CameraConstants {
 	Mat44 InvertedMatrix;
 };
 
+template <typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 inline void ThrowIfFailed(long hr, char const* errorMsg) {
 	if (hr < 0) {
@@ -108,6 +111,33 @@ enum class TopologyType {// Transformed directly to DX12 (if standard changes, u
 	NUM_TOPOLOGIES
 };
 
+enum class CommandListType {
+	DEFAULT,
+	RESOURCES,
+	NUM_COMMAND_LIST_TYPES
+};
+
+enum class ConstantBufferType {
+	CAMERA,
+	MODEL,
+	LIGHT,
+	NUM_CONSTANT_BUFFER_TYPES
+};
+
+
+/// <summary>
+/// P: Position
+/// C: Color
+/// U: UV
+/// N: Normal
+/// B: Bitangent
+/// T: Tangent
+/// </summary>
+enum class VertexType {
+	PCU, // Unlit 
+	PNCU
+};
+
 constexpr char const* EnumToString(BlendMode blendMode) {
 	return BlendModeStrings[(int)blendMode];
 }
@@ -136,6 +166,7 @@ constexpr char const* EnumToString(TopologyType topologyType) {
 	return TopologyTypeStrings[(int)topologyType];
 }
 
+
 /*
 * Since SRV UAV AND CBV share heap, the start and end of each needs to be managed
 */
@@ -154,7 +185,8 @@ constexpr unsigned int UAV_HANDLE_START = SRV_HANDLE_END + 1;
 constexpr unsigned int UAV_HANDLE_END = SRV_UAV_CBV_DEFAULT_SIZE - 1;
 constexpr unsigned int UAV_DESCRIPTORS_AMOUNT = UAV_HANDLE_END - UAV_HANDLE_START + 1;
 
-TextureFormat ParseFromString(std::string const& text);
+TextureFormat ParseFromString(std::string const& text, TextureFormat defaultFormat);
+BlendMode ParseFromString(std::string const& strBlendMode, BlendMode defaultBlendMode);
 
 
 
