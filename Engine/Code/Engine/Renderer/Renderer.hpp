@@ -146,7 +146,6 @@ public:
 	void DrawVertexArray(std::vector<Vertex_PNCU> const& vertexes);
 	void DrawIndexedVertexArray(unsigned int numVertexes, const Vertex_PNCU* vertexes, unsigned int numIndices, unsigned int const* indices);
 	void DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, std::vector<unsigned int> const& indices);
-	void BindDepthAsTexture(Texture* depthTarget = nullptr, unsigned int slot = 0);
 
 	void SetModelMatrix(Mat44 const& modelMat);
 	void SetModelColor(Rgba8 const& modelColor);
@@ -196,8 +195,7 @@ public:
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
 	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect);
-	void TrackResource(Resource* newResource);
-	void RemoveResource(Resource* newResource);
+
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
 	ID3D12GraphicsCommandList6* GetCurrentCommandList(CommandListType cmdListType);
 
@@ -341,6 +339,10 @@ private:
 
 	std::vector<Vertex_PNCU> m_immediateDiffuseVertexes;
 	std::vector<unsigned int> m_immediateDiffuseIndices;
+	std::vector<ConstantBuffer> m_cameraCBOArray = {};
+	std::vector<ConstantBuffer> m_lightCBOArray = {};
+	std::vector<ConstantBuffer> m_modelCBOArray = {};
+
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources
@@ -356,11 +358,9 @@ private:
 	DescriptorHeap* m_GPUDescriptorHeaps[(size_t)DescriptorHeapType::MAX_GPU_VISIBLE] = {};
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
 	ImmediateContext* m_immediateContexts = nullptr;
+	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
 
-	std::vector<ConstantBuffer> m_cameraCBOArray = {};
-	std::vector<ConstantBuffer> m_lightCBOArray = {};
-	std::vector<ConstantBuffer> m_modelCBOArray = {};
-
+	
 	Camera const* m_currentCamera = nullptr;
 
 	VertexBuffer* m_immediateVBO = nullptr;

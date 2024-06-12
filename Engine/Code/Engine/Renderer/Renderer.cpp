@@ -398,7 +398,6 @@ void Renderer::CreateBackBuffers()
 		backBufferTexInfo.m_name = Stringf("BackBuffer %d", frameBufferInd);
 		backBufferTexInfo.m_owner = this;
 		backBufferTexInfo.m_handle = new Resource(m_device.Get());
-		TrackResource(backBufferTexInfo.m_handle);
 		backBufferTexInfo.m_handle->m_resource = bufferTex;
 
 		backBuffer = CreateTexture(backBufferTexInfo);
@@ -500,7 +499,6 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 		handle = new Resource(m_device.Get());
 		handle->m_currentState = initialResourceState;
 
-		TrackResource(handle);
 		D3D12_CLEAR_VALUE clearValueRT = {};
 		D3D12_CLEAR_VALUE clearValueDST = {};
 		D3D12_CLEAR_VALUE* clearValue = NULL;
@@ -1226,12 +1224,6 @@ void Renderer::FinishPendingPreFxPassResourceTasks()
 
 void Renderer::UploadImmediateVertexes()
 {
-	Resource* VBORsc = m_immediateVBO->GetResource();
-	Resource* IBORsc = m_immediateIBO->GetResource();
-
-	Resource* diffuseVBORsc = m_immediateDiffuseVBO->GetResource();
-	Resource* diffuseIBORsc = m_immediateDiffuseIBO->GetResource();
-
 	// Unlit vertexes. This is a giant buffer with all vertexes for better performance
 	size_t vertexesSize = sizeof(Vertex_PCU) * m_immediateVertexes.size();
 	if (vertexesSize > 0) {
@@ -1294,7 +1286,7 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 	Material* material = ctx.m_material;
 	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
-	unsigned int rscBarrierCount = drawRscBarriers.size();
+	unsigned int rscBarrierCount = (unsigned int)drawRscBarriers.size();
 	if (rscBarrierCount > 0) {
 		cmdList->ResourceBarrier(rscBarrierCount, drawRscBarriers.data());
 	}
@@ -1730,6 +1722,7 @@ void Renderer::EndFrame()
 	ExecuteMainRenderPass();
 	ExecuteEffectsRenderPass();
 	DebugRenderEndFrame();
+	EndFrameImGui();
 
 
 	g_theMaterialSystem->EndFrame();
@@ -1739,11 +1732,14 @@ void Renderer::EndFrame()
 
 	Resource* currentBackBuffer = GetActiveBackBuffer()->GetResource();
 	Resource* currentRT = GetActiveRenderTarget()->GetResource();
+	
 
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, cmdList);
 	currentRT->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, cmdList);
 
 	cmdList->CopyResource(currentBackBuffer->m_resource, currentRT->m_resource);
+
+
 
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, cmdList);
 
@@ -2095,10 +2091,6 @@ void Renderer::DrawIndexedVertexArray(std::vector<Vertex_PNCU> const& vertexes, 
 	DrawIndexedVertexArray((unsigned int)vertexes.size(), vertexes.data(), (unsigned int)indices.size(), indices.data());
 }
 
-void Renderer::BindDepthAsTexture(Texture* depthTarget /*= nullptr*/, unsigned int slot /*= 0*/)
-{
-
-}
 
 void Renderer::SetModelMatrix(Mat44 const& modelMat)
 {
@@ -2548,7 +2540,7 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	dstResource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, rscBarriers);
 
 	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
-	defaultCmdList->ResourceBarrier(rscBarriers.size(), rscBarriers.data());
+	defaultCmdList->ResourceBarrier((unsigned int)rscBarriers.size(), rscBarriers.data());
 
 	ClearTexture(Rgba8(0, 0, 0, 255), dst);
 
@@ -2614,17 +2606,6 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 
 	defaultCmdList->ClearState(defaultMat->m_PSO);
 }
-
-void Renderer::TrackResource(Resource* newResource)
-{
-
-}
-
-void Renderer::RemoveResource(Resource* newResource)
-{
-
-}
-
 
 ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
 {
@@ -2731,7 +2712,7 @@ void Renderer::BeginFrameImGui()
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 #endif
 }
 
@@ -2740,12 +2721,13 @@ void Renderer::EndFrameImGui()
 #if defined(ENGINE_USE_IMGUI)
 	Texture* currentRt = GetActiveRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE currentRTVHandle = currentRt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
 	ImGui::Render();
-	m_commandList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, nullptr);
-	m_commandList->SetDescriptorHeaps(1, &m_ImGuiSrvDescHeap);
+	defaultCmdList->OMSetRenderTargets(1, &currentRTVHandle, FALSE, nullptr);
+	defaultCmdList->SetDescriptorHeaps(1, &m_ImGuiSrvDescHeap);
 
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), m_commandList.Get());
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), defaultCmdList);
 #endif
 }
 
