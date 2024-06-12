@@ -58,7 +58,7 @@ struct RendererConfig {
 };
 
 struct FxContext {
-	CameraConstants m_cameraConstants = {};
+	ConstantBuffer* m_cameraCBO = nullptr;
 	Material* m_fx = nullptr;
 	Texture* m_depthTarget = nullptr;
 };
@@ -195,7 +195,7 @@ public:
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
-	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants = CameraConstants());
+	void CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect);
 	void TrackResource(Resource* newResource);
 	void RemoveResource(Resource* newResource);
 	ID3D12CommandAllocator* GetCommandAllocForCmdList(CommandListType cmdListType);
@@ -255,7 +255,12 @@ private:
 	/// // Uploads pending resources and inserts resource barriers before drawing
 	/// </summary>
 	void FinishPendingPrePassResourceTasks();
+	void FinishPendingPreFxPassResourceTasks();
 	void UploadImmediateVertexes();
+	
+	void DrawAllEffects();
+	void DrawEffect(FxContext& fxCtx);
+
 	void DrawAllImmediateContexts();
 	void DrawImmediateContext(ImmediateContext& ctx);
 	ImmediateContext& GetCurrentDrawCtx();
@@ -281,6 +286,7 @@ private:
 	/// Execute all draw calls issued by Engine users (other Engine systems will be in a consecutive pass)
 	/// </summary>
 	void ExecuteMainRenderPass();
+	void ExecuteEffectsRenderPass();
 	void FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers);
 private:
 	// This object must be first ALWAYS!!!!!
@@ -322,6 +328,7 @@ private:
 	std::vector<ID3D12GraphicsCommandList6*> m_commandLists;
 	std::vector<ID3D12CommandAllocator*> m_commandAllocators;
 
+	std::vector<FxContext> m_effectsContexts;
 	std::vector<Texture*> m_defaultRenderTargets;
 	std::vector<Texture*> m_backBuffers;
 	std::vector<D3D12_RESOURCE_BARRIER> m_pendingRscBarriers;

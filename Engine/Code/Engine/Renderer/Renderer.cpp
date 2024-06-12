@@ -1194,6 +1194,36 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	}
 }
 
+void Renderer::FinishPendingPreFxPassResourceTasks()
+{
+	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	if (m_pendingRscCopy.size() > 0) {
+
+		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
+		copyRscBarriers.reserve(m_pendingRscCopy.size() * 2);
+		for (Buffer* buffer : m_pendingRscCopy) {
+			buffer->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_DEST, copyRscBarriers);
+			buffer->m_uploadBuffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_COPY_SOURCE, copyRscBarriers);
+		}
+
+		//currentCmdList->ResourceBarrier((UINT)m_pendingCopyRscBarriers.size(), m_pendingCopyRscBarriers.data());
+		currentCmdList->ResourceBarrier((UINT)copyRscBarriers.size(), copyRscBarriers.data());
+
+		for (Buffer* buffer : m_pendingRscCopy) {
+			buffer->ResetCopyState();
+			Resource* uploadRsc = buffer->m_uploadBuffer;
+			Resource* defaultRsc = buffer->m_buffer;
+
+			currentCmdList->CopyResource(defaultRsc->m_resource, uploadRsc->m_resource);
+			AddBufferBindResourceBarrier(buffer, m_pendingRscBarriers);
+		}
+	}
+
+	if (m_pendingRscBarriers.size() > 0) {
+		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
+	}
+}
+
 void Renderer::UploadImmediateVertexes()
 {
 	Resource* VBORsc = m_immediateVBO->GetResource();
@@ -1229,6 +1259,23 @@ void Renderer::UploadImmediateVertexes()
 		m_immediateDiffuseIBO->GuaranteeBufferSize(diffuseIndexSize);
 		m_immediateDiffuseIBO->CopyCPUToGPU(m_immediateDiffuseIndices.data(), diffuseIndexSize);
 	}
+}
+
+void Renderer::DrawAllEffects()
+{
+	for (FxContext& ctx : m_effectsContexts) {
+		DrawEffect(ctx);
+	}
+}
+
+void Renderer::DrawEffect(FxContext& fxCtx)
+{
+	Texture* activeTarget = GetActiveRenderTarget();
+	Texture* backTarget = GetBackUpRenderTarget();
+
+	CopyTextureWithMaterial(backTarget, activeTarget, fxCtx.m_depthTarget, fxCtx.m_fx);
+
+	m_currentRenderTarget = (m_currentRenderTarget + 1) % 2;
 }
 
 void Renderer::DrawAllImmediateContexts()
@@ -1602,15 +1649,20 @@ void Renderer::ExecuteMainRenderPass()
 	FinishPendingPrePassResourceTasks();
 	DrawAllImmediateContexts();
 
-	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
-	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
-	rscCmdList->Close();
-	cmdList->Close();
+	//ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	//ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+	//rscCmdList->Close();
+	//cmdList->Close();
 
-	ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
-	ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
+	//ID3D12CommandList* ppCmdLists[] = { rscCmdList, cmdList };
+	//ExecuteCommandLists(_countof(ppCmdLists), ppCmdLists);
 
-	ResetGPUState();
+}
+
+void Renderer::ExecuteEffectsRenderPass()
+{
+	//FinishPendingPreFxPassResourceTasks();
+	DrawAllEffects();
 }
 
 void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers)
@@ -1675,8 +1727,10 @@ void Renderer::BeginFrame()
 void Renderer::EndFrame()
 {
 
-	DebugRenderEndFrame();
 	ExecuteMainRenderPass();
+	ExecuteEffectsRenderPass();
+	DebugRenderEndFrame();
+
 
 	g_theMaterialSystem->EndFrame();
 
@@ -1684,6 +1738,13 @@ void Renderer::EndFrame()
 	ID3D12GraphicsCommandList6* rscCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
 
 	Resource* currentBackBuffer = GetActiveBackBuffer()->GetResource();
+	Resource* currentRT = GetActiveRenderTarget()->GetResource();
+
+	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, cmdList);
+	currentRT->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, cmdList);
+
+	cmdList->CopyResource(currentBackBuffer->m_resource, currentRT->m_resource);
+
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_PRESENT, cmdList);
 
 	cmdList->Close();
@@ -1853,7 +1914,7 @@ void Renderer::BeginCamera(Camera const& camera)
 	BindTexture(m_defaultTexture);
 	SetSamplerMode(SamplerMode::POINTCLAMP);
 
-	ctx.SetRenderTarget(0, GetActiveBackBuffer());
+	ctx.SetRenderTarget(0, GetActiveRenderTarget());
 	ctx.SetDepthRenderTarget(m_defaultDepthTarget);
 
 	CameraConstants cameraConstants = {};
@@ -1896,7 +1957,7 @@ void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
 
 void Renderer::ClearScreen(Rgba8 const& color)
 {
-	Texture* currentRt = GetActiveBackBuffer();
+	Texture* currentRt = GetActiveRenderTarget();
 	ClearTexture(color, currentRt);
 	ClearDepth();
 }
@@ -2138,7 +2199,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 		texRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_pendingRscBarriers);
 	}
 	else {
-		if(slot == 0){
+		if (slot == 0) {
 			currentDrawCtx.m_boundTextures[slot] = m_defaultTexture;
 		}
 		else {
@@ -2456,12 +2517,102 @@ Texture* Renderer::GetCurrentDepthTarget() const
 
 void Renderer::ApplyEffect(Material* effect, Camera const* camera /*= nullptr*/, Texture* customDepth /*= nullptr*/)
 {
+	FxContext newFxCtx = {};
 
+	CameraConstants cameraConstants = {};
+	if (camera) {
+		cameraConstants.ProjectionMatrix = camera->GetProjectionMatrix();
+		cameraConstants.ViewMatrix = camera->GetViewMatrix();
+		cameraConstants.InvertedMatrix = camera->GetProjectionMatrix().GetInverted();
+	}
+
+	newFxCtx.m_cameraCBO = GetNextCBufferSlot(ConstantBufferType::CAMERA);
+	newFxCtx.m_cameraCBO->CopyCPUToGPU(&cameraConstants, sizeof(CameraConstants));
+
+	newFxCtx.m_fx = effect;
+	newFxCtx.m_depthTarget = (customDepth) ? customDepth : m_defaultDepthTarget;
+
+	m_effectsContexts.push_back(newFxCtx);
 }
 
-void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect, CameraConstants const& cameraConstants /*= CameraConstants()*/)
+void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* depthBuffer, Material* effect)
 {
+	Resource* srcResource = src->GetResource();
+	Resource* dstResource = dst->GetResource();
+	Resource* dsvResource = depthBuffer->GetResource();
 
+	std::vector<D3D12_RESOURCE_BARRIER> rscBarriers;
+	rscBarriers.reserve(3);
+	srcResource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, rscBarriers);
+	dsvResource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_READ, rscBarriers);
+	dstResource->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, rscBarriers);
+
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	defaultCmdList->ResourceBarrier(rscBarriers.size(), rscBarriers.data());
+
+	ClearTexture(Rgba8(0, 0, 0, 255), dst);
+
+	BindMaterial(effect);
+
+	SetSamplerMode(SamplerMode::BILINEARCLAMP);
+
+	CopyTextureToDescriptorHeap(src, m_srvHandleStart, 0);
+	CopyTextureToDescriptorHeap(depthBuffer, m_srvHandleStart, 1);
+
+	DescriptorHeap* srvUAVCBVHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+	DescriptorHeap* samplerHeap = GetGPUDescriptorHeap(DescriptorHeapType::SAMPLER);
+	ID3D12DescriptorHeap* allDescriptorHeaps[] = {
+		srvUAVCBVHeap->GetHeap(),
+		samplerHeap->GetHeap()
+	};
+
+	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
+
+	defaultCmdList->SetPipelineState(effect->m_PSO);
+	defaultCmdList->SetGraphicsRootSignature(m_defaultRootSignature.Get());
+	defaultCmdList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
+
+
+	defaultCmdList->SetGraphicsRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(m_cbvHandleStart));
+	defaultCmdList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(m_srvHandleStart));
+	defaultCmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(UAV_HANDLE_START));
+	defaultCmdList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+
+	m_cbvHandleStart += 1;
+	m_srvHandleStart += 2;
+
+
+	defaultCmdList->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	D3D12_VIEWPORT viewport = {};
+	viewport.TopLeftX = 0;
+	viewport.TopLeftY = 0;
+	viewport.Width = static_cast<float>(m_config.m_window->GetClientDimensions().x);
+	viewport.Height = static_cast<float>(m_config.m_window->GetClientDimensions().y);
+	viewport.MinDepth = 0;
+	viewport.MaxDepth = 1;
+
+	D3D12_RECT scissorRect = {};
+	scissorRect.left = 0;
+	scissorRect.top = 0;
+	scissorRect.right = static_cast<long>(m_config.m_window->GetClientDimensions().x);
+	scissorRect.bottom = static_cast<long>(m_config.m_window->GetClientDimensions().y);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtHandle = dst->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dstHandle = depthBuffer->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT)->GetHandle();
+
+	defaultCmdList->RSSetViewports(1, &viewport);
+	defaultCmdList->RSSetScissorRects(1, &scissorRect);
+	defaultCmdList->OMSetRenderTargets(1, &rtHandle, FALSE, &dstHandle);
+
+	defaultCmdList->DrawInstanced(3, 1, 0, 0);
+	//CD3DX12_RESOURCE_BARRIER resourceBarrier = CD3DX12_RESOURCE_BARRIER::Transition(dstResource->m_resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+	//m_commandList->ResourceBarrier(1, &resourceBarrier);
+	//dstResource->m_currentState = D3D12_RESOURCE_STATE_COMMON;
+
+	Material* defaultMat = GetDefaultMaterial();
+
+	defaultCmdList->ClearState(defaultMat->m_PSO);
 }
 
 void Renderer::TrackResource(Resource* newResource)
@@ -2477,13 +2628,13 @@ void Renderer::RemoveResource(Resource* newResource)
 
 ID3D12CommandAllocator* Renderer::GetCommandAllocForCmdList(CommandListType cmdListType)
 {
-	size_t accessIndex = ((size_t)m_currentCmdListIndex * 2) + size_t(cmdListType);
+	size_t accessIndex = ((size_t)m_currentBackBuffer * 2) + size_t(cmdListType);
 	return m_commandAllocators[accessIndex];
 }
 
 ID3D12GraphicsCommandList6* Renderer::GetCurrentCommandList(CommandListType cmdListType)
 {
-	size_t accessIndex = ((size_t)m_currentCmdListIndex * 2) + size_t(cmdListType);
+	size_t accessIndex = ((size_t)m_currentBackBuffer * 2) + size_t(cmdListType);
 	return m_commandLists[accessIndex];
 }
 
@@ -2521,6 +2672,7 @@ void Renderer::ResetGPUState()
 	m_immediateDiffuseIndices.clear();
 	m_pendingRscBarriers.clear();
 	m_pendingRscCopy.clear();
+	m_effectsContexts.clear();
 
 	m_isModelBufferDirty = false;
 }
