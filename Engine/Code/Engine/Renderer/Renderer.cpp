@@ -676,7 +676,6 @@ Texture* Renderer::GetBackUpBackBuffer() const
 
 void Renderer::Startup()
 {
-
 	EnableDebugLayer();
 	CreateDevice();
 	CreateCommandQueue();
@@ -754,15 +753,13 @@ void Renderer::CreatePSOForMaterial(Material* material)
 	std::vector<std::string> nameStrings;
 
 	if (material->IsMeshShader()) {
-
+		CreateMeshShaderPSO(material);
 	}
 	else {
-
 		CreateGraphicsPSO(material);
 	}
 
 	ThrowIfFailed(psoCreation, "COULD NOT CREATE PSO");
-
 
 	std::string shaderDebugName = "PSO:";
 	shaderDebugName += baseName;
@@ -771,7 +768,6 @@ void Renderer::CreatePSOForMaterial(Material* material)
 
 bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, ShaderLoadInfo const& loadInfo)
 {
-
 	char const* sourceName = loadInfo.m_shaderSrc.c_str();
 	char const* entryPoint = loadInfo.m_shaderEntryPoint.c_str();
 	char const* target = Material::GetTargetForShader(loadInfo.m_shaderType);
@@ -1058,6 +1054,71 @@ void Renderer::CreateGraphicsPSO(Material* material)
 
 	HRESULT psoCreationResult = m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&material->m_PSO));
 	ThrowIfFailed(psoCreationResult, Stringf("FAILED TO CREATE PSO FOR MATERIAL %s", material->GetName().c_str()).c_str());
+}
+
+void Renderer::CreateMeshShaderPSO(Material* material)
+{
+	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc =  {};
+	MaterialConfig const& matConfig = material->m_config;
+
+	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
+		LocalToD3D12(matConfig.m_fillMode),			// Fill mode
+		LocalToD3D12(matConfig.m_cullMode),			// Cull mode
+		LocalToD3D12(matConfig.m_windingOrder),		// Winding order
+		D3D12_DEFAULT_DEPTH_BIAS,					// Depth bias
+		D3D12_DEFAULT_DEPTH_BIAS_CLAMP,				// Bias clamp
+		D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,		// Slope scaled bias
+		TRUE,										// Depth Clip enable
+		FALSE,										// Multi sample (MSAA)
+		FALSE,										// Anti aliased line enable
+		0,											// Force sample count
+		D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF	// Conservative Rasterization
+	);
+
+	D3D12_BLEND_DESC blendDesc = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	SetBlendModeSpecs(matConfig.m_blendMode, blendDesc);
+
+	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
+	ShaderByteCode* msByteCode = material->m_byteCodes[ShaderType::Mesh];
+
+	psoDesc.pRootSignature = m_defaultRootSignature.Get();
+	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
+	psoDesc.MS = CD3DX12_SHADER_BYTECODE(msByteCode->m_byteCode.data(), msByteCode->m_byteCode.size());
+
+	psoDesc.RasterizerState = rasterizerDesc;
+	psoDesc.BlendState = blendDesc;
+	psoDesc.DepthStencilState.DepthEnable = matConfig.m_depthEnable;
+	psoDesc.DepthStencilState.DepthFunc = LocalToD3D12(matConfig.m_depthFunc);
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	psoDesc.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	const D3D12_DEPTH_STENCILOP_DESC defaultStencilOp = // a stencil operation structure, does not really matter since stencil testing is turned off
+	{ D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS };
+	psoDesc.DepthStencilState.FrontFace = defaultStencilOp; // both front and back facing polygons get the same treatment
+	psoDesc.DepthStencilState.BackFace = defaultStencilOp;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE(matConfig.m_topology);
+	psoDesc.NumRenderTargets = (UINT)matConfig.m_numRenderTargets;
+
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		TextureFormat const& format = matConfig.m_renderTargetFormats[rtIndex];
+		if (format == TextureFormat::INVALID) continue;
+		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
+	}
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
+	psoDesc.SampleDesc.Count = 1;
+
+	auto psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
+
+	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+	streamDesc.pPipelineStateSubobjectStream = &psoStream;
+	streamDesc.SizeInBytes = sizeof(psoStream);
+
+	HRESULT psoCreationResult = m_device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&material->m_PSO));
+	ThrowIfFailed(psoCreationResult, "FAILED TO CREATE MESH SHADER");
+	material->m_isMeshShader = true;
 }
 
 void Renderer::SetBlendModeSpecs(BlendMode const* blendModes, D3D12_BLEND_DESC& blendDesc)
@@ -1629,6 +1690,9 @@ void Renderer::AddBufferBindResourceBarrier(Buffer* bufferToBind, std::vector<D3
 	case BufferType::IndexBuffer:
 		bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, barriersArray);
 		break;
+	case BufferType::StructuredBuffer:
+		bufferToBind->m_buffer->AddResourceBarrierToList(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, barriersArray);
+		break;
 	default:
 		ERROR_AND_DIE("UNRECOGNIZED BUFFER TYPE");
 		break;
@@ -2003,7 +2067,17 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
-	// #TODO
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	ctx.SetPipelineTypeFlag(true);
+	ctx.m_meshThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
+	ctx.m_srvHandleStart = m_srvHandleStart;
+	ctx.m_cbvHandleStart = m_cbvHandleStart;
+
+	SetContextDescriptorStarts(ctx);
+	ctx.SetDrawCallUsage(true);
+	SetModelBufferForCtx(ctx);
+
+	CopyCurrentDrawCtxToNext();
 }
 
 void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)

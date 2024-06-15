@@ -225,7 +225,7 @@ private:
 	DescriptorHeap* GetCPUDescriptorHeap(DescriptorHeapType descriptorHeapType) const;
 
 	// Textures
-	BitmapFont*CreateBitmapFont(std::filesystem::path bitmapPath);
+	BitmapFont* CreateBitmapFont(std::filesystem::path bitmapPath);
 	void DestroyTexture(Texture* textureToDestroy);
 	void CreateDefaultTextureTargets();
 	void ClearTexture(Rgba8 const& color, Texture* tex);
@@ -244,6 +244,7 @@ private:
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
 	void CreateGraphicsPSO(Material* material);
+	void CreateMeshShaderPSO(Material* material);
 	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
 
 	// Internal Resource Management

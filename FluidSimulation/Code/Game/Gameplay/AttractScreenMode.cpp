@@ -56,7 +56,7 @@ void AttractScreenMode::Render() const
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
 		g_theRenderer->ClearScreen(Rgba8::BLACK);
-		Material* def2DMat = g_theRenderer->GetDefault2DMaterial();
+		Material* def2DMat = g_theRenderer->GetDefaultMaterial(false);
 		g_theRenderer->BindMaterial(def2DMat);
 		g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 		if (m_useTextAnimation) {

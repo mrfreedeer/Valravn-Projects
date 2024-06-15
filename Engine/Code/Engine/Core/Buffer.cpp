@@ -231,6 +231,7 @@ ResourceView* Buffer::CreateConstantBufferView()
 StructuredBuffer::StructuredBuffer(BufferDesc const& bufDesc) :
 	Buffer(bufDesc)
 {
+	m_bufferType = BufferType::StructuredBuffer;
 	Buffer::Initialize();
 }
 

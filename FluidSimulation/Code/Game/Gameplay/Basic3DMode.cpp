@@ -172,7 +172,7 @@ void Basic3DMode::Startup()
 
 	BufferDesc bufferDesc = {};
 	bufferDesc.data = m_particlesMeshInfo;
-	bufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	bufferDesc.memoryUsage = MemoryUsage::Default;
 	bufferDesc.owner = g_theRenderer;
 	bufferDesc.size = sizeof(FluidParticleMeshInfo) * m_particles.size();
 	bufferDesc.stride = sizeof(FluidParticleMeshInfo);
@@ -194,8 +194,7 @@ void Basic3DMode::Startup()
 
 	BufferDesc cBufferDesc = {};
 	cBufferDesc.data = nullptr;
-	cBufferDesc.descriptorHeap = nullptr;
-	cBufferDesc.memoryUsage = MemoryUsage::Dynamic;
+	cBufferDesc.memoryUsage = MemoryUsage::Default;
 	cBufferDesc.owner = g_theRenderer;
 	cBufferDesc.size = sizeof(GameConstants);
 	cBufferDesc.stride = sizeof(GameConstants);
@@ -264,7 +263,6 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
-	g_theRenderer->FlushPendingWork();
 
 	g_theRenderer->BeginCamera(m_UICamera);
 	{

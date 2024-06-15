@@ -28,6 +28,7 @@ enum class BufferType {
 	VertexBuffer,
 	IndexBuffer,
 	ConstantBuffer,
+	StructuredBuffer,
 	NUM_BUFFER_TYPES
 };
 
