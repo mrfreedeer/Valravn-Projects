@@ -12,6 +12,7 @@ DXGI_FORMAT LocalToD3D12(TextureFormat textureFormat)
 	case TextureFormat::R32G32_FLOAT: return DXGI_FORMAT_R32G32_FLOAT;
 	case TextureFormat::R24G8_TYPELESS: return DXGI_FORMAT_R24G8_TYPELESS;
 	case TextureFormat::R32_FLOAT: return DXGI_FORMAT_R32_FLOAT;
+	case TextureFormat::D32_FLOAT: return DXGI_FORMAT_D32_FLOAT;
 	case TextureFormat::UNKNOWN: return DXGI_FORMAT_UNKNOWN;
 	default: ERROR_AND_DIE("Unsupported format");
 	}
@@ -74,6 +75,7 @@ DXGI_FORMAT LocalToColourD3D12(TextureFormat textureFormat)
 {
 	switch (textureFormat) {
 	case TextureFormat::R24G8_TYPELESS: return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	case TextureFormat::D32_FLOAT: return DXGI_FORMAT_R32_FLOAT;
 	default: return LocalToD3D12(textureFormat);
 	}
 }

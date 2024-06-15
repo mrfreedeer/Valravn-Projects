@@ -7,7 +7,7 @@
 	Bit:		Meaning
 	0			Normal vertex draw(0) / Indexed draw(1)
 	1			Regular Graphics Pipeline(0) / Mesh Shader Pipeline(1)
-	2			Uses depth as texture
+	2			Uses default depth as texture
 	3			Is render pass begin
 	4			Is render pass end
 	5			Has been used for draw call
@@ -43,7 +43,7 @@ public:
 	bool IsIndexDraw() const { return m_drawFlags & INDEXED_BIT_MASK; }
 	bool UsesMeshShaders() const { return m_drawFlags & PIPELINE_TYPE_BIT_MASK; }
 	bool UsesRegularPipeline() const { return !(m_drawFlags & PIPELINE_TYPE_BIT_MASK); }
-	bool UsesDepthAsTexture() const { return m_drawFlags & DEPTH_TEXTURE_BIT_MASK; }
+	bool UsesDefaultDepthAsTexture() const { return m_drawFlags & DEPTH_TEXTURE_BIT_MASK; }
 	bool WasUsedForDrawCall() const { return m_drawFlags & DRAW_CALLED_BIT_MASK; }
 	bool UsesDiffuseShaders() const { return m_drawFlags & DIFFUSE_BIT_MASK; }
 	bool UsesExternalBuffers() const { return (m_externalVBO || m_externalIBO); }
@@ -51,11 +51,12 @@ public:
 	bool IsRenderTargetCleared(unsigned int slot) const { return m_clearRtFlags & (1 << slot); }
 	bool IsDRTCleared() const { return m_isDRTCleared; }
 	VertexType GetVertexType() const { return m_vertexType; }
+	Texture* GetDepthRenderTarget() { return m_depthTarget; }
 
 	// Setters
 	void SetIndexDrawFlag(bool isIndexedDraw);
 	void SetPipelineTypeFlag(bool usesMeshShader);
-	void SetDepthTextureSRVFlag(bool usesDepthAsTexture);
+	void SetDefaultDepthTextureSRVFlag(bool usesDepthAsTexture);
 	void SetDrawCallUsage(bool usedInDrawCall);
 	void SetDiffuseShaderUsage(bool usesDiffuseShaders);
 	void SetRenderTargetClear(unsigned int slot, bool isCleared);

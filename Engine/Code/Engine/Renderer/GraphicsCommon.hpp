@@ -42,6 +42,7 @@ enum class TextureFormat : int {
 	D24_UNORM_S8_UINT,
 	R24G8_TYPELESS,
 	R32_FLOAT,
+	D32_FLOAT,
 	UNKNOWN
 };
 

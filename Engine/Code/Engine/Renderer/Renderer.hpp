@@ -168,6 +168,7 @@ public:
 
 	// Setters
 	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
+	void SetDepthRenderTarget(Texture* dst);
 	void SetBlendMode(BlendMode newBlendMode);
 	void SetCullMode(CullMode newCullMode);
 	void SetFillMode(FillMode newFillMode);

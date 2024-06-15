@@ -76,7 +76,7 @@ ResourceView* Texture::CreateRenderTargetView()
 ResourceView* Texture::CreateDepthStencilView()
 {
 	D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = new D3D12_DEPTH_STENCIL_VIEW_DESC();
-	dsvDesc->Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	dsvDesc->Format = LocalToD3D12(m_creationInfo.m_clearFormat);
 	dsvDesc->ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 	dsvDesc->Flags = D3D12_DSV_FLAG_NONE;
 

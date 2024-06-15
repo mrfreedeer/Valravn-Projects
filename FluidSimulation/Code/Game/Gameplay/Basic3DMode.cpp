@@ -143,7 +143,7 @@ void Basic3DMode::Startup()
 	m_fluidSolver.InitializeParticles();
 
 	m_verts.clear();
-	size_t lastIndex = 0;
+	//size_t lastIndex = 0;
 	constexpr unsigned int meshletSize = 64;
 
 	std::vector<Meshlet> meshlets;
@@ -205,11 +205,11 @@ void Basic3DMode::Startup()
 
 
 	TextureCreateInfo depthTextureInfo = {};
-	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
-	depthTextureInfo.m_format = TextureFormat::R32_FLOAT;
+	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	depthTextureInfo.m_format = TextureFormat::D32_FLOAT;
 	depthTextureInfo.m_owner = g_theRenderer;
-	depthTextureInfo.m_clearColour = Rgba8(255, 255, 255, 255);
-	depthTextureInfo.m_clearFormat = TextureFormat::R32_FLOAT;
+	depthTextureInfo.m_clearColour = Rgba8(0, 0, 0, 0);
+	depthTextureInfo.m_clearFormat = TextureFormat::D32_FLOAT;
 	depthTextureInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	depthTextureInfo.m_owner = g_theRenderer;
 	depthTextureInfo.m_name = "Prepass DRT";
@@ -255,9 +255,8 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindTexture(nullptr);
 		RenderEntities();
 
-		g_theRenderer->SetRenderTarget(m_depthTexture, 1);
-		g_theRenderer->ClearRenderTarget(1, Rgba8::WHITE);
-
+		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
+		g_theRenderer->ClearDepth(0.0f);
 		RenderParticles();
 
 	}

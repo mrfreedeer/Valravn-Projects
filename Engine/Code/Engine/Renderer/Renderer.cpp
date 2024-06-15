@@ -499,21 +499,18 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 		handle = new Resource(m_device.Get());
 		handle->m_currentState = initialResourceState;
 
-		D3D12_CLEAR_VALUE clearValueRT = {};
-		D3D12_CLEAR_VALUE clearValueDST = {};
+		D3D12_CLEAR_VALUE clearValueTex = {};
 		D3D12_CLEAR_VALUE* clearValue = NULL;
 
 		// If it can be bound as RT then it needs the clear colour, otherwise it's null
 		if (creationInfo.m_bindFlags & RESOURCE_BIND_RENDER_TARGET_BIT) {
-			creationInfo.m_clearColour.GetAsFloats(clearValueRT.Color);
-			clearValueRT.Format = LocalToD3D12(creationInfo.m_clearFormat);
-			clearValue = &clearValueRT;
-		}
-
-		if (creationInfo.m_bindFlags & RESOURCE_BIND_DEPTH_STENCIL_BIT) {
-			creationInfo.m_clearColour.GetAsFloats(clearValueDST.Color);
-			clearValueDST.Format = LocalToD3D12(TextureFormat::D24_UNORM_S8_UINT);
-			clearValue = &clearValueDST;
+			creationInfo.m_clearColour.GetAsFloats(clearValueTex.Color);
+			clearValueTex.Format = LocalToD3D12(creationInfo.m_clearFormat);
+			clearValue = &clearValueTex;
+		} else if (creationInfo.m_bindFlags & RESOURCE_BIND_DEPTH_STENCIL_BIT) {
+			creationInfo.m_clearColour.GetAsFloats(clearValueTex.Color);
+			clearValueTex.Format = LocalToD3D12(creationInfo.m_clearFormat);
+			clearValue = &clearValueTex;
 		}
 
 		HRESULT textureCreateHR = m_device->CreateCommittedResource(
@@ -1591,7 +1588,7 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx.ResetExternalBuffers();
 		nextCtx.SetIndexDrawFlag(false);
 		nextCtx.SetPipelineTypeFlag(false);
-		nextCtx.SetDepthTextureSRVFlag(false);
+		nextCtx.SetDefaultDepthTextureSRVFlag(false);
 		nextCtx.SetVertexType(VertexType::PCU); // PCU is default
 	}
 	m_currentDrawCtx++;
@@ -1727,6 +1724,9 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
 		Resource* rsc = texture->GetResource();
 		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, out_rscBarriers);
+		if(texture == m_defaultDepthTarget){
+			ctx.SetDefaultDepthTextureSRVFlag(true);
+		}
 	}
 
 	// Constant Buffers
@@ -2035,8 +2035,9 @@ void Renderer::ClearRenderTarget(unsigned int slot, Rgba8 const& color)
 void Renderer::ClearDepth(float clearDepth /*= 1.0f*/)
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
-	ResourceView* dsvView = m_defaultDepthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
-	Resource* dsvRsc = m_defaultDepthTarget->GetResource();
+	Texture* drt = currentDrawCtx.GetDepthRenderTarget();
+	ResourceView* dsvView = drt->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
+	Resource* dsvRsc = drt->GetResource();
 	dsvRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_pendingRscBarriers);
 
 	D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH;
@@ -2341,6 +2342,15 @@ void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
 	}
 }
 
+
+void Renderer::SetDepthRenderTarget(Texture* dst)
+{
+	if(!dst) dst = m_defaultDepthTarget;
+	bool isDSVCompatible = dst->IsBindCompatible(RESOURCE_BIND_DEPTH_STENCIL_BIT);
+	GUARANTEE_OR_DIE(isDSVCompatible, "TEXTURE IS NOT DSV COMPATIBLE");
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	ctx.SetDepthRenderTarget(dst);
+}
 
 void Renderer::SetBlendMode(BlendMode newBlendMode)
 {

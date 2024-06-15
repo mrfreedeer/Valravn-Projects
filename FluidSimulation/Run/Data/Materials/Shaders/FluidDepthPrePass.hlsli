@@ -16,7 +16,7 @@ struct ps_input_t
 struct ps_output_t
 {
     float4 color : SV_Target0;
-    float worldDepth : SV_Target1;
+    float worldDepth : SV_Depth;
 };
 
 struct Meshlet
@@ -227,6 +227,6 @@ ps_output_t PixelMain(ps_input_t input)
         discard;
     
     output.color = resultingColor;
-    output.worldDepth = 0.0f;
+    output.worldDepth = 1.0f;
     return output;
 }

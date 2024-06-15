@@ -12,7 +12,7 @@ void ImmediateContext::SetPipelineTypeFlag(bool usesMeshShader)
 	m_drawFlags |= (usesMeshShader << PIPELINE_TYPE_SHIFT);
 }
 
-void ImmediateContext::SetDepthTextureSRVFlag(bool usesDepthAsTexture)
+void ImmediateContext::SetDefaultDepthTextureSRVFlag(bool usesDepthAsTexture)
 {
 	m_drawFlags &= ~DEPTH_TEXTURE_BIT_MASK;
 	m_drawFlags |= (usesDepthAsTexture << DEPTH_TEXTURE_BIT_SHIFT);
