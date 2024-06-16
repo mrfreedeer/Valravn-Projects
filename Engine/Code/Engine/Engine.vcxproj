@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props" Condition="Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" />
+  <Import Project="$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props" Condition="Exists('$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="DebugInline|Win32">
       <Configuration>DebugInline</Configuration>
@@ -1181,13 +1181,13 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" />
+    <Import Project="$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets" Condition="Exists('$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props'))" />
-    <Error Condition="!Exists('..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\..\FirstTriangle\packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets'))" />
+    <Error Condition="!Exists('$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.props'))" />
+    <Error Condition="!Exists('$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)packages\Microsoft.Direct3D.DXC.1.8.2403.24\build\native\Microsoft.Direct3D.DXC.targets'))" />
   </Target>
 </Project>
