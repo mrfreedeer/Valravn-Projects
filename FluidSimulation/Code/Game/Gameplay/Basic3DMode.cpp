@@ -130,7 +130,7 @@ void Basic3DMode::Startup()
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 
 	FluidSolverConfig config = {};
-	config.m_particlePerSide = 10;
+	config.m_particlePerSide = 8;
 	config.m_pointerToParticles = &m_particles;
 	config.m_simulationBounds = m_particlesBounds;
 	config.m_iterations = 5;
@@ -208,7 +208,7 @@ void Basic3DMode::Startup()
 	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
 	depthTextureInfo.m_format = TextureFormat::D32_FLOAT;
 	depthTextureInfo.m_owner = g_theRenderer;
-	depthTextureInfo.m_clearColour = Rgba8(0, 0, 0, 0);
+	depthTextureInfo.m_clearColour = Rgba8(255, 255, 255, 255);
 	depthTextureInfo.m_clearFormat = TextureFormat::D32_FLOAT;
 	depthTextureInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	depthTextureInfo.m_owner = g_theRenderer;
@@ -255,8 +255,17 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindTexture(nullptr);
 		RenderEntities();
 
+		Light firstLight = {};
+		Rgba8::WHITE.GetAsFloats(firstLight.Color);
+		firstLight.Enabled = true;
+		firstLight.LightType = 1;
+		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
+		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
+
+		g_theRenderer->SetLight(firstLight, 0);
 		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
-		g_theRenderer->ClearDepth(0.0f);
+		g_theRenderer->ClearDepth(1.0f);
+		g_theRenderer->BindLightConstants();
 		RenderParticles();
 
 	}
@@ -581,7 +590,7 @@ void Basic3DMode::RenderParticles() const
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
-	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
+	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
 	g_theRenderer->SetModelColor(Rgba8::WHITE);
 

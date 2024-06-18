@@ -51,7 +51,8 @@ float1 RangeMap(float1 inValue, float1 inStart, float1 inEnd, float1 outStart, f
 float4 PixelMain(v2p_t input) : SV_Target0
 {
     float4 resultingColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * ModelColor;
-    resultingColor.r = 0.005f / (1.005f - resultingColor.r); 
+    float epsilon = 0.025f;
+    resultingColor.r = epsilon / (1.0f + epsilon - resultingColor.r);
     if (resultingColor.w == 0)
         discard;
     return resultingColor;

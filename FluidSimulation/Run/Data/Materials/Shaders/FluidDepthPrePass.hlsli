@@ -214,19 +214,28 @@ ps_output_t PixelMain(ps_input_t input)
 {
     ps_output_t output = (ps_output_t) 0;
     
-    //float2 posInCircle = (input.uv * 2.0f) - 1.0f;
-    //float radiusSqr = dot(posInCircle, posInCircle);
+    float2 posInCircle = (input.uv * 2.0f) - 1.0f;
+    float radiusSqr = dot(posInCircle, posInCircle);
     
-    //if (radiusSqr > 1.0f)
-    //    discard;
-    
-    float4 resultingColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * ModelColor;
-    
-    //float4 resultingColor = /*diffuseTexture.Sample(diffuseSampler, input.uv) * input.color **/ meshlets[0].Color;
-    if (resultingColor.w == 0)
+    if (radiusSqr > 1.0f)
         discard;
     
+    // The normal is simulated to a the normals in a sphere. In the center
+    // It will be only the -forward component, as it's pointing towards the camera
+    // At the edges, the normal will be the uv positions.
+    float3 normal = float3(posInCircle, 0.0f);
+    normal.z = -sqrt(1.0f - radiusSqr);
+    float4 eyeSpaceNormalPoint = float4(normal * SpriteRadius + input.eyeSpacePosition, 1.0f);
+    float4 clipPos = mul(ProjectionMatrix, eyeSpaceNormalPoint);
+    float depth = clipPos.z / clipPos.w;
+    
+    //float4 resultingColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * ModelColor;
+    
+    float4 resultingColor = diffuseTexture.Sample(diffuseSampler, input.uv) * input.color * meshlets[0].Color * saturate(dot(normal, Lights[0].Direction));
+    //if (resultingColor.w == 0)
+    //    discard;
+    
     output.color = resultingColor;
-    output.worldDepth = 1.0f;
+    output.worldDepth = depth;
     return output;
 }
