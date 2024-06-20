@@ -223,8 +223,10 @@ ps_output_t PixelMain(ps_input_t input)
     // The normal is simulated to a the normals in a sphere. In the center
     // It will be only the -forward component, as it's pointing towards the camera
     // At the edges, the normal will be the uv positions.
-    float3 normal = float3(posInCircle, 0.0f);
-    normal.z = -sqrt(1.0f - radiusSqr);
+    float3 normal;
+    normal.yz= posInCircle;
+    normal.y *= -1.0f;
+    normal.x = -sqrt(1.0f - radiusSqr);
     float4 eyeSpaceNormalPoint = float4(normal * SpriteRadius + input.eyeSpacePosition, 1.0f);
     float4 clipPos = mul(ProjectionMatrix, eyeSpaceNormalPoint);
     float depth = clipPos.z / clipPos.w;

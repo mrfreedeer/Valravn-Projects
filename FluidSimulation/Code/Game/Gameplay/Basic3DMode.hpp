@@ -46,6 +46,7 @@ private:
 
 private:
 	Material* m_prePassMaterial = nullptr;
+	Material* m_normalPassMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
 	StructuredBuffer* m_meshVBuffer[2] = {} ;
 	StructuredBuffer* m_meshletBuffer = nullptr;

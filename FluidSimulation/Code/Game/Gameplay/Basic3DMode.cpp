@@ -127,7 +127,9 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
 
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
+	std::filesystem::path normalMaterialPath("Data/Materials/NormalCalculation");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
+	m_normalPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(normalMaterialPath);
 
 	FluidSolverConfig config = {};
 	config.m_particlePerSide = 8;
@@ -135,7 +137,7 @@ void Basic3DMode::Startup()
 	config.m_simulationBounds = m_particlesBounds;
 	config.m_iterations = 5;
 	config.m_kernelRadius = 0.196f;
-	config.m_renderingRadius = config.m_kernelRadius;
+	config.m_renderingRadius = 0.065f;
 	config.m_restDensity = 1000.0f;
 
 
@@ -268,6 +270,10 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindLightConstants();
 		RenderParticles();
 
+		g_theRenderer->BindMaterial(m_normalPassMaterial);
+		g_theRenderer->SetDepthRenderTarget(nullptr);
+		g_theRenderer->BindTexture(m_depthTexture);
+		g_theRenderer->DrawVertexArray(std::vector<Vertex_PCU>(3));
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
@@ -584,13 +590,11 @@ void Basic3DMode::RenderParticles() const
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
 	g_theRenderer->BindMaterial(m_prePassMaterial);
-	//g_theRenderer->SetRasterizerState(CullMode::NONE, FillMode::SOLID, WindingOrder::COUNTERCLOCKWISE);
 	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->BindStructuredBuffer(currentVBuffer, 1);
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
-	//g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 	g_theRenderer->SetModelMatrix(Mat44());
 	g_theRenderer->SetModelColor(Rgba8::WHITE);
 
