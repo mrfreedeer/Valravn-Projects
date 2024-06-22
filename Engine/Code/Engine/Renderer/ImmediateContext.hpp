@@ -8,12 +8,8 @@
 	0			Normal vertex draw(0) / Indexed draw(1)
 	1			Regular Graphics Pipeline(0) / Mesh Shader Pipeline(1)
 	2			Uses default depth as texture
-	3			Is render pass begin
-	4			Is render pass end
-	5			Has been used for draw call
-	6			Uses diffuse shaders
-	7			Clears Render Target
-	8			Clears Render Pass
+	3			Has been used for draw call
+	4			Uses diffuse shaders
 */
 
 constexpr unsigned int INDEXED_BIT_SHIFT = 0;

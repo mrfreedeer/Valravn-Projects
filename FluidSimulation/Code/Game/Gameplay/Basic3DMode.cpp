@@ -210,10 +210,10 @@ void Basic3DMode::Startup()
 
 	TextureCreateInfo thicknessTexInfo = {};
 	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
-	thicknessTexInfo.m_format = TextureFormat::R32_FLOAT;
+	thicknessTexInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
 	thicknessTexInfo.m_owner = g_theRenderer;
 	thicknessTexInfo.m_clearColour = Rgba8(0, 0, 0, 0);
-	thicknessTexInfo.m_clearFormat = TextureFormat::R32_FLOAT;
+	thicknessTexInfo.m_clearFormat = TextureFormat::R8G8B8A8_UNORM;
 	thicknessTexInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	thicknessTexInfo.m_owner = g_theRenderer;
 	thicknessTexInfo.m_name = "Thickness";
@@ -292,8 +292,7 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindMaterial(m_thicknessMaterial);
 		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
 		g_theRenderer->SetRenderTarget(m_thickness);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::WHITE);
-		g_theRenderer->BindLightConstants();
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
 		RenderParticles();
 
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
@@ -320,6 +319,7 @@ void Basic3DMode::Render() const
 		verts.clear();
 		AddVertsForAABB2D(verts, secQuad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindTexture(m_thickness);
+		g_theRenderer->BindMaterial(g_theRenderer->GetDefaultMaterial(false));
 		g_theRenderer->DrawVertexArray(verts);
 
 	}

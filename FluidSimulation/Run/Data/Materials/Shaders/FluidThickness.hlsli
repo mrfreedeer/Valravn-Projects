@@ -13,11 +13,6 @@ struct ps_input_t
     float2 uv : TEXCOORD0;
 };
 
-struct ps_output_t
-{
-    float thickness: SV_Target0;
-};
-
 struct Light
 {
     bool Enabled;
@@ -68,16 +63,13 @@ cbuffer GameConstants : register(b3)
     float4 CameraLeft;
 }
 
-ps_output_t PixelMain(ps_input_t input)
+float4 PixelMain(ps_input_t input): SV_Target0
 {
-    ps_output_t output = (ps_output_t) 0;
-    
     float2 posInCircle = (input.uv * 2.0f) - 1.0f;
     float radiusSqr = dot(posInCircle, posInCircle);
     
     if (radiusSqr > 1.0f)
         discard;
-    
-    output.thickness = 0.05f;
-    return output;
+    float thickness = sqrt(1.0f - radiusSqr) * 0.55f;
+    return float4(thickness, 0.f, 0.f, thickness);
 }
