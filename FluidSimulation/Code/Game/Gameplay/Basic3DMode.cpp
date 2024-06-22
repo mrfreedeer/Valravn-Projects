@@ -127,9 +127,11 @@ void Basic3DMode::Startup()
 	m_effectsMaterials[(int)MaterialEffect::DistanceFog] = g_theMaterialSystem->GetMaterialForName("DistanceFogFX");
 
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
-	std::filesystem::path normalMaterialPath("Data/Materials/NormalCalculation");
+	std::filesystem::path fluidColorMatPath("Data/Materials/FluidColorPass");
+	std::filesystem::path thicknessMaterialPath("Data/Materials/ThicknessPrepass");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
-	m_normalPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(normalMaterialPath);
+	m_fluidColorPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(fluidColorMatPath);
+	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
 
 	FluidSolverConfig config = {};
 	config.m_particlePerSide = 8;
@@ -206,6 +208,16 @@ void Basic3DMode::Startup()
 	m_gameConstants->Initialize();
 
 
+	TextureCreateInfo thicknessTexInfo = {};
+	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	thicknessTexInfo.m_format = TextureFormat::R32_FLOAT;
+	thicknessTexInfo.m_owner = g_theRenderer;
+	thicknessTexInfo.m_clearColour = Rgba8(0, 0, 0, 0);
+	thicknessTexInfo.m_clearFormat = TextureFormat::R32_FLOAT;
+	thicknessTexInfo.m_dimensions = g_theWindow->GetClientDimensions();
+	thicknessTexInfo.m_owner = g_theRenderer;
+	thicknessTexInfo.m_name = "Thickness";
+
 	TextureCreateInfo depthTextureInfo = {};
 	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
 	depthTextureInfo.m_format = TextureFormat::D32_FLOAT;
@@ -217,6 +229,7 @@ void Basic3DMode::Startup()
 	depthTextureInfo.m_name = "Prepass DRT";
 
 	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
+	m_thickness = g_theRenderer->CreateTexture(thicknessTexInfo);
 
 }
 
@@ -263,14 +276,29 @@ void Basic3DMode::Render() const
 		firstLight.LightType = 1;
 		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
 		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
+		firstLight.QuadraticAttenuation = 0.0f;
+		firstLight.LinearAttenuation = 0.05f;
+		firstLight.ConstantAttenuation= 0.025f;
+
+		DebugAddWorldPoint(firstLight.Position, 0.1f, 0.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
 
 		g_theRenderer->SetLight(firstLight, 0);
 		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
 		g_theRenderer->ClearDepth(1.0f);
 		g_theRenderer->BindLightConstants();
+		g_theRenderer->BindMaterial(m_prePassMaterial);
 		RenderParticles();
 
-		g_theRenderer->BindMaterial(m_normalPassMaterial);
+		g_theRenderer->BindMaterial(m_thicknessMaterial);
+		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
+		g_theRenderer->SetRenderTarget(m_thickness);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::WHITE);
+		g_theRenderer->BindLightConstants();
+		RenderParticles();
+
+		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
+		//g_theRenderer->SetRenderTarget(nullptr);
+		g_theRenderer->BindMaterial(m_fluidColorPassMaterial);
 		g_theRenderer->SetDepthRenderTarget(nullptr);
 		g_theRenderer->BindTexture(m_depthTexture);
 		g_theRenderer->DrawVertexArray(std::vector<Vertex_PCU>(3));
@@ -281,11 +309,17 @@ void Basic3DMode::Render() const
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
 		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
+		AABB2 secQuad( Vec2(m_UISize.x * 0.25f, 0.0f), Vec2(m_UISize.x * 0.5f, m_UISize.y * 0.25f));
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
 		//g_theRenderer->BindDepthAsTexture();
 		g_theRenderer->BindTexture(m_depthTexture);
+		g_theRenderer->DrawVertexArray(verts);
+
+		verts.clear();
+		AddVertsForAABB2D(verts, secQuad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+		g_theRenderer->BindTexture(m_thickness);
 		g_theRenderer->DrawVertexArray(verts);
 
 	}
@@ -589,7 +623,7 @@ void Basic3DMode::RenderParticles() const
 	gameConstants.SpriteRadius = m_fluidSolver.GetRenderingRadius();
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
-	g_theRenderer->BindMaterial(m_prePassMaterial);
+	//g_theRenderer->BindMaterial(m_prePassMaterial);
 	g_theRenderer->BindTexture(nullptr);
 	g_theRenderer->BindStructuredBuffer(currentVBuffer, 1);
 	g_theRenderer->BindStructuredBuffer(m_meshletBuffer, 2);

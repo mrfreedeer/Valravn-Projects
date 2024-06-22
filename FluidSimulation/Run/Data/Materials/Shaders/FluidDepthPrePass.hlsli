@@ -15,7 +15,6 @@ struct ps_input_t
 
 struct ps_output_t
 {
-    float4 color : SV_Target0;
     float worldDepth : SV_Depth;
 };
 
@@ -237,7 +236,6 @@ ps_output_t PixelMain(ps_input_t input)
     //if (resultingColor.w == 0)
     //    discard;
     
-    output.color = resultingColor;
     output.worldDepth = depth;
     return output;
 }

@@ -1,0 +1,14 @@
+<Material name="FluidColorPass">
+	<VertexShader headerSrc="Shaders/" shaderName="FluidColorPass_v" src="Data/Materials/Shaders/Stages/FluidColorPass_v.hlsl" entryPoint="VertexMain"/>
+	<PixelShader  headerSrc="Shaders/" shaderName="FluidColorPass_p" src="Data/Materials/Shaders/Stages/FluidColorPass_p.hlsl" entryPoint="PixelMain"/>
+	<BlendMode value="Opaque"/>
+	<!-- CCW - CounterClockwise
+    CW - ClockWise -->
+	<WindingOrder value="NONE"/>
+	<CullMode value="BackFace"/>
+	<FillMode value="Solid"/>
+	<Topology value="TriangleList"/>
+	<DepthStencil depthFunction="ALWAYS" writeDepth="true"/>
+	<Antialiasing value="8"/>
+	<Metadata src="material.mtl"/>
+</Material>

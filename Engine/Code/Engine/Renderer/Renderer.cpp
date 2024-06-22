@@ -507,7 +507,8 @@ Texture* Renderer::CreateTexture(TextureCreateInfo& creationInfo)
 			creationInfo.m_clearColour.GetAsFloats(clearValueTex.Color);
 			clearValueTex.Format = LocalToD3D12(creationInfo.m_clearFormat);
 			clearValue = &clearValueTex;
-		} else if (creationInfo.m_bindFlags & RESOURCE_BIND_DEPTH_STENCIL_BIT) {
+		}
+		else if (creationInfo.m_bindFlags & RESOURCE_BIND_DEPTH_STENCIL_BIT) {
 			creationInfo.m_clearColour.GetAsFloats(clearValueTex.Color);
 			clearValueTex.Format = LocalToD3D12(creationInfo.m_clearFormat);
 			clearValue = &clearValueTex;
@@ -1044,7 +1045,6 @@ void Renderer::CreateGraphicsPSO(Material* material)
 		if (format == TextureFormat::INVALID) continue;
 		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
 	}
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
 
@@ -1055,7 +1055,7 @@ void Renderer::CreateGraphicsPSO(Material* material)
 
 void Renderer::CreateMeshShaderPSO(Material* material)
 {
-	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc =  {};
+	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = {};
 	MaterialConfig const& matConfig = material->m_config;
 
 	D3D12_RASTERIZER_DESC rasterizerDesc = CD3DX12_RASTERIZER_DESC(
@@ -1103,7 +1103,6 @@ void Renderer::CreateMeshShaderPSO(Material* material)
 		if (format == TextureFormat::INVALID) continue;
 		psoDesc.RTVFormats[rtIndex] = LocalToColourD3D12(format);
 	}
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = (matConfig.m_depthEnable) ? DXGI_FORMAT_D24_UNORM_S8_UINT : DXGI_FORMAT_UNKNOWN;
 	psoDesc.SampleDesc.Count = 1;
 
@@ -1724,7 +1723,7 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
 		Resource* rsc = texture->GetResource();
 		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, out_rscBarriers);
-		if(texture == m_defaultDepthTarget){
+		if (texture == m_defaultDepthTarget) {
 			ctx.SetDefaultDepthTextureSRVFlag(true);
 		}
 	}
@@ -1796,7 +1795,7 @@ void Renderer::EndFrame()
 
 	Resource* currentBackBuffer = GetActiveBackBuffer()->GetResource();
 	Resource* currentRT = GetActiveRenderTarget()->GetResource();
-	
+
 
 	currentBackBuffer->TransitionTo(D3D12_RESOURCE_STATE_COPY_DEST, cmdList);
 	currentRT->TransitionTo(D3D12_RESOURCE_STATE_COPY_SOURCE, cmdList);
@@ -2255,13 +2254,7 @@ void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
 	currentDrawCtx.m_boundTextures[slot] = texture;
-	if (texture) {
-		// if it is depth texture, special code handles resource barriers at DrawImmediateCtx
-		if (texture->IsBindCompatible(ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT)) return;
-		Resource* texRsc = texture->GetResource();
-		texRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, m_pendingRscBarriers);
-	}
-	else {
+	if (!texture) {
 		if (slot == 0) {
 			currentDrawCtx.m_boundTextures[slot] = m_defaultTexture;
 		}
@@ -2345,7 +2338,7 @@ void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
 
 void Renderer::SetDepthRenderTarget(Texture* dst)
 {
-	if(!dst) dst = m_defaultDepthTarget;
+	if (!dst) dst = m_defaultDepthTarget;
 	bool isDSVCompatible = dst->IsBindCompatible(RESOURCE_BIND_DEPTH_STENCIL_BIT);
 	GUARANTEE_OR_DIE(isDSVCompatible, "TEXTURE IS NOT DSV COMPATIBLE");
 	ImmediateContext& ctx = GetCurrentDrawCtx();
@@ -2730,6 +2723,11 @@ void Renderer::ResetGPUState()
 	m_effectsContexts.clear();
 
 	m_isModelBufferDirty = false;
+}
+
+Texture* Renderer::GetDefaultRenderTarget() const
+{
+	return GetActiveRenderTarget();
 }
 
 void Renderer::InitializeImGui()

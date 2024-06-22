@@ -211,7 +211,7 @@ void Material::ParseRenderTargets(XMLElement const& xmlElement)
 	while (renderTargetDesc) {
 		std::string texFormat = ParseXmlAttribute(*renderTargetDesc, "format", "INVALID");
 		unsigned int rtIndex = ParseXmlAttribute(*renderTargetDesc, "index", 0);
-		std::string blendModeStr = ParseXmlAttribute(xmlElement, "blendMode", "Opaque");
+		std::string blendModeStr = ParseXmlAttribute(*renderTargetDesc, "blendMode", "Opaque");
 
 		m_config.m_renderTargetFormats[rtIndex] = ParseFromString(texFormat, TextureFormat::INVALID);
 		BlendMode customBlendMode = ParseFromString(blendModeStr, BlendMode::OPAQUE);

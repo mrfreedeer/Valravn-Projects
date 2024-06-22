@@ -91,7 +91,10 @@
     <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml">
       <Filter>Materials</Filter>
     </Xml>
-    <Xml Include="..\..\Run\Data\Materials\NormalCalculation.xml">
+    <Xml Include="..\..\Run\Data\Materials\FluidColorPass.xml">
+      <Filter>Materials</Filter>
+    </Xml>
+    <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml">
       <Filter>Materials</Filter>
     </Xml>
   </ItemGroup>
@@ -99,7 +102,10 @@
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli">
       <Filter>Materials\Shaders</Filter>
     </None>
-    <None Include="..\..\Run\Data\Materials\Shaders\NormalCalculation.hlsli">
+    <None Include="..\..\Run\Data\Materials\Shaders\FluidColorPass.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\FluidThickness.hlsli">
       <Filter>Materials\Shaders</Filter>
     </None>
   </ItemGroup>
@@ -110,10 +116,13 @@
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\NormalCalculation_p.hlsl">
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidColorPass_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\NormalCalculation_v.hlsl">
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidColorPass_v.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidThickness_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>

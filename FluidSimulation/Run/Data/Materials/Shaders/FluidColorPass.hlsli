@@ -102,6 +102,25 @@ ps_input_t VertexMain(vs_input_t input)
     return output;
 }
 
+float Attenuate(Light light, float distance)
+{
+    float attenuation = (light.ConstantAttenuation + light.LinearAttenuation * distance + light.QuadraticAttenuation * distance * distance);
+    if (attenuation == 0)
+    {
+        return 1.0f;
+    }
+    return 1.0f / attenuation;
+}
+
+float4 CalculateDiffusePointLight(Light light, float4 Position, float3 Normal)
+{
+    float3 dispToLight = light.Position - Position.xyz;
+    float3 L = normalize(dispToLight);
+    float attenuation = Attenuate(light, length(dispToLight));
+    
+    return saturate(dot(Normal, L)) * light.Color * attenuation;
+}
+
 float4 PixelMain(ps_input_t input) : SV_Target0
 {
     uint2 depthDims;
@@ -154,6 +173,10 @@ float4 PixelMain(ps_input_t input) : SV_Target0
     float3 normal = normalize(cross(difX, difY));
    
     normal = normalize(mul(InvViewMat, float4(normal, 0.0f)).xyz);
+    float4 worldPos = mul(InvViewMat, float4(pixelEyePos, 1.0f));
     
-    return float4(normal, 1.0f);
+    float4 diffuseLight = CalculateDiffusePointLight(Lights[0], worldPos, normal) * float4(0.0f, 0.0f, 1.0f, 1.0f);
+    
+    //return float4(normal, 1.0f);
+    return diffuseLight;
 }

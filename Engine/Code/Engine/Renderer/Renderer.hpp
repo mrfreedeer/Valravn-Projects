@@ -201,6 +201,7 @@ public:
 	ID3D12GraphicsCommandList6* GetCurrentCommandList(CommandListType cmdListType);
 
 	void ResetGPUState();
+	Texture* GetDefaultRenderTarget() const;
 private:
 	// ImGui
 	void InitializeImGui();
