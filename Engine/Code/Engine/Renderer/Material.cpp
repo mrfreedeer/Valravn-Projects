@@ -199,7 +199,6 @@ void Material::ParseDepthStencil(XMLElement const& xmlElement)
 	}
 
 	m_config.m_depthEnable = ParseXmlAttribute(xmlElement, "writeDepth", false);
-
 }
 
 void Material::ParseRenderTargets(XMLElement const& xmlElement)

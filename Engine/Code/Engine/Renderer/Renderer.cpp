@@ -230,6 +230,7 @@ void Renderer::CreateDevice()
 		D3D12_MESSAGE_ID hide[] =
 		{
 			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+			D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE
 		};
 		D3D12_INFO_QUEUE_FILTER filter = {};
 		filter.DenyList.NumIDs = _countof(hide);
@@ -361,8 +362,6 @@ void Renderer::CreateDefaultRootSignature()
 
 	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-	//rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-	//ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error), "COULD NOT SERIALIZE ROOT SIGNATURE");
 	ComPtr<ID3DBlob> signature;
 	ComPtr<ID3DBlob> MSsignature;
 	ComPtr<ID3DBlob> error;
@@ -374,8 +373,7 @@ void Renderer::CreateDefaultRootSignature()
 
 	rootSignatureSerialization = D3D12SerializeVersionedRootSignature(&MSRootSignature, MSsignature.GetAddressOf(), error.GetAddressOf());
 	ThrowIfFailed(rootSignatureSerialization, "COULD NOT SERIALIZE ROOT SIGNATURE");
-	//ThrowIfFailed(m_device->CreateRootSignature(0, MSsignature->GetBufferPointer(), MSsignature->GetBufferSize(), IID_PPV_ARGS(&m_MSRootSignature)), "COULD NOT CREATE ROOT SIGNATURE");
-	//SetDebugName(m_MSRootSignature, "DEFAULTROOTSIGNATURE");
+
 }
 
 void Renderer::CreateBackBuffers()
@@ -1008,7 +1006,7 @@ void Renderer::CreateGraphicsPSO(Material* material)
 
 	psoDesc.InputLayout.NumElements = (UINT)reflectInputDesc.size();
 	psoDesc.InputLayout.pInputElementDescs = inputLayoutDesc.data();
-	psoDesc.pRootSignature = m_defaultRootSignature.Get();
+	psoDesc.pRootSignature = m_defaultRootSignature;
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 
 	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vsByteCode->m_byteCode.data(), vsByteCode->m_byteCode.size());
@@ -1078,7 +1076,7 @@ void Renderer::CreateMeshShaderPSO(Material* material)
 	ShaderByteCode* psByteCode = material->m_byteCodes[ShaderType::Pixel];
 	ShaderByteCode* msByteCode = material->m_byteCodes[ShaderType::Mesh];
 
-	psoDesc.pRootSignature = m_defaultRootSignature.Get();
+	psoDesc.pRootSignature = m_defaultRootSignature;
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(psByteCode->m_byteCode.data(), psByteCode->m_byteCode.size());
 	psoDesc.MS = CD3DX12_SHADER_BYTECODE(msByteCode->m_byteCode.data(), msByteCode->m_byteCode.size());
 
@@ -1237,13 +1235,6 @@ void Renderer::FinishPendingPrePassResourceTasks()
 		}
 	}
 
-	Texture* activeRT = GetActiveBackBuffer();
-	Resource* rtRsc = activeRT->GetResource();
-
-	Resource* depthRsc = m_defaultDepthTarget->GetResource();
-	depthRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, m_pendingRscBarriers);
-	rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, m_pendingRscBarriers);
-
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
@@ -1376,7 +1367,7 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
 	cmdList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
-	cmdList->SetGraphicsRootSignature(m_defaultRootSignature.Get());
+	cmdList->SetGraphicsRootSignature(m_defaultRootSignature);
 	// 0 -> CBV
 	// 1 -> SRV
 	// 2 -> UAV
@@ -1402,10 +1393,14 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		rtHandle = rt->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT)->GetHandle();
 	}
 
-	ResourceView* dsvView = ctx.m_depthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE* usedDSV = nullptr;
 
-	cmdList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, &dsvHandle);
+	if (ctx.m_depthTarget) {
+		ResourceView* dsvView = ctx.m_depthTarget->GetOrCreateView(RESOURCE_BIND_DEPTH_STENCIL_BIT);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
+		usedDSV = &dsvHandle;
+	}
+	cmdList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, usedDSV);
 	if (ctx.UsesMeshShaders()) {
 		unsigned int threadX = ctx.m_meshThreads.x;
 		unsigned int threadY = ctx.m_meshThreads.y;
@@ -1752,6 +1747,18 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 		Resource* externalVBORsc = ctx.m_externalVBO->GetResource();
 		externalVBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, out_rscBarriers);
 	}
+
+	Texture* activeRT = ctx.m_renderTargets[0];
+	Resource* rtRsc = activeRT->GetResource();
+
+	if (ctx.m_depthTarget) {
+		Resource* depthRsc = ctx.m_depthTarget->GetResource();
+		depthRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, out_rscBarriers);
+	}
+
+	if (activeRT) {
+		rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, out_rscBarriers);
+	}
 }
 
 void Renderer::BeginFrame()
@@ -1874,7 +1881,8 @@ void Renderer::Shutdown()
 	m_DXGIFactory.Reset();
 	m_commandQueue.Reset();
 	m_swapChain.Reset();
-	m_defaultRootSignature.Reset();
+	DX_SAFE_RELEASE(m_defaultRootSignature);
+	m_defaultRootSignature = nullptr;
 
 	// Clearing cmd lists and allocators
 	for (unsigned int index = 0; index < m_commandAllocators.size(); index++) {
@@ -1971,8 +1979,14 @@ void Renderer::BeginCamera(Camera const& camera)
 	BindTexture(m_defaultTexture);
 	SetSamplerMode(SamplerMode::POINTCLAMP);
 
-	ctx.SetRenderTarget(0, GetActiveRenderTarget());
-	ctx.SetDepthRenderTarget(m_defaultDepthTarget);
+	Texture* cameraTarget = m_currentCamera->GetRenderTarget();
+	Texture* cameraDepth = m_currentCamera->GetDepthTarget();
+
+	Texture* usedRT = (cameraTarget) ? cameraTarget : GetActiveRenderTarget();
+	Texture* usedDRT = (cameraDepth) ? cameraDepth : m_defaultDepthTarget;
+
+	ctx.SetRenderTarget(0, usedRT);
+	ctx.SetDepthRenderTarget(usedDRT);
 
 	CameraConstants cameraConstants = {};
 	cameraConstants.ProjectionMatrix = camera.GetProjectionMatrix();
@@ -2014,7 +2028,8 @@ void Renderer::ClearTexture(Rgba8 const& color, Texture* tex)
 
 void Renderer::ClearScreen(Rgba8 const& color)
 {
-	Texture* currentRt = GetActiveRenderTarget();
+	Texture* cameraTarget = (m_currentCamera->GetRenderTarget());
+	Texture* currentRt = (cameraTarget) ? cameraTarget : GetActiveRenderTarget();
 	ClearTexture(color, currentRt);
 	ClearDepth();
 }
@@ -2350,9 +2365,10 @@ void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
 
 void Renderer::SetDepthRenderTarget(Texture* dst)
 {
-	if (!dst) dst = m_defaultDepthTarget;
-	bool isDSVCompatible = dst->IsBindCompatible(RESOURCE_BIND_DEPTH_STENCIL_BIT);
-	GUARANTEE_OR_DIE(isDSVCompatible, "TEXTURE IS NOT DSV COMPATIBLE");
+	if (dst) {
+		bool isDSVCompatible = dst->IsBindCompatible(RESOURCE_BIND_DEPTH_STENCIL_BIT);
+		GUARANTEE_OR_DIE(isDSVCompatible, "TEXTURE IS NOT DSV COMPATIBLE");
+	}
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	ctx.SetDepthRenderTarget(dst);
 }
@@ -2643,7 +2659,7 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
 
 	defaultCmdList->SetPipelineState(effect->m_PSO);
-	defaultCmdList->SetGraphicsRootSignature(m_defaultRootSignature.Get());
+	defaultCmdList->SetGraphicsRootSignature(m_defaultRootSignature);
 	defaultCmdList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
 
 

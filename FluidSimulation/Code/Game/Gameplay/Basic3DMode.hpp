@@ -55,7 +55,6 @@ private:
 	Texture* m_depthTexture = nullptr;
 	Texture* m_thickness = nullptr;
 	Texture* m_backgroundRT = nullptr;
-	Texture* m_backgroundDRT = nullptr;
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
 	unsigned int m_currentVBuffer = 0;
 

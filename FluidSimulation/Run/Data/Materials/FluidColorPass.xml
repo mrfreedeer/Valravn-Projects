@@ -8,7 +8,7 @@
 	<CullMode value="BackFace"/>
 	<FillMode value="Solid"/>
 	<Topology value="TriangleList"/>
-	<DepthStencil depthFunction="ALWAYS" writeDepth="true"/>
+	<DepthStencil depthFunction="ALWAYS" writeDepth="false"/>
 	<Antialiasing value="8"/>
 	<Metadata src="material.mtl"/>
 </Material>

@@ -228,16 +228,6 @@ void Basic3DMode::Startup()
 	backgroundRTInfo.m_owner = g_theRenderer;
 	backgroundRTInfo.m_name = "Background RT";
 
-	TextureCreateInfo backgroundDepthInfo = {};
-	backgroundDepthInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
-	backgroundDepthInfo.m_format = TextureFormat::R24G8_TYPELESS;
-	backgroundDepthInfo.m_owner = g_theRenderer;
-	backgroundDepthInfo.m_clearColour = Rgba8(0, 0, 0, 0);
-	backgroundDepthInfo.m_clearFormat = TextureFormat::D24_UNORM_S8_UINT;
-	backgroundDepthInfo.m_dimensions = g_theWindow->GetClientDimensions();
-	backgroundDepthInfo.m_owner = g_theRenderer;
-	backgroundDepthInfo.m_name = "Background DRT";
-
 	TextureCreateInfo depthTextureInfo = {};
 	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
 	depthTextureInfo.m_format = TextureFormat::D32_FLOAT;
@@ -251,8 +241,9 @@ void Basic3DMode::Startup()
 	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
 	m_thickness = g_theRenderer->CreateTexture(thicknessTexInfo);
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
-	m_backgroundDRT = g_theRenderer->CreateTexture(backgroundDepthInfo);
 
+	m_worldCamera.SetColorTarget(m_backgroundRT);
+	//m_worldCamera.SetDepthTarget(m_backgroundDRT);
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -288,7 +279,7 @@ void Basic3DMode::Render() const
 	{
 		g_theRenderer->SetRenderTarget(m_backgroundRT);
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
-		g_theRenderer->SetDepthRenderTarget(m_backgroundDRT);
+		//g_theRenderer->SetDepthRenderTarget(m_backgroundDRT);
 		g_theRenderer->ClearDepth();
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
@@ -303,7 +294,7 @@ void Basic3DMode::Render() const
 		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
 		firstLight.QuadraticAttenuation = 0.0f;
 		firstLight.LinearAttenuation = 0.05f;
-		firstLight.ConstantAttenuation= 0.025f;
+		firstLight.ConstantAttenuation = 0.025f;
 
 		DebugAddWorldPoint(firstLight.Position, 0.1f, 0.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
 
@@ -315,12 +306,42 @@ void Basic3DMode::Render() const
 		RenderParticles();
 
 		g_theRenderer->BindMaterial(m_thicknessMaterial);
-		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
 		g_theRenderer->SetRenderTarget(m_thickness);
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
 		RenderParticles();
 
-		g_theRenderer->ClearBoundStructuredBuffers();
+	}
+	g_theRenderer->EndCamera(m_worldCamera);
+
+
+	
+
+
+
+	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
+		if (m_applyEffects[effectInd]) {
+			g_theRenderer->ApplyEffect(m_effectsMaterials[effectInd], &m_worldCamera);
+		}
+	}
+
+
+	GameMode::Render();
+
+	{
+		g_theRenderer->BeginCamera(m_worldCamera);
+
+		Light firstLight = {};
+		Rgba8::WHITE.GetAsFloats(firstLight.Color);
+		firstLight.Enabled = true;
+		firstLight.LightType = 1;
+		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
+		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
+		firstLight.QuadraticAttenuation = 0.0f;
+		firstLight.LinearAttenuation = 0.05f;
+		firstLight.ConstantAttenuation = 0.025f;
+
+		g_theRenderer->SetLight(firstLight, 0);
+		g_theRenderer->BindLightConstants();
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
 		//g_theRenderer->SetRenderTarget(nullptr);
 		g_theRenderer->BindMaterial(m_fluidColorPassMaterial);
@@ -328,17 +349,16 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindTexture(m_depthTexture);
 		g_theRenderer->BindTexture(m_thickness, 1);
 		g_theRenderer->BindTexture(m_backgroundRT, 2);
-		g_theRenderer->BindTexture(m_backgroundDRT, 3);
+		g_theRenderer->BindTexture(g_theRenderer->GetCurrentDepthTarget(), 3);
 		g_theRenderer->SetModelColor(Rgba8(0, 120, 255, 255));
 		g_theRenderer->DrawVertexArray(std::vector<Vertex_PCU>(3));
+		g_theRenderer->EndCamera(m_worldCamera);
 	}
-	g_theRenderer->EndCamera(m_worldCamera);
-
 
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
 		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
-		AABB2 secQuad( Vec2(m_UISize.x * 0.25f, 0.0f), Vec2(m_UISize.x * 0.5f, m_UISize.y * 0.25f));
+		AABB2 secQuad(Vec2(m_UISize.x * 0.25f, 0.0f), Vec2(m_UISize.x * 0.5f, m_UISize.y * 0.25f));
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
@@ -354,17 +374,6 @@ void Basic3DMode::Render() const
 
 	}
 	g_theRenderer->EndCamera(m_UICamera);
-
-
-
-	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
-		if (m_applyEffects[effectInd]) {
-			g_theRenderer->ApplyEffect(m_effectsMaterials[effectInd], &m_worldCamera);
-		}
-	}
-
-	GameMode::Render();
-
 }
 
 void Basic3DMode::Shutdown()
@@ -628,7 +637,7 @@ void Basic3DMode::UpdateParticles(float deltaSeconds)
 		FluidParticle const& particle = m_particles[particleIndex];
 		FluidParticleMeshInfo& particleMesh = m_particlesMeshInfo[particleIndex];
 		particleMesh.Position = particle.m_position;
-		Rgba8(0,0,160,120).GetAsFloats(particleMesh.Color);
+		Rgba8(0, 0, 160, 120).GetAsFloats(particleMesh.Color);
 	}
 
 	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];

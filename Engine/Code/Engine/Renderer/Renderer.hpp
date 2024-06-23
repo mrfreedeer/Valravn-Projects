@@ -322,7 +322,6 @@ private:
 	ComPtr<IDXGIFactory4> m_DXGIFactory;
 	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
-	ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 
 	/*=================== Vectors =================== */
 	std::vector<Texture*> m_loadedTextures;
@@ -361,6 +360,7 @@ private:
 	DescriptorHeap* m_CPUDescriptorHeaps[(size_t)DescriptorHeapType::NUM_DESCRIPTOR_HEAPS] = {};
 	ImmediateContext* m_immediateContexts = nullptr;
 	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
+	ID3D12RootSignature* m_defaultRootSignature = nullptr;
 
 	
 	Camera const* m_currentCamera = nullptr;
