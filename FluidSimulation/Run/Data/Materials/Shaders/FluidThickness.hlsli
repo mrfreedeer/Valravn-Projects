@@ -70,6 +70,11 @@ float4 PixelMain(ps_input_t input): SV_Target0
     
     if (radiusSqr > 1.0f)
         discard;
-    float thickness = sqrt(1.0f - radiusSqr) * 0.55f;
+    //float thickness = sqrt(1.0f - radiusSqr) * 0.55f;
+    //thickness = (posInCircle - input.position.xy);
+    
+    //float2 fracScreen = frac(input.position.xy) * sqrt(1.0f - radiusSqr);
+    //thickness = dot(fracScreen, fracScreen);
+    float thickness = (1.0f - radiusSqr) * 0.05f;
     return float4(thickness, 0.f, 0.f, thickness);
 }

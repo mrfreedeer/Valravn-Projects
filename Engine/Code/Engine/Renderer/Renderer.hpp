@@ -165,6 +165,7 @@ public:
 	void BindVertexBuffer(VertexBuffer* const& vertexBuffer);
 	void BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount);
 	void BindStructuredBuffer(Buffer* const& buffer, unsigned int slot);
+	void ClearBoundStructuredBuffers();
 
 	// Setters
 	void SetRenderTarget(Texture* dst, unsigned int slot = 0);

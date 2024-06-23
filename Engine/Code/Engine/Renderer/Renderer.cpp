@@ -2247,6 +2247,9 @@ void Renderer::BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot /*=
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
 	ctx.m_boundCBuffers[slot] = cBuffer;
+	if (!cBuffer) {
+		ctx.m_boundCBuffers.erase(slot);
+	}
 }
 
 void Renderer::BindTexture(Texture const* texture, unsigned int slot /*= 0*/)
@@ -2313,6 +2316,15 @@ void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 
 	currentDrawCtx.m_boundBuffers[slot] = buffer;
+	if (!buffer) {
+		currentDrawCtx.m_boundBuffers.erase(slot);
+	}
+}
+
+void Renderer::ClearBoundStructuredBuffers()
+{
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+	currentDrawCtx.m_boundBuffers.clear();
 }
 
 void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)

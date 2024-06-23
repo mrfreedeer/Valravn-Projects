@@ -51,6 +51,10 @@ cbuffer GameConstants : register(b3)
 }
 
 Texture2D<float> depthTexture : register(t0);
+Texture2D<float> thicknessTexture : register(t1);
+Texture2D<float4> backgroundTex : register(t2);
+Texture2D<float> backgroundDepth : register(t3);
+
 SamplerState diffuseSampler : register(s0);
 
 // input to the vertex shader - for now, a special input that is the index of the vertex we're drawing
@@ -140,9 +144,10 @@ float4 PixelMain(ps_input_t input) : SV_Target0
     
     
     float depth = depthTexture.Sample(diffuseSampler, input.uv);
-    if (depth >= maxDepth)
+    float bgDepth = backgroundDepth.Sample(diffuseSampler, input.uv);
+    if (bgDepth < depth )
     {
-        discard;
+        return backgroundTex.Sample(diffuseSampler, input.uv);
     }
     
     float topDepth = depthTexture.Sample(diffuseSampler, topUV);
@@ -175,8 +180,12 @@ float4 PixelMain(ps_input_t input) : SV_Target0
     normal = normalize(mul(InvViewMat, float4(normal, 0.0f)).xyz);
     float4 worldPos = mul(InvViewMat, float4(pixelEyePos, 1.0f));
     
-    float4 diffuseLight = CalculateDiffusePointLight(Lights[0], worldPos, normal) * float4(0.0f, 0.0f, 1.0f, 1.0f);
+    float3 dispToLight = normalize(Lights[0].Position.xyz - worldPos.xyz);
+    float4 diffuseLight = CalculateDiffusePointLight(Lights[0], worldPos, normal);
+    float thickness = thicknessTexture.Sample(diffuseSampler, input.uv);
+    float4 IExp = exp(-(1.0f.xxxx - ModelColor) * thickness);
+    float4 background = backgroundTex.Sample(diffuseSampler, input.uv + (normal.xy * thickness));
     
     //return float4(normal, 1.0f);
-    return diffuseLight;
+    return saturate(IExp) * background * ModelColor * dot(normal, dispToLight);
 }

@@ -134,10 +134,10 @@ void Basic3DMode::Startup()
 	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
 
 	FluidSolverConfig config = {};
-	config.m_particlePerSide = 8;
+	config.m_particlePerSide = 10;
 	config.m_pointerToParticles = &m_particles;
 	config.m_simulationBounds = m_particlesBounds;
-	config.m_iterations = 5;
+	config.m_iterations = 3;
 	config.m_kernelRadius = 0.196f;
 	config.m_renderingRadius = 0.065f;
 	config.m_restDensity = 1000.0f;
@@ -210,13 +210,33 @@ void Basic3DMode::Startup()
 
 	TextureCreateInfo thicknessTexInfo = {};
 	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
-	thicknessTexInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
+	thicknessTexInfo.m_format = TextureFormat::R32_FLOAT;
 	thicknessTexInfo.m_owner = g_theRenderer;
 	thicknessTexInfo.m_clearColour = Rgba8(0, 0, 0, 0);
-	thicknessTexInfo.m_clearFormat = TextureFormat::R8G8B8A8_UNORM;
+	thicknessTexInfo.m_clearFormat = TextureFormat::R32_FLOAT;
 	thicknessTexInfo.m_dimensions = g_theWindow->GetClientDimensions();
 	thicknessTexInfo.m_owner = g_theRenderer;
 	thicknessTexInfo.m_name = "Thickness";
+
+	TextureCreateInfo backgroundRTInfo = {};
+	backgroundRTInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	backgroundRTInfo.m_format = TextureFormat::R8G8B8A8_UNORM;
+	backgroundRTInfo.m_owner = g_theRenderer;
+	backgroundRTInfo.m_clearColour = Rgba8(0, 0, 0, 0);
+	backgroundRTInfo.m_clearFormat = TextureFormat::R8G8B8A8_UNORM;
+	backgroundRTInfo.m_dimensions = g_theWindow->GetClientDimensions();
+	backgroundRTInfo.m_owner = g_theRenderer;
+	backgroundRTInfo.m_name = "Background RT";
+
+	TextureCreateInfo backgroundDepthInfo = {};
+	backgroundDepthInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	backgroundDepthInfo.m_format = TextureFormat::R24G8_TYPELESS;
+	backgroundDepthInfo.m_owner = g_theRenderer;
+	backgroundDepthInfo.m_clearColour = Rgba8(0, 0, 0, 0);
+	backgroundDepthInfo.m_clearFormat = TextureFormat::D24_UNORM_S8_UINT;
+	backgroundDepthInfo.m_dimensions = g_theWindow->GetClientDimensions();
+	backgroundDepthInfo.m_owner = g_theRenderer;
+	backgroundDepthInfo.m_name = "Background DRT";
 
 	TextureCreateInfo depthTextureInfo = {};
 	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
@@ -230,6 +250,8 @@ void Basic3DMode::Startup()
 
 	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
 	m_thickness = g_theRenderer->CreateTexture(thicknessTexInfo);
+	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
+	m_backgroundDRT = g_theRenderer->CreateTexture(backgroundDepthInfo);
 
 }
 
@@ -264,7 +286,10 @@ void Basic3DMode::Render() const
 {
 	g_theRenderer->BeginCamera(m_worldCamera);
 	{
-		g_theRenderer->ClearScreen(Rgba8::BLACK);
+		g_theRenderer->SetRenderTarget(m_backgroundRT);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+		g_theRenderer->SetDepthRenderTarget(m_backgroundDRT);
+		g_theRenderer->ClearDepth();
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
 		g_theRenderer->BindTexture(nullptr);
@@ -295,11 +320,16 @@ void Basic3DMode::Render() const
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
 		RenderParticles();
 
+		g_theRenderer->ClearBoundStructuredBuffers();
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
 		//g_theRenderer->SetRenderTarget(nullptr);
 		g_theRenderer->BindMaterial(m_fluidColorPassMaterial);
 		g_theRenderer->SetDepthRenderTarget(nullptr);
 		g_theRenderer->BindTexture(m_depthTexture);
+		g_theRenderer->BindTexture(m_thickness, 1);
+		g_theRenderer->BindTexture(m_backgroundRT, 2);
+		g_theRenderer->BindTexture(m_backgroundDRT, 3);
+		g_theRenderer->SetModelColor(Rgba8(0, 120, 255, 255));
 		g_theRenderer->DrawVertexArray(std::vector<Vertex_PCU>(3));
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
