@@ -243,7 +243,7 @@ void Basic3DMode::Startup()
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
 
 	m_worldCamera.SetColorTarget(m_backgroundRT);
-	//m_worldCamera.SetDepthTarget(m_backgroundDRT);
+	m_UICamera.SetColorTarget(m_backgroundRT);
 }
 
 void Basic3DMode::Update(float deltaSeconds)
@@ -279,7 +279,6 @@ void Basic3DMode::Render() const
 	{
 		g_theRenderer->SetRenderTarget(m_backgroundRT);
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
-		//g_theRenderer->SetDepthRenderTarget(m_backgroundDRT);
 		g_theRenderer->ClearDepth();
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
@@ -343,7 +342,6 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetLight(firstLight, 0);
 		g_theRenderer->BindLightConstants();
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
-		//g_theRenderer->SetRenderTarget(nullptr);
 		g_theRenderer->BindMaterial(m_fluidColorPassMaterial);
 		g_theRenderer->SetDepthRenderTarget(nullptr);
 		g_theRenderer->BindTexture(m_depthTexture);
@@ -357,12 +355,13 @@ void Basic3DMode::Render() const
 
 	g_theRenderer->BeginCamera(m_UICamera);
 	{
+		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
+
 		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
 		AABB2 secQuad(Vec2(m_UISize.x * 0.25f, 0.0f), Vec2(m_UISize.x * 0.5f, m_UISize.y * 0.25f));
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
-		//g_theRenderer->BindDepthAsTexture();
 		g_theRenderer->BindTexture(m_depthTexture);
 		g_theRenderer->DrawVertexArray(verts);
 
