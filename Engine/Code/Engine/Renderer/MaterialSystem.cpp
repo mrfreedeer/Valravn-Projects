@@ -161,7 +161,6 @@ Material* MaterialSystem::GetSiblingMaterial(Material* material, SiblingMatTypes
 
 	if (!siblingMat) {
 		siblingMat = new Material(newConfig);
-		siblingMat->m_isMeshShader = material->IsMeshShader();
 
 		m_config.m_renderer->CreatePSOForMaterial(siblingMat);
 

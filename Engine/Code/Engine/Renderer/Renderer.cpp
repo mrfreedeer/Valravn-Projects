@@ -258,16 +258,16 @@ void Renderer::EnableDebugLayer()
 }
 
 
-void Renderer::CreateCommandQueue()
+void Renderer::CreateCommandQueues()
 {
 	// Describe and create the command queue.
-	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	D3D12_COMMAND_QUEUE_DESC graphicsQueueDesc = {};
+	graphicsQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	graphicsQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-	ThrowIfFailed(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)), "FAILED TO CREATE COMMANDQUEUE");
+	ThrowIfFailed(m_device->CreateCommandQueue(&graphicsQueueDesc, IID_PPV_ARGS(&m_graphicsCommandQueue)), "FAILED TO CREATE GRAPHICS COMMANDQUEUE");
 
-	SetDebugName(m_commandQueue, "COMMAND QUEUE");
+	SetDebugName(m_graphicsCommandQueue, "GCOMM QUEUE");
 }
 
 void Renderer::CreateSwapChain()
@@ -291,7 +291,7 @@ void Renderer::CreateSwapChain()
 
 	ComPtr<IDXGISwapChain1> swapChain;
 	ThrowIfFailed(m_DXGIFactory->CreateSwapChainForHwnd(
-		m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
+		m_graphicsCommandQueue,        // Swap chain needs the queue so that it can force a flush on it.
 		windowHandle,
 		&swapChainDesc,
 		nullptr,
@@ -321,8 +321,8 @@ void Renderer::CreateDescriptorHeaps()
 
 void Renderer::CreateFences()
 {
-	m_fence = new Fence(m_device.Get(), m_commandQueue.Get());
-	m_resourcesFence = new Fence(m_device.Get(), m_commandQueue.Get());
+	m_fence = new Fence(m_device.Get(), m_graphicsCommandQueue);
+	m_resourcesFence = new Fence(m_device.Get(), m_graphicsCommandQueue);
 }
 
 void Renderer::CreateDefaultRootSignature()
@@ -402,6 +402,21 @@ void Renderer::CreateBackBuffers()
 		backBuffer->GetOrCreateView(RESOURCE_BIND_RENDER_TARGET_BIT);
 		DX_SAFE_RELEASE(bufferTex);
 	}
+}
+
+ResourceView* Renderer::CreateUnorderedAccessView(ResourceViewInfo const& resourceViewInfo) const
+{
+	DescriptorHeap* uavDescriptorHeap = GetCPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = uavDescriptorHeap->GetNextCPUHandle();
+
+	m_device->CreateUnorderedAccessView(resourceViewInfo.m_source->m_resource, NULL, resourceViewInfo.m_uavDesc, cpuHandle);
+
+	ResourceView* newResourceView = new ResourceView(resourceViewInfo);
+	newResourceView->m_descriptorHandle = cpuHandle;
+	newResourceView->m_source = resourceViewInfo.m_source;
+
+	return newResourceView;
 }
 
 ResourceView* Renderer::CreateShaderResourceView(ResourceViewInfo const& resourceViewInfo) const
@@ -674,7 +689,7 @@ void Renderer::Startup()
 {
 	EnableDebugLayer();
 	CreateDevice();
-	CreateCommandQueue();
+	CreateCommandQueues();
 	CreateSwapChain();
 	CreateDescriptorHeaps();
 	CreateFences(); // Has to go after creating command queue
@@ -748,11 +763,20 @@ void Renderer::CreatePSOForMaterial(Material* material)
 	HRESULT psoCreation = {};
 	std::vector<std::string> nameStrings;
 
-	if (material->IsMeshShader()) {
-		CreateMeshShaderPSO(material);
-	}
-	else {
+	switch (material->m_pipelineType)
+	{
+	case PipelineType::Graphics:
 		CreateGraphicsPSO(material);
+		break;
+	case PipelineType::Mesh:
+		CreateMeshShaderPSO(material);
+		break;
+	case PipelineType::Compute:
+		CreateComputePSO(material);
+		break;
+	default:
+		ERROR_AND_DIE("UNRECOGNIZED PIPELINE TYPE");
+		break;
 	}
 
 	ThrowIfFailed(psoCreation, "COULD NOT CREATE PSO");
@@ -1051,6 +1075,17 @@ void Renderer::CreateGraphicsPSO(Material* material)
 	ThrowIfFailed(psoCreationResult, Stringf("FAILED TO CREATE PSO FOR MATERIAL %s", material->GetName().c_str()).c_str());
 }
 
+void Renderer::CreateComputePSO(Material* material)
+{
+	D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+	ShaderByteCode* csByteCode = material->m_byteCodes[ShaderType::Compute];
+
+	psoDesc.CS = CD3DX12_SHADER_BYTECODE(csByteCode->m_byteCode.data(), csByteCode->m_byteCode.size());
+	psoDesc.pRootSignature = m_defaultRootSignature;
+
+	m_device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&material->m_PSO));
+}
+
 void Renderer::CreateMeshShaderPSO(Material* material)
 {
 	D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = {};
@@ -1112,7 +1147,6 @@ void Renderer::CreateMeshShaderPSO(Material* material)
 
 	HRESULT psoCreationResult = m_device->CreatePipelineState(&streamDesc, IID_PPV_ARGS(&material->m_PSO));
 	ThrowIfFailed(psoCreationResult, "FAILED TO CREATE MESH SHADER");
-	material->m_isMeshShader = true;
 }
 
 void Renderer::SetBlendModeSpecs(BlendMode const* blendModes, D3D12_BLEND_DESC& blendDesc)
@@ -1357,7 +1391,13 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		CopyBufferToGPUHeap(pBuffer, RESOURCE_BIND_SHADER_RESOURCE_BIT, ctx.m_srvHandleStart, slot);
 	}
 
-	CopyEngineCBuffersToGPUHeap(ctx);
+	for (auto& [slot, pBuffer] : ctx.m_boundRWBuffers) {
+		CopyBufferToGPUHeap(pBuffer, RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT, ctx.m_uavHandleStart, slot);
+	}
+
+	if (ctx.IsDrawTypePipeline()) {
+		CopyEngineCBuffersToGPUHeap(ctx);
+	}
 	DescriptorHeap* srvUAVCBVHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
 	DescriptorHeap* samplerHeap = GetGPUDescriptorHeap(DescriptorHeapType::SAMPLER);
 	ID3D12DescriptorHeap* allDescriptorHeaps[] = {
@@ -1367,15 +1407,27 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 
 	UINT numHeaps = sizeof(allDescriptorHeaps) / sizeof(ID3D12DescriptorHeap*);
 	cmdList->SetDescriptorHeaps(numHeaps, allDescriptorHeaps);
-	cmdList->SetGraphicsRootSignature(m_defaultRootSignature);
+
 	// 0 -> CBV
 	// 1 -> SRV
 	// 2 -> UAV
 	// 3 -> Samplers
-	cmdList->SetGraphicsRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_cbvHandleStart));
-	cmdList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
-	cmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(UAV_HANDLE_START));
-	cmdList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+	if (ctx.IsComputeShader()) {
+		cmdList->SetComputeRootSignature(m_defaultRootSignature);
+
+		cmdList->SetComputeRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_cbvHandleStart));
+		cmdList->SetComputeRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
+		cmdList->SetComputeRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_uavHandleStart));
+		cmdList->SetComputeRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+	}
+	else {
+		cmdList->SetGraphicsRootSignature(m_defaultRootSignature);
+
+		cmdList->SetGraphicsRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_cbvHandleStart));
+		cmdList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
+		cmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_uavHandleStart));
+		cmdList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+	}
 
 	cmdList->RSSetViewports(1, &m_viewport);
 	cmdList->RSSetScissorRects(1, &m_scissorRect);
@@ -1400,42 +1452,50 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvView->GetHandle();
 		usedDSV = &dsvHandle;
 	}
-	cmdList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, usedDSV);
-	if (ctx.UsesMeshShaders()) {
-		unsigned int threadX = ctx.m_meshThreads.x;
-		unsigned int threadY = ctx.m_meshThreads.y;
-		unsigned int threadZ = ctx.m_meshThreads.z;
-		cmdList->DispatchMesh(threadX, threadY, threadZ);
+
+	unsigned int threadX = ctx.m_dispatchThreads.x;
+	unsigned int threadY = ctx.m_dispatchThreads.y;
+	unsigned int threadZ = ctx.m_dispatchThreads.z;
+
+	if (ctx.IsComputeShader()) {
+		cmdList->Dispatch(threadX, threadY, threadZ);
 	}
 	else {
-		cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmdList->OMSetRenderTargets(rtCount, rtvHandles, FALSE, usedDSV);
+		if (ctx.UsesMeshShaders()) {
 
-		VertexBuffer* usedBuffer = (ctx.m_externalVBO) ? ctx.m_externalVBO : GetImmediateVBO(ctx.GetVertexType());;
-		IndexBuffer* usedIndexedBuffer = nullptr;
-
-
-		D3D12_VERTEX_BUFFER_VIEW D3DbufferView = {};
-		BufferView vBufferView = usedBuffer->GetBufferView();
-		// Initialize the vertex buffer view.
-		D3DbufferView.BufferLocation = vBufferView.m_bufferLocation;
-		D3DbufferView.StrideInBytes = (UINT)vBufferView.m_strideInBytes;
-		D3DbufferView.SizeInBytes = (UINT)vBufferView.m_sizeInBytes;
-
-		cmdList->IASetVertexBuffers(0, 1, &D3DbufferView);
-
-		if (ctx.IsIndexDraw()) {
-			usedIndexedBuffer = (ctx.m_externalIBO) ? ctx.m_externalIBO : m_immediateIBO;
-			D3D12_INDEX_BUFFER_VIEW D3DindexedBufferView = {};
-			BufferView iBufferView = usedIndexedBuffer->GetBufferView();
-			D3DindexedBufferView.BufferLocation = iBufferView.m_bufferLocation;
-			D3DindexedBufferView.Format = DXGI_FORMAT_R32_UINT;
-			D3DindexedBufferView.SizeInBytes = (UINT)iBufferView.m_sizeInBytes;
-
-			cmdList->IASetIndexBuffer(&D3DindexedBufferView);
-			cmdList->DrawIndexedInstanced((UINT)ctx.m_indexCount, 1, (UINT)ctx.m_indexStart, (INT)ctx.m_vertexStart, 0);
+			cmdList->DispatchMesh(threadX, threadY, threadZ);
 		}
 		else {
-			cmdList->DrawInstanced((UINT)ctx.m_vertexCount, 1, (UINT)ctx.m_vertexStart, 0);
+			cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			VertexBuffer* usedBuffer = (ctx.m_externalVBO) ? ctx.m_externalVBO : GetImmediateVBO(ctx.GetVertexType());;
+			IndexBuffer* usedIndexedBuffer = nullptr;
+
+
+			D3D12_VERTEX_BUFFER_VIEW D3DbufferView = {};
+			BufferView vBufferView = usedBuffer->GetBufferView();
+			// Initialize the vertex buffer view.
+			D3DbufferView.BufferLocation = vBufferView.m_bufferLocation;
+			D3DbufferView.StrideInBytes = (UINT)vBufferView.m_strideInBytes;
+			D3DbufferView.SizeInBytes = (UINT)vBufferView.m_sizeInBytes;
+
+			cmdList->IASetVertexBuffers(0, 1, &D3DbufferView);
+
+			if (ctx.IsIndexedDraw()) {
+				usedIndexedBuffer = (ctx.m_externalIBO) ? ctx.m_externalIBO : m_immediateIBO;
+				D3D12_INDEX_BUFFER_VIEW D3DindexedBufferView = {};
+				BufferView iBufferView = usedIndexedBuffer->GetBufferView();
+				D3DindexedBufferView.BufferLocation = iBufferView.m_bufferLocation;
+				D3DindexedBufferView.Format = DXGI_FORMAT_R32_UINT;
+				D3DindexedBufferView.SizeInBytes = (UINT)iBufferView.m_sizeInBytes;
+
+				cmdList->IASetIndexBuffer(&D3DindexedBufferView);
+				cmdList->DrawIndexedInstanced((UINT)ctx.m_indexCount, 1, (UINT)ctx.m_indexStart, (INT)ctx.m_vertexStart, 0);
+			}
+			else {
+				cmdList->DrawInstanced((UINT)ctx.m_vertexCount, 1, (UINT)ctx.m_vertexStart, 0);
+			}
 		}
 	}
 }
@@ -1476,6 +1536,7 @@ void Renderer::SetContextDescriptorStarts(ImmediateContext& ctx)
 {
 	ctx.m_srvHandleStart = m_srvHandleStart;
 	ctx.m_cbvHandleStart = m_cbvHandleStart;
+	ctx.m_uavHandleStart = m_uavHandleStart;
 
 	UpdateDescriptorsHandleStarts(ctx);
 }
@@ -1581,7 +1642,7 @@ void Renderer::CopyCurrentDrawCtxToNext()
 		nextCtx = ImmediateContext(m_immediateContexts[m_currentDrawCtx]);
 		nextCtx.ResetExternalBuffers();
 		nextCtx.SetIndexDrawFlag(false);
-		nextCtx.SetPipelineTypeFlag(false);
+		nextCtx.SetPipelineType(PipelineType::Graphics);
 		nextCtx.SetDefaultDepthTextureSRVFlag(false);
 		nextCtx.SetVertexType(VertexType::PCU); // PCU is default
 	}
@@ -1625,6 +1686,7 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 	static auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	static auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
 	static auto findHighestValSRVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValUAVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
 
 
 	// Find the max value to skip that amount of slots
@@ -1633,10 +1695,12 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 	auto texMaxIt = std::max_element(ctx.m_boundTextures.begin(), ctx.m_boundTextures.end(), findHighestValTex);
 	auto cBufferMaxIt = std::max_element(ctx.m_boundCBuffers.begin(), ctx.m_boundCBuffers.end(), findHighestValCbuffer);
 	auto SRVBufferMaxIt = std::max_element(ctx.m_boundBuffers.begin(), ctx.m_boundBuffers.end(), findHighestValSRVBuffer);
+	auto UAVBufferMaxIt = std::max_element(ctx.m_boundRWBuffers.begin(), ctx.m_boundRWBuffers.end(), findHighestValUAVBuffer);
 
 	unsigned int texMax = (texMaxIt != ctx.m_boundTextures.end()) ? texMaxIt->first : 0;
 	unsigned int srvBufferMax = (SRVBufferMaxIt != ctx.m_boundBuffers.end()) ? SRVBufferMaxIt->first : 0;
 	unsigned int cBufferMax = (cBufferMaxIt != ctx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
+	unsigned int uavBufferMax = (UAVBufferMaxIt != ctx.m_boundRWBuffers.end()) ? UAVBufferMaxIt->first : 0;
 
 	unsigned int SRVMax = (srvBufferMax > texMax) ? srvBufferMax : texMax;
 
@@ -1648,6 +1712,12 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 
 	m_srvHandleStart += SRVMax + 1;
 	m_cbvHandleStart += cBufferMax + 1;
+
+	// UAV could actually be 0, as opposed to SRV, UAV
+	// Since SRVs will always have default Texture and CBVs have the engine buffers
+	if (ctx.m_boundRWBuffers.size() != 0) {
+		m_uavHandleStart += uavBufferMax + 1;
+	}
 }
 
 VertexBuffer* Renderer::GetImmediateVBO(VertexType vertexType)
@@ -1666,7 +1736,7 @@ VertexBuffer* Renderer::GetImmediateVBO(VertexType vertexType)
 
 void Renderer::ExecuteCommandLists(unsigned int count, ID3D12CommandList** cmdLists)
 {
-	m_commandQueue->ExecuteCommandLists(count, cmdLists);
+	m_graphicsCommandQueue->ExecuteCommandLists(count, cmdLists);
 	m_currentCmdListIndex = (m_currentCmdListIndex + 1) % 2;
 }
 
@@ -1736,29 +1806,37 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, out_rscBarriers);
 	}
 
-	// External VBO, IBO
-
-	if (ctx.m_externalIBO) {
-		Resource* externalIBORsc = ctx.m_externalIBO->GetResource();
-		externalIBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, out_rscBarriers);
+	for (auto& [slot, buffer] : ctx.m_boundRWBuffers) {
+		Resource* rsc = buffer->GetResource();
+		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_UNORDERED_ACCESS, out_rscBarriers);
 	}
 
-	if (ctx.m_externalVBO) {
-		Resource* externalVBORsc = ctx.m_externalVBO->GetResource();
-		externalVBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, out_rscBarriers);
+	if (ctx.IsDrawTypePipeline()) {
+		// External VBO, IBO
+
+		if (ctx.m_externalIBO) {
+			Resource* externalIBORsc = ctx.m_externalIBO->GetResource();
+			externalIBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_INDEX_BUFFER, out_rscBarriers);
+		}
+
+		if (ctx.m_externalVBO) {
+			Resource* externalVBORsc = ctx.m_externalVBO->GetResource();
+			externalVBORsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, out_rscBarriers);
+		}
+
+		Texture* activeRT = ctx.m_renderTargets[0];
+		Resource* rtRsc = activeRT->GetResource();
+
+		if (ctx.m_depthTarget) {
+			Resource* depthRsc = ctx.m_depthTarget->GetResource();
+			depthRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, out_rscBarriers);
+		}
+
+		if (activeRT) {
+			rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, out_rscBarriers);
+		}
 	}
 
-	Texture* activeRT = ctx.m_renderTargets[0];
-	Resource* rtRsc = activeRT->GetResource();
-
-	if (ctx.m_depthTarget) {
-		Resource* depthRsc = ctx.m_depthTarget->GetResource();
-		depthRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_DEPTH_WRITE, out_rscBarriers);
-	}
-
-	if (activeRT) {
-		rtRsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_RENDER_TARGET, out_rscBarriers);
-	}
 }
 
 void Renderer::BeginFrame()
@@ -1879,10 +1957,9 @@ void Renderer::Shutdown()
 
 	m_device.Reset();
 	m_DXGIFactory.Reset();
-	m_commandQueue.Reset();
 	m_swapChain.Reset();
 	DX_SAFE_RELEASE(m_defaultRootSignature);
-	m_defaultRootSignature = nullptr;
+	DX_SAFE_RELEASE(m_graphicsCommandQueue);
 
 	// Clearing cmd lists and allocators
 	for (unsigned int index = 0; index < m_commandAllocators.size(); index++) {
@@ -1938,6 +2015,7 @@ void Renderer::Shutdown()
 	m_currentLightBufferSlot = 0;
 	m_srvHandleStart = 0;
 	m_cbvHandleStart = 0;
+	m_uavHandleStart = 0;
 	m_currentFrame = 0;
 
 	m_defaultTexture = nullptr;
@@ -2079,14 +2157,27 @@ Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 	return newTexture;
 }
 
+void Renderer::Dispatch(unsigned int threadX, unsigned threadY, unsigned int threadZ)
+{
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+
+	ctx.SetPipelineType(PipelineType::Compute);
+	ctx.m_dispatchThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
+                                 
+	SetContextDescriptorStarts(ctx);
+	ctx.SetDrawCallUsage(true);
+	SetModelBufferForCtx(ctx);
+
+	CopyCurrentDrawCtxToNext();
+}
+
+
 
 void Renderer::DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ)
 {
 	ImmediateContext& ctx = GetCurrentDrawCtx();
-	ctx.SetPipelineTypeFlag(true);
-	ctx.m_meshThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
-	ctx.m_srvHandleStart = m_srvHandleStart;
-	ctx.m_cbvHandleStart = m_cbvHandleStart;
+	ctx.SetPipelineType(PipelineType::Mesh);
+	ctx.m_dispatchThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
 
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
@@ -2103,7 +2194,6 @@ void Renderer::DrawVertexBuffer(VertexBuffer* const& vertexBuffer)
 	ctx.SetDrawCallUsage(true);
 	SetModelBufferForCtx(ctx);
 
-
 	CopyCurrentDrawCtxToNext();
 }
 
@@ -2115,7 +2205,6 @@ void Renderer::DrawIndexedVertexBuffer(VertexBuffer* const& vertexBuffer, IndexB
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
 	SetModelBufferForCtx(ctx);
-
 
 	CopyCurrentDrawCtxToNext();
 }
@@ -2220,11 +2309,9 @@ ResourceView* Renderer::CreateResourceView(ResourceViewInfo const& resourceViewI
 	case RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT:
 		return CreateConstantBufferView(resourceViewInfo);
 	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
-		// TODO
-		break;
+		return CreateUnorderedAccessView(resourceViewInfo);
 	}
 
-	return nullptr;
 }
 
 BitmapFont* Renderer::CreateOrGetBitmapFont(std::filesystem::path bitmapPath)
@@ -2290,6 +2377,14 @@ void Renderer::BindMaterial(Material* mat)
 	currentDrawCtx.m_material = mat;
 }
 
+void Renderer::BindComputeMaterial(Material* mat)
+{
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+	currentDrawCtx.Reset();
+	currentDrawCtx.SetPipelineType(PipelineType::Compute);
+	currentDrawCtx.m_material = mat;
+}
+
 void Renderer::BindMaterialByName(char const* materialName)
 {
 	Material* material = g_theMaterialSystem->GetMaterialForName(materialName);
@@ -2336,10 +2431,21 @@ void Renderer::BindStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	}
 }
 
+void Renderer::BindRWStructuredBuffer(Buffer* const& buffer, unsigned int slot)
+{
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+
+	currentDrawCtx.m_boundRWBuffers[slot] = buffer;
+	if (!buffer) {
+		currentDrawCtx.m_boundRWBuffers.erase(slot);
+	}
+}
+
 void Renderer::ClearBoundStructuredBuffers()
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 	currentDrawCtx.m_boundBuffers.clear();
+	currentDrawCtx.m_boundRWBuffers.clear();
 }
 
 void Renderer::SetRenderTarget(Texture* dst, unsigned int slot /*= 0*/)
@@ -2665,7 +2771,7 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 
 	defaultCmdList->SetGraphicsRootDescriptorTable(0, srvUAVCBVHeap->GetGPUHandleAtOffset(m_cbvHandleStart));
 	defaultCmdList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(m_srvHandleStart));
-	defaultCmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(UAV_HANDLE_START));
+	defaultCmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(m_uavHandleStart));
 	defaultCmdList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
 
 	m_cbvHandleStart += 1;
@@ -2731,6 +2837,7 @@ void Renderer::ResetGPUState()
 	m_currentDrawCtx = 0;
 	m_srvHandleStart = SRV_HANDLE_START;
 	m_cbvHandleStart = CBV_HANDLE_START;
+	m_uavHandleStart = UAV_HANDLE_START;
 
 	auto cmdAllocator = GetCommandAllocForCmdList(CommandListType::DEFAULT);
 	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);

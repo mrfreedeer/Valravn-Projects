@@ -6,21 +6,18 @@
 	Flags
 	Bit:		Meaning
 	0			Normal vertex draw(0) / Indexed draw(1)
-	1			Regular Graphics Pipeline(0) / Mesh Shader Pipeline(1)
-	2			Uses default depth as texture
-	3			Has been used for draw call
-	4			Uses diffuse shaders
+	1			Uses default depth as texture
+	2			Has been used for draw call
+	3			Uses diffuse shaders
 */
 
 constexpr unsigned int INDEXED_BIT_SHIFT = 0;
-constexpr unsigned int PIPELINE_TYPE_SHIFT = 1;
-constexpr unsigned int DEPTH_TEXTURE_BIT_SHIFT = 2;
-constexpr unsigned int DRAW_CALLED_BIT_SHIFT = 3;
-constexpr unsigned int DIFFUSE_BIT_SHIFT = 4;
+constexpr unsigned int DEPTH_TEXTURE_BIT_SHIFT = 1;
+constexpr unsigned int DRAW_CALLED_BIT_SHIFT = 2;
+constexpr unsigned int DIFFUSE_BIT_SHIFT = 3;
 
 
 constexpr unsigned int INDEXED_BIT_MASK = (1 << 0);
-constexpr unsigned int PIPELINE_TYPE_BIT_MASK = (1 << PIPELINE_TYPE_SHIFT);
 constexpr unsigned int DEPTH_TEXTURE_BIT_MASK = (1 << DEPTH_TEXTURE_BIT_SHIFT);
 constexpr unsigned int DRAW_CALLED_BIT_MASK = (1 << DRAW_CALLED_BIT_SHIFT);
 constexpr unsigned int DIFFUSE_BIT_MASK = (1 << DIFFUSE_BIT_SHIFT);
@@ -36,9 +33,11 @@ class ImmediateContext {
 	friend class Renderer;
 public:
 	// Getters
-	bool IsIndexDraw() const { return m_drawFlags & INDEXED_BIT_MASK; }
-	bool UsesMeshShaders() const { return m_drawFlags & PIPELINE_TYPE_BIT_MASK; }
-	bool UsesRegularPipeline() const { return !(m_drawFlags & PIPELINE_TYPE_BIT_MASK); }
+	bool IsIndexedDraw() const { return m_drawFlags & INDEXED_BIT_MASK; }
+	bool IsComputeShader() const { return m_pipelineType == PipelineType::Compute; }
+	bool IsDrawTypePipeline() const { return m_pipelineType != PipelineType::Compute; }
+	bool UsesMeshShaders() const { return m_pipelineType == PipelineType::Mesh; }
+	bool UsesRegularPipeline() const { return m_pipelineType == PipelineType::Graphics; }
 	bool UsesDefaultDepthAsTexture() const { return m_drawFlags & DEPTH_TEXTURE_BIT_MASK; }
 	bool WasUsedForDrawCall() const { return m_drawFlags & DRAW_CALLED_BIT_MASK; }
 	bool UsesDiffuseShaders() const { return m_drawFlags & DIFFUSE_BIT_MASK; }
@@ -51,7 +50,7 @@ public:
 
 	// Setters
 	void SetIndexDrawFlag(bool isIndexedDraw);
-	void SetPipelineTypeFlag(bool usesMeshShader);
+	void SetPipelineType(PipelineType pipelineType);
 	void SetDefaultDepthTextureSRVFlag(bool usesDepthAsTexture);
 	void SetDrawCallUsage(bool usedInDrawCall);
 	void SetDiffuseShaderUsage(bool usesDiffuseShaders);
@@ -60,6 +59,7 @@ public:
 	void SetRenderTarget(unsigned int index, Texture* renderTarget);
 	void SetDepthRenderTarget(Texture* depthRenderTarget);
 	void SetVertexType(VertexType vertexType);
+
 
 	void Reset();
 	void ResetExternalBuffers();
@@ -72,6 +72,7 @@ private:
 	bool m_isDRTCleared = false;
 
 	VertexType m_vertexType = VertexType::PCU;
+	PipelineType m_pipelineType = PipelineType::Graphics;
 	Material* m_material = nullptr;
 	Texture* m_renderTargets[8] = {};
 	Texture* m_depthTarget = nullptr;
@@ -86,11 +87,13 @@ private:
 	size_t m_indexCount = 0;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
+	unsigned int m_uavHandleStart = 0;
 	unsigned int m_depthSRVSlot = 0;
-	IntVec3 m_meshThreads = IntVec3::ZERO;
+	IntVec3 m_dispatchThreads = IntVec3::ZERO;
 	ModelConstants m_modelConstants = {};
 
 	std::map<unsigned int, Texture const*> m_boundTextures;
 	std::map<unsigned int, ConstantBuffer*> m_boundCBuffers;
 	std::map<unsigned int, Buffer*> m_boundBuffers;
+	std::map<unsigned int, Buffer*> m_boundRWBuffers;
 };

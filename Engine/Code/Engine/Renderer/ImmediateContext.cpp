@@ -6,10 +6,9 @@ void ImmediateContext::SetIndexDrawFlag(bool isIndexedDraw)
 	m_drawFlags |= (isIndexedDraw << INDEXED_BIT_SHIFT);
 }
 
-void ImmediateContext::SetPipelineTypeFlag(bool usesMeshShader)
+void ImmediateContext::SetPipelineType(PipelineType pipelineType)
 {
-	m_drawFlags &= ~PIPELINE_TYPE_BIT_MASK;
-	m_drawFlags |= (usesMeshShader << PIPELINE_TYPE_SHIFT);
+	m_pipelineType = pipelineType;
 }
 
 void ImmediateContext::SetDefaultDepthTextureSRVFlag(bool usesDepthAsTexture)
@@ -60,6 +59,7 @@ void ImmediateContext::SetVertexType(VertexType vertexType)
 void ImmediateContext::Reset()
 {
 	m_vertexType = VertexType::PCU;
+	m_pipelineType = PipelineType::Graphics;
 	m_drawFlags = 0;
 	m_clearRtFlags = 0;
 	m_isDRTCleared = false;
@@ -68,11 +68,12 @@ void ImmediateContext::Reset()
 	m_boundTextures.clear();
 	m_boundCBuffers.clear();
 	m_boundBuffers.clear();
+	m_boundRWBuffers.clear();
 	m_vertexStart = 0;
 	m_vertexCount = 0;
 	m_indexStart = 0;
 	m_indexCount = 0;
-	m_meshThreads = IntVec3::ZERO;
+	m_dispatchThreads = IntVec3::ZERO;
 	//VertexBuffer* m_immediateBuffer = nullptr;
 	m_material = nullptr;
 	for (int rtIndex = 0; rtIndex < 8; rtIndex++) {

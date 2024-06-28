@@ -21,6 +21,15 @@ Buffer::Buffer(BufferDesc const& bufferDesc) :
 
 Buffer::~Buffer()
 {
+	for (ResourceView*& view : m_views) {
+		if (view) {
+			delete view;
+			view = nullptr;
+		}
+	}
+
+	m_views.clear();
+
 	if (m_buffer) {
 		delete m_buffer;
 		m_buffer = nullptr;
@@ -94,7 +103,7 @@ ResourceView* Buffer::GetOrCreateView(ResourceBindFlagBit viewType)
 	case RESOURCE_BIND_SHADER_RESOURCE_BIT:
 		return CreateShaderResourceView();
 	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
-		ERROR_AND_DIE("HAVENT DONE UAV TEXTURE VIEW");
+		return CreateUnorederedAccessView();
 	case RESOURCE_BIND_CONSTANT_BUFFER_VIEW_BIT:
 		return CreateConstantBufferView();
 	case RESOURCE_BIND_DEPTH_STENCIL_BIT:
@@ -166,7 +175,12 @@ void Buffer::CreateBuffer(Resource* const& buffer, bool isUpload)
 	CD3DX12_HEAP_PROPERTIES heapProperties = (isUpload) ? CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD) : CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	D3D12_RESOURCE_STATES initialState = (isUpload) ? D3D12_RESOURCE_STATE_GENERIC_READ : D3D12_RESOURCE_STATE_COMMON;
 	buffer->m_currentState = initialState;
+
 	CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(m_size);
+	if (!isUpload && (m_bufferType == BufferType::StructuredBuffer)) {
+		resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
 
 	ThrowIfFailed(m_owner->m_device->CreateCommittedResource(
 		&heapProperties,
@@ -205,6 +219,27 @@ ResourceView* Buffer::CreateShaderResourceView()
 	viewInfo.m_source = m_buffer;
 
 	ResourceView* newView = m_owner->CreateResourceView(viewInfo);
+	m_views.push_back(newView);
+
+	return newView;
+}
+
+ResourceView* Buffer::CreateUnorederedAccessView()
+{
+	D3D12_UNORDERED_ACCESS_VIEW_DESC* uaView = new D3D12_UNORDERED_ACCESS_VIEW_DESC();
+	uaView->Buffer.FirstElement = 0;
+	uaView->Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+	uaView->Buffer.NumElements = UINT(m_size / m_stride);
+	uaView->Buffer.StructureByteStride = UINT(m_stride);
+
+	uaView->ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+
+	ResourceViewInfo bufferViewInfo = {};
+	bufferViewInfo.m_uavDesc = uaView;
+	bufferViewInfo.m_viewType = RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT;
+	bufferViewInfo.m_source = m_buffer;
+
+	ResourceView* newView = m_owner->CreateResourceView(bufferViewInfo);
 	m_views.push_back(newView);
 
 	return newView;

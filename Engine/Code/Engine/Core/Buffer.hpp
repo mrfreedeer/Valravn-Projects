@@ -59,6 +59,7 @@ protected:
 	virtual void Initialize();
 	virtual void CreateBuffer(Resource* const& buffer, bool isUpload = false);
 	ResourceView* CreateShaderResourceView();
+	ResourceView* CreateUnorederedAccessView();
 	ResourceView* CreateConstantBufferView();
 protected:
 	BufferDesc m_bufferDesc = {};

@@ -70,7 +70,11 @@ void Material::ParseShader(std::string const& attributeName, XMLElement const& x
 	}
 	else if (AreStringsEqualCaseInsensitive(attributeName, "meshshader")) {
 		shaderType = ShaderType::Mesh;
-		m_isMeshShader = true;
+		m_pipelineType = PipelineType::Mesh;
+	}
+	else if (AreStringsEqualCaseInsensitive(attributeName, "computeshader")) {
+		shaderType = ShaderType::Compute;
+		m_pipelineType = PipelineType::Compute;
 	}
 
 	ShaderLoadInfo& loadInfo = m_config.m_shaders[shaderType];

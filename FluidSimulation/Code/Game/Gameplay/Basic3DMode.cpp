@@ -129,9 +129,11 @@ void Basic3DMode::Startup()
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
 	std::filesystem::path fluidColorMatPath("Data/Materials/FluidColorPass");
 	std::filesystem::path thicknessMaterialPath("Data/Materials/ThicknessPrepass");
+	std::filesystem::path computeMatPath("Data/Materials/BlurKernel");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 	m_fluidColorPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(fluidColorMatPath);
 	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
+	m_computeMaterial = g_theMaterialSystem->CreateOrGetMaterial(computeMatPath);
 
 	FluidSolverConfig config = {};
 	config.m_particlePerSide = 10;
@@ -173,6 +175,16 @@ void Basic3DMode::Startup()
 	}
 	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
 	m_particlesMeshInfo = new FluidParticleMeshInfo[m_particles.size()];
+
+
+	BufferDesc computeBufferDesc = {};
+	computeBufferDesc.data = m_particlesMeshInfo;
+	computeBufferDesc.memoryUsage = MemoryUsage::Default;
+	computeBufferDesc.owner = g_theRenderer;
+	computeBufferDesc.size = sizeof(unsigned int) * 64;
+	computeBufferDesc.stride = sizeof(unsigned int);
+	computeBufferDesc.debugName = "Compute Buffer 0";
+	m_computeBuffer = new StructuredBuffer(computeBufferDesc);
 
 	BufferDesc bufferDesc = {};
 	bufferDesc.data = m_particlesMeshInfo;
@@ -312,7 +324,9 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
-
+	g_theRenderer->BindComputeMaterial(m_computeMaterial);
+	g_theRenderer->BindRWStructuredBuffer(m_computeBuffer, 0);
+	g_theRenderer->Dispatch(1,1,1);
 	
 
 
@@ -373,6 +387,9 @@ void Basic3DMode::Render() const
 
 	}
 	g_theRenderer->EndCamera(m_UICamera);
+
+
+
 }
 
 void Basic3DMode::Shutdown()
@@ -399,6 +416,9 @@ void Basic3DMode::Shutdown()
 
 	delete m_particlesMeshInfo;
 	m_particlesMeshInfo = nullptr;
+	
+	delete m_computeBuffer;
+	m_computeBuffer = nullptr;
 
 	delete m_meshVBuffer[0];
 	delete m_meshVBuffer[1];

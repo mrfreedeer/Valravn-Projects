@@ -129,6 +129,9 @@ public:
 	Texture* CreateOrGetTextureFromFile(char const* imageFilePath);
 	Texture* CreateTexture(TextureCreateInfo& creationInfo);
 
+	// Compute Shaders
+	void Dispatch(unsigned int threadX, unsigned threadY, unsigned int threadZ);
+
 	// Mesh Shaders
 	void DispatchMesh(unsigned int threadX, unsigned threadY, unsigned int threadZ);
 
@@ -160,11 +163,13 @@ public:
 	void BindConstantBuffer(ConstantBuffer* cBuffer, unsigned int slot = 0);
 	void BindTexture(Texture const* texture, unsigned int slot = 0);
 	void BindMaterial(Material* mat);
+	void BindComputeMaterial(Material* mat);
 	void BindMaterialByName(char const* materialName);
 	void BindMaterialByPath(std::filesystem::path materialPath);
 	void BindVertexBuffer(VertexBuffer* const& vertexBuffer);
 	void BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount);
 	void BindStructuredBuffer(Buffer* const& buffer, unsigned int slot);
+	void BindRWStructuredBuffer(Buffer* const& buffer, unsigned int slot);
 	void ClearBoundStructuredBuffers();
 
 	// Setters
@@ -213,12 +218,14 @@ private:
 	// DX12 Initialization & Render Initialization
 	void CreateDevice();
 	void EnableDebugLayer();
-	void CreateCommandQueue();
+	void CreateCommandQueues();
 	void CreateSwapChain();
 	void CreateDescriptorHeaps();
 	void CreateFences();
 	void CreateDefaultRootSignature();
 	void CreateBackBuffers();
+
+	ResourceView* CreateUnorderedAccessView(ResourceViewInfo const& resourceViewInfo) const;
 	ResourceView* CreateShaderResourceView(ResourceViewInfo const& resourceViewInfo) const;
 	ResourceView* CreateRenderTargetView(ResourceViewInfo const& viewInfo) const;
 	ResourceView* CreateDepthStencilView(ResourceViewInfo const& viewInfo) const;
@@ -247,6 +254,7 @@ private:
 	ShaderByteCode* CompileOrGetShaderBytes(ShaderLoadInfo const& shaderLoadInfo);
 	ShaderByteCode* GetByteCodeForShaderSrc(ShaderLoadInfo const& shaderLoadInfo);
 	void CreateGraphicsPSO(Material* material);
+	void CreateComputePSO(Material* material);
 	void CreateMeshShaderPSO(Material* material);
 	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
 
@@ -315,12 +323,12 @@ private:
 	unsigned int m_currentLightBufferSlot = 0;
 	unsigned int m_srvHandleStart = 0;
 	unsigned int m_cbvHandleStart = 0;
+	unsigned int m_uavHandleStart = 0;
 	unsigned int m_currentFrame = 0;
 
 	/*=================== ComPtrs =================== */
 	ComPtr<ID3D12Device2> m_device;
 	ComPtr<IDXGIFactory4> m_DXGIFactory;
-	ComPtr<ID3D12CommandQueue> m_commandQueue;
 	ComPtr<IDXGISwapChain3> m_swapChain;
 
 	/*=================== Vectors =================== */
@@ -361,6 +369,7 @@ private:
 	ImmediateContext* m_immediateContexts = nullptr;
 	ID3D12DescriptorHeap* m_ImGuiSrvDescHeap = nullptr;
 	ID3D12RootSignature* m_defaultRootSignature = nullptr;
+	ID3D12CommandQueue* m_graphicsCommandQueue = nullptr;
 
 	
 	Camera const* m_currentCamera = nullptr;

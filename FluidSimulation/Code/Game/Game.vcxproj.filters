@@ -97,6 +97,9 @@
     <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml">
       <Filter>Materials</Filter>
     </Xml>
+    <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml">
+      <Filter>Materials</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli">
@@ -124,6 +127,9 @@
     </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidThickness_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
+      <Filter>Materials\Shaders</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

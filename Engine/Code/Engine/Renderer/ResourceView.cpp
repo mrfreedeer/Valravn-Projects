@@ -7,30 +7,30 @@ bool ResourceViewInfo::operator==(ResourceViewInfo const& otherView) const
 
 ResourceViewInfo::~ResourceViewInfo()
 {
-	/*if (m_srvDesc) {
-		delete m_srvDesc;
-		m_srvDesc = nullptr;
-	}
+	//if (m_srvDesc) {
+	//	delete m_srvDesc;
+	//	m_srvDesc = nullptr;
+	//}
 
-	if (m_rtvDesc) {
-		delete m_rtvDesc;
-		m_rtvDesc = nullptr;
-	}
+	//if (m_rtvDesc) {
+	//	delete m_rtvDesc;
+	//	m_rtvDesc = nullptr;
+	//}
 
-	if (m_cbvDesc) {
-		delete m_cbvDesc;
-		m_cbvDesc = nullptr;
-	}
+	//if (m_cbvDesc) {
+	//	delete m_cbvDesc;
+	//	m_cbvDesc = nullptr;
+	//}
 
-	if (m_uavDesc) {
-		delete m_uavDesc;
-		m_uavDesc = nullptr;
-	}
+	//if (m_uavDesc) {
+	//	delete m_uavDesc;
+	//	m_uavDesc = nullptr;
+	//}
 
-	if (m_dsvDesc) {
-		delete m_dsvDesc;
-		m_dsvDesc = nullptr;
-	}*/
+	//if (m_dsvDesc) {
+	//	delete m_dsvDesc;
+	//	m_dsvDesc = nullptr;
+	//}
 }
 
 ResourceView::ResourceView(ResourceViewInfo const& viewInfo):

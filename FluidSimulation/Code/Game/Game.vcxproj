@@ -459,6 +459,7 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
+    <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml" />
     <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml" />
     <Xml Include="..\..\Run\Data\Materials\FluidColorPass.xml" />
     <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml" />
@@ -474,6 +475,16 @@
     <None Include="..\..\Run\Data\Materials\Shaders\FluidThickness.hlsli" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+    </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_m.hlsl">
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MeshMain</EntryPointName>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">MeshMain</EntryPointName>

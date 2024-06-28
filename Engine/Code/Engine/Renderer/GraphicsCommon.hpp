@@ -125,6 +125,11 @@ enum class ConstantBufferType {
 	NUM_CONSTANT_BUFFER_TYPES
 };
 
+enum class PipelineType {
+	Graphics,
+	Mesh,
+	Compute
+};
 
 /// <summary>
 /// P: Position

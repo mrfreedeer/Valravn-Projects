@@ -48,9 +48,11 @@ private:
 	Material* m_prePassMaterial = nullptr;
 	Material* m_fluidColorPassMaterial = nullptr;
 	Material* m_thicknessMaterial = nullptr;
+	Material* m_computeMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
 	StructuredBuffer* m_meshVBuffer[2] = {} ;
 	StructuredBuffer* m_meshletBuffer = nullptr;
+	StructuredBuffer* m_computeBuffer = nullptr;
 	ConstantBuffer* m_gameConstants = nullptr;
 	Texture* m_depthTexture = nullptr;
 	Texture* m_thickness = nullptr;
