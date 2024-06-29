@@ -221,7 +221,7 @@ void Basic3DMode::Startup()
 
 
 	TextureCreateInfo thicknessTexInfo = {};
-	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_ALL_TEXTURE_VIEWS;
 	thicknessTexInfo.m_format = TextureFormat::R32_FLOAT;
 	thicknessTexInfo.m_owner = g_theRenderer;
 	thicknessTexInfo.m_clearColour = Rgba8(0, 0, 0, 0);
@@ -252,6 +252,10 @@ void Basic3DMode::Startup()
 
 	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
 	m_thickness = g_theRenderer->CreateTexture(thicknessTexInfo);
+	thicknessTexInfo.m_name = "Blurred Thickness";
+	thicknessTexInfo.m_handle = nullptr;
+	m_blurredThickness = g_theRenderer->CreateTexture(thicknessTexInfo);
+
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
 
 	m_worldCamera.SetColorTarget(m_backgroundRT);
@@ -325,7 +329,8 @@ void Basic3DMode::Render() const
 	g_theRenderer->EndCamera(m_worldCamera);
 
 	g_theRenderer->BindComputeMaterial(m_computeMaterial);
-	g_theRenderer->BindRWStructuredBuffer(m_computeBuffer, 0);
+	//g_theRenderer->BindRWStructuredBuffer(m_computeBuffer, 0);
+	g_theRenderer->BindRWTexture(m_blurredThickness, 0);
 	g_theRenderer->Dispatch(1,1,1);
 	
 

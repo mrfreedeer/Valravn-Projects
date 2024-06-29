@@ -56,6 +56,7 @@ private:
 	ConstantBuffer* m_gameConstants = nullptr;
 	Texture* m_depthTexture = nullptr;
 	Texture* m_thickness = nullptr;
+	Texture* m_blurredThickness = nullptr;
 	Texture* m_backgroundRT = nullptr;
 	bool m_applyEffects[(int)MaterialEffect::NUM_EFFECTS];
 	unsigned int m_currentVBuffer = 0;

@@ -87,12 +87,10 @@ D3D12_RESOURCE_FLAGS LocalToD3D12(ResourceBindFlag flags)
 
 	if (flags & ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT) {
 		result |= D3D12_RESOURCE_FLAG_NONE;
-
 	}
 
 	if (flags & ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT) {
 		result |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
 	}
 
 	if (flags & ResourceBindFlagBit::RESOURCE_BIND_DEPTH_STENCIL_BIT) {

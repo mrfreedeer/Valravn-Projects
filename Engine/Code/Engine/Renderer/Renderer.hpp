@@ -170,6 +170,7 @@ public:
 	void BindIndexBuffer(IndexBuffer* const& indexBuffer, size_t indexCount);
 	void BindStructuredBuffer(Buffer* const& buffer, unsigned int slot);
 	void BindRWStructuredBuffer(Buffer* const& buffer, unsigned int slot);
+	void BindRWTexture(Texture* rwTexture, unsigned int slot);
 	void ClearBoundStructuredBuffers();
 
 	// Setters
@@ -284,7 +285,7 @@ private:
 	void SetContextIndexedDrawInfo(ImmediateContext& ctx, unsigned int numVertexes, Vertex_PNCU const* vertexes, unsigned int indexCount, unsigned int const* indexes);
 
 	void CopyCurrentDrawCtxToNext();
-	void CopyTextureToDescriptorHeap(Texture const* texture, unsigned int handleStart, unsigned int slot);
+	void CopyTextureToDescriptorHeap(Texture const* texture, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot);
 	void CopyBufferToGPUHeap(Buffer* bufferToBind, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot);
 	void CopyEngineCBuffersToGPUHeap(ImmediateContext& ctx);
 	void CopyResourceToGPUHeap(ResourceView* rsv, unsigned int handleStart, unsigned int slot);

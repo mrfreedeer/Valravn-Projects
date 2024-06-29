@@ -93,6 +93,7 @@ private:
 	ModelConstants m_modelConstants = {};
 
 	std::map<unsigned int, Texture const*> m_boundTextures;
+	std::map<unsigned int, Texture const*> m_boundRWTextures;
 	std::map<unsigned int, ConstantBuffer*> m_boundCBuffers;
 	std::map<unsigned int, Buffer*> m_boundBuffers;
 	std::map<unsigned int, Buffer*> m_boundRWBuffers;

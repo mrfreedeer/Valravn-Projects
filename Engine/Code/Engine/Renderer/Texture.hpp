@@ -49,6 +49,7 @@ private:
 	ResourceView* CreateShaderResourceView();
 	ResourceView* CreateRenderTargetView();
 	ResourceView* CreateDepthStencilView();
+	ResourceView* CreateUnorderedAccessView();
 	Texture();
 	Texture(TextureCreateInfo const& createInfo);
 	~Texture();

@@ -1379,7 +1379,7 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 	for (auto& [slot, texture] : ctx.m_boundTextures) {
 		Texture const* boundTex = texture;
 		if (!boundTex) boundTex = m_defaultTexture;
-		CopyTextureToDescriptorHeap(boundTex, ctx.m_srvHandleStart, slot);
+		CopyTextureToDescriptorHeap(boundTex, RESOURCE_BIND_SHADER_RESOURCE_BIT, ctx.m_srvHandleStart, slot);
 	}
 
 	// Copy Descriptors into the GPU Descriptor heap
@@ -1389,6 +1389,10 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 
 	for (auto& [slot, pBuffer] : ctx.m_boundBuffers) {
 		CopyBufferToGPUHeap(pBuffer, RESOURCE_BIND_SHADER_RESOURCE_BIT, ctx.m_srvHandleStart, slot);
+	}
+
+	for (auto& [slot, pTex] : ctx.m_boundRWTextures) {
+		CopyTextureToDescriptorHeap(pTex, RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT, ctx.m_uavHandleStart, slot);
 	}
 
 	for (auto& [slot, pBuffer] : ctx.m_boundRWBuffers) {
@@ -1649,10 +1653,10 @@ void Renderer::CopyCurrentDrawCtxToNext()
 	m_currentDrawCtx++;
 }
 
-void Renderer::CopyTextureToDescriptorHeap(Texture const* texture, unsigned int handleStart, unsigned int slot)
+void Renderer::CopyTextureToDescriptorHeap(Texture const* texture, ResourceBindFlagBit bindFlag, unsigned int handleStart, unsigned int slot)
 {
 	Texture* usedTex = const_cast<Texture*>(texture);
-	ResourceView* rsv = usedTex->GetOrCreateView(RESOURCE_BIND_SHADER_RESOURCE_BIT);
+	ResourceView* rsv = usedTex->GetOrCreateView(bindFlag);
 	CopyResourceToGPUHeap(rsv, handleStart, slot);
 }
 
@@ -1685,8 +1689,7 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 {
 	static auto findHighestValTex = [](const std::pair<unsigned int, Texture const*>& a, const std::pair<unsigned int, Texture const*>& b)->bool { return a.first < b.first; };
 	static auto findHighestValCbuffer = [](const std::pair<unsigned int, ConstantBuffer*>& a, const std::pair<unsigned int, ConstantBuffer*>& b)->bool { return a.first < b.first; };
-	static auto findHighestValSRVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
-	static auto findHighestValUAVBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
+	static auto findHighestValBuffer = [](const std::pair<unsigned int, Buffer*>& a, const std::pair<unsigned int, Buffer*>& b)->bool { return a.first < b.first; };
 
 
 	// Find the max value to skip that amount of slots
@@ -1694,16 +1697,18 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 	// Buffers bound as SRV share handle start with textures
 	auto texMaxIt = std::max_element(ctx.m_boundTextures.begin(), ctx.m_boundTextures.end(), findHighestValTex);
 	auto cBufferMaxIt = std::max_element(ctx.m_boundCBuffers.begin(), ctx.m_boundCBuffers.end(), findHighestValCbuffer);
-	auto SRVBufferMaxIt = std::max_element(ctx.m_boundBuffers.begin(), ctx.m_boundBuffers.end(), findHighestValSRVBuffer);
-	auto UAVBufferMaxIt = std::max_element(ctx.m_boundRWBuffers.begin(), ctx.m_boundRWBuffers.end(), findHighestValUAVBuffer);
+	auto SRVBufferMaxIt = std::max_element(ctx.m_boundBuffers.begin(), ctx.m_boundBuffers.end(), findHighestValBuffer);
+	auto UAVBufferMaxIt = std::max_element(ctx.m_boundRWBuffers.begin(), ctx.m_boundRWBuffers.end(), findHighestValBuffer);
+	auto UAVTexMaxIt = std::max_element(ctx.m_boundRWTextures.begin(), ctx.m_boundRWTextures.end(), findHighestValTex);
 
 	unsigned int texMax = (texMaxIt != ctx.m_boundTextures.end()) ? texMaxIt->first : 0;
 	unsigned int srvBufferMax = (SRVBufferMaxIt != ctx.m_boundBuffers.end()) ? SRVBufferMaxIt->first : 0;
 	unsigned int cBufferMax = (cBufferMaxIt != ctx.m_boundCBuffers.end()) ? cBufferMaxIt->first : 0;
 	unsigned int uavBufferMax = (UAVBufferMaxIt != ctx.m_boundRWBuffers.end()) ? UAVBufferMaxIt->first : 0;
+	unsigned int uavTexMax = (UAVTexMaxIt != ctx.m_boundRWTextures.end()) ? UAVTexMaxIt->first : 0;
 
 	unsigned int SRVMax = (srvBufferMax > texMax) ? srvBufferMax : texMax;
-
+	unsigned int UAVMax = (uavBufferMax > uavTexMax) ? uavBufferMax : uavTexMax;
 	// This is accounting for the Engine's constant buffers
 	// slot 0: Camera
 	// slot 1: Model
@@ -1716,7 +1721,7 @@ void Renderer::UpdateDescriptorsHandleStarts(ImmediateContext const& ctx)
 	// UAV could actually be 0, as opposed to SRV, UAV
 	// Since SRVs will always have default Texture and CBVs have the engine buffers
 	if (ctx.m_boundRWBuffers.size() != 0) {
-		m_uavHandleStart += uavBufferMax + 1;
+		m_uavHandleStart += UAVMax + 1;
 	}
 }
 
@@ -2441,6 +2446,16 @@ void Renderer::BindRWStructuredBuffer(Buffer* const& buffer, unsigned int slot)
 	}
 }
 
+void Renderer::BindRWTexture(Texture* rwTexture, unsigned int slot)
+{
+	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
+
+	currentDrawCtx.m_boundRWTextures[slot] = rwTexture;
+	if (!rwTexture) {
+		currentDrawCtx.m_boundRWTextures.erase(slot);
+	}
+}
+
 void Renderer::ClearBoundStructuredBuffers()
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
@@ -2752,8 +2767,8 @@ void Renderer::CopyTextureWithMaterial(Texture* dst, Texture* src, Texture* dept
 
 	SetSamplerMode(SamplerMode::BILINEARCLAMP);
 
-	CopyTextureToDescriptorHeap(src, m_srvHandleStart, 0);
-	CopyTextureToDescriptorHeap(depthBuffer, m_srvHandleStart, 1);
+	CopyTextureToDescriptorHeap(src, RESOURCE_BIND_SHADER_RESOURCE_BIT, m_srvHandleStart, 0);
+	CopyTextureToDescriptorHeap(depthBuffer, RESOURCE_BIND_SHADER_RESOURCE_BIT, m_srvHandleStart, 1);
 
 	DescriptorHeap* srvUAVCBVHeap = GetGPUDescriptorHeap(DescriptorHeapType::SRV_UAV_CBV);
 	DescriptorHeap* samplerHeap = GetGPUDescriptorHeap(DescriptorHeapType::SAMPLER);

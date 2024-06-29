@@ -69,6 +69,7 @@ void ImmediateContext::Reset()
 	m_boundCBuffers.clear();
 	m_boundBuffers.clear();
 	m_boundRWBuffers.clear();
+	m_boundRWTextures.clear();
 	m_vertexStart = 0;
 	m_vertexCount = 0;
 	m_indexStart = 0;

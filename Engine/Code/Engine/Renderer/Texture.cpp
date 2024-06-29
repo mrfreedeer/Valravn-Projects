@@ -93,6 +93,24 @@ ResourceView* Texture::CreateDepthStencilView()
 
 
 
+ResourceView* Texture::CreateUnorderedAccessView()
+{
+	D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = new D3D12_UNORDERED_ACCESS_VIEW_DESC();
+	uavDesc->Texture2D.MipSlice = 0;
+	uavDesc->Format = LocalToD3D12(m_creationInfo.m_clearFormat);
+	uavDesc->ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+	ResourceViewInfo viewInfo = {};
+	viewInfo.m_uavDesc = uavDesc;
+	viewInfo.m_viewType = RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT;
+	viewInfo.m_source = m_handle;
+
+	ResourceView* newView = m_owner->CreateResourceView(viewInfo);
+	m_views.push_back(newView);
+
+	return newView;
+}
+
 ResourceView* Texture::GetOrCreateView(ResourceBindFlagBit viewType)
 {
 	for (ResourceView*& currentView : m_views) {
@@ -110,7 +128,7 @@ ResourceView* Texture::GetOrCreateView(ResourceBindFlagBit viewType)
 	case RESOURCE_BIND_DEPTH_STENCIL_BIT:
 		return CreateDepthStencilView();
 	case RESOURCE_BIND_UNORDERED_ACCESS_VIEW_BIT:
-		ERROR_AND_DIE("HAVENT DONE UAV TEXTURE VIEW");
+		return CreateUnorderedAccessView();
 	case RESOURCE_BIND_NONE:
 	default:
 		ERROR_AND_DIE(Stringf("UNSUPPORTED VIEW %d", viewType));
