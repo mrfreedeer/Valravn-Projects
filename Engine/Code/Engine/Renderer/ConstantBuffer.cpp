@@ -26,7 +26,7 @@ void ConstantBuffer::Initialize()
 
 void ConstantBuffer::CopyCPUToGPU(void const* data, size_t sizeInBytes)
 {
-	sizeInBytes = AlignToCBufferStride(sizeInBytes);
+	//sizeInBytes = AlignToCBufferStride(sizeInBytes);
 	Buffer::CopyCPUToGPU(data, sizeInBytes);
 }
 
