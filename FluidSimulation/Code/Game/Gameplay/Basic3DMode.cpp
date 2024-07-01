@@ -38,6 +38,15 @@ struct GameConstants
 	Vec4 CameraLeft;
 };
 
+struct BlurConstants
+{
+	float KernelRadius;
+	float GaussianSigma;
+	float ClearValue;
+	unsigned int DirectionFlags; // b01 for vertical, b10 for horizontal
+	float GaussianKernels[16];
+};
+
 
 Basic3DMode::Basic3DMode(Game* game, Vec2 const& UISize) :
 	GameMode(game, UISize)
@@ -120,6 +129,30 @@ void Basic3DMode::Startup()
 	//colorInfo.m_bindFlags = TEXTURE_BIND_RENDER_TARGET_BIT | TEXTURE_BIND_SHADER_RESOURCE_BIT;
 	//colorInfo.m_memoryUsage = MemoryUsage::Default;
 
+	LoadMaterials();
+
+	FluidSolverConfig config = {};
+	config.m_particlePerSide = 10;
+	config.m_pointerToParticles = &m_particles;
+	config.m_simulationBounds = m_particlesBounds;
+	config.m_iterations = 3;
+	config.m_kernelRadius = 0.196f;
+	config.m_renderingRadius = 0.075f;
+	config.m_restDensity = 1000.0f;
+
+
+	m_fluidSolver = FluidSolver(config);
+	m_fluidSolver.InitializeParticles();
+
+	InitializeBuffers();
+	InitializeTextures();
+
+	m_worldCamera.SetColorTarget(m_backgroundRT);
+	m_UICamera.SetColorTarget(m_backgroundRT);
+}
+
+void Basic3DMode::LoadMaterials()
+{
 	m_effectsMaterials[(int)MaterialEffect::ColorBanding] = g_theMaterialSystem->GetMaterialForName("ColorBandFX");
 	m_effectsMaterials[(int)MaterialEffect::Grayscale] = g_theMaterialSystem->GetMaterialForName("GrayScaleFX");
 	m_effectsMaterials[(int)MaterialEffect::Inverted] = g_theMaterialSystem->GetMaterialForName("InvertedColorFX");
@@ -130,24 +163,15 @@ void Basic3DMode::Startup()
 	std::filesystem::path fluidColorMatPath("Data/Materials/FluidColorPass");
 	std::filesystem::path thicknessMaterialPath("Data/Materials/ThicknessPrepass");
 	std::filesystem::path computeMatPath("Data/Materials/BlurKernel");
+	std::filesystem::path gaussianBlurMatPath("Data/Materials/GaussianBlurPixelPass");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 	m_fluidColorPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(fluidColorMatPath);
 	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
 	m_computeMaterial = g_theMaterialSystem->CreateOrGetMaterial(computeMatPath);
+	m_gaussianBlurMaterial = g_theMaterialSystem->CreateOrGetMaterial(gaussianBlurMatPath);
+}
 
-	FluidSolverConfig config = {};
-	config.m_particlePerSide = 10;
-	config.m_pointerToParticles = &m_particles;
-	config.m_simulationBounds = m_particlesBounds;
-	config.m_iterations = 3;
-	config.m_kernelRadius = 0.196f;
-	config.m_renderingRadius = 0.065f;
-	config.m_restDensity = 1000.0f;
-
-
-	m_fluidSolver = FluidSolver(config);
-	m_fluidSolver.InitializeParticles();
-
+void Basic3DMode::InitializeBuffers() {
 	m_verts.clear();
 	//size_t lastIndex = 0;
 	constexpr unsigned int meshletSize = 64;
@@ -176,7 +200,6 @@ void Basic3DMode::Startup()
 	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
 	m_particlesMeshInfo = new FluidParticleMeshInfo[m_particles.size()];
 
-
 	BufferDesc computeBufferDesc = {};
 	computeBufferDesc.data = m_particlesMeshInfo;
 	computeBufferDesc.memoryUsage = MemoryUsage::Default;
@@ -192,12 +215,8 @@ void Basic3DMode::Startup()
 	bufferDesc.owner = g_theRenderer;
 	bufferDesc.size = sizeof(FluidParticleMeshInfo) * m_particles.size();
 	bufferDesc.stride = sizeof(FluidParticleMeshInfo);
-	bufferDesc.debugName = "Mesh VBuffer 0";
-	m_meshVBuffer[0] = new StructuredBuffer(bufferDesc);
-
-	bufferDesc.debugName = "Mesh VBuffer 1";
-	m_meshVBuffer[1] = new StructuredBuffer(bufferDesc);
-
+	bufferDesc.debugName = "Mesh VBuffer";
+	m_meshVBuffer = new StructuredBuffer(bufferDesc);
 	bufferDesc.data = meshlets.data();
 	bufferDesc.size = sizeof(Meshlet) * meshlets.size();
 	bufferDesc.stride = sizeof(Meshlet);
@@ -205,8 +224,6 @@ void Basic3DMode::Startup()
 	bufferDesc.debugName = "Meshlet Buffer";
 	m_meshletBuffer = new StructuredBuffer(bufferDesc);
 	//m_meshletBuffer->CopyCPUToGPU(meshlets.data(), sizeof(Meshlet) * meshlets.size());
-
-	GameConstants dummyData = {};
 
 	BufferDesc cBufferDesc = {};
 	cBufferDesc.data = nullptr;
@@ -220,6 +237,31 @@ void Basic3DMode::Startup()
 	m_gameConstants->Initialize();
 
 
+	BufferDesc blurCBufferDesc = {};
+	blurCBufferDesc.data = nullptr;
+	blurCBufferDesc.memoryUsage = MemoryUsage::Default;
+	blurCBufferDesc.owner = g_theRenderer;
+	blurCBufferDesc.size = sizeof(BlurConstants);
+	blurCBufferDesc.stride = sizeof(BlurConstants);
+	blurCBufferDesc.debugName = "Thickness H_Blur Constants";
+
+	m_thicknessHPassCBuffer = new ConstantBuffer(blurCBufferDesc);
+	m_thicknessHPassCBuffer->Initialize();
+
+	blurCBufferDesc.debugName = "Depth H_Blur Constants";
+	m_depthHPassCBuffer = new ConstantBuffer(blurCBufferDesc);
+	m_depthHPassCBuffer->Initialize();
+
+	blurCBufferDesc.debugName = " Thickness V_Blur Constants";
+	m_thicknessVPassCBuffer = new ConstantBuffer(blurCBufferDesc);
+	m_thicknessVPassCBuffer->Initialize();
+
+	blurCBufferDesc.debugName = "Depth V_Blur Constants";
+	m_depthVPassCBuffer = new ConstantBuffer(blurCBufferDesc);
+	m_depthVPassCBuffer->Initialize();
+}
+
+void Basic3DMode::InitializeTextures() {
 	TextureCreateInfo thicknessTexInfo = {};
 	thicknessTexInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_ALL_TEXTURE_VIEWS;
 	thicknessTexInfo.m_format = TextureFormat::R32_FLOAT;
@@ -251,21 +293,31 @@ void Basic3DMode::Startup()
 	depthTextureInfo.m_name = "Prepass DRT";
 
 	m_depthTexture = g_theRenderer->CreateTexture(depthTextureInfo);
+	depthTextureInfo.m_name = "Blurred Depth";
+	depthTextureInfo.m_handle = nullptr;
+	depthTextureInfo.m_format = TextureFormat::R32_FLOAT;
+	depthTextureInfo.m_bindFlags = ResourceBindFlagBit::RESOURCE_BIND_RENDER_TARGET_BIT | ResourceBindFlagBit::RESOURCE_BIND_SHADER_RESOURCE_BIT;
+	depthTextureInfo.m_clearFormat = TextureFormat::R32_FLOAT;
+
+
+	m_blurredDepthTexture[0] = g_theRenderer->CreateTexture(depthTextureInfo);
+	depthTextureInfo.m_name = "Blurred Depth 1";
+	depthTextureInfo.m_handle = nullptr;
+	m_blurredDepthTexture[1] = g_theRenderer->CreateTexture(depthTextureInfo);
+
 	m_thickness = g_theRenderer->CreateTexture(thicknessTexInfo);
 	thicknessTexInfo.m_name = "Blurred Thickness";
 	thicknessTexInfo.m_handle = nullptr;
-	m_blurredThickness = g_theRenderer->CreateTexture(thicknessTexInfo);
+	m_blurredThickness[0] = g_theRenderer->CreateTexture(thicknessTexInfo);
+	thicknessTexInfo.m_handle = nullptr;
+	thicknessTexInfo.m_name = "Blurred Thickness 1";
+	m_blurredThickness[1] = g_theRenderer->CreateTexture(thicknessTexInfo);
 
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
-
-	m_worldCamera.SetColorTarget(m_backgroundRT);
-	m_UICamera.SetColorTarget(m_backgroundRT);
 }
 
 void Basic3DMode::Update(float deltaSeconds)
 {
-	m_currentVBuffer = (m_currentVBuffer + 1) % 2;
-
 	m_fps = 1.0f / deltaSeconds;
 	GameMode::Update(deltaSeconds);
 
@@ -287,14 +339,82 @@ void Basic3DMode::Update(float deltaSeconds)
 	DisplayClocksInfo();
 
 
+	BlurConstants horizontalBlurConstants = {};
+	horizontalBlurConstants.ClearValue = 0.0f;
+	horizontalBlurConstants.DirectionFlags = (0b1010);
+	
+	int kernelRadius = 7;
+	GetGaussianKernels(kernelRadius, 3.0f, horizontalBlurConstants.GaussianKernels);
+	horizontalBlurConstants.GaussianSigma = 1.0f;
+	horizontalBlurConstants.KernelRadius = kernelRadius;
+
+	BlurConstants verticalBlurConstants = {};
+	memcpy(&verticalBlurConstants, &horizontalBlurConstants, sizeof(BlurConstants));
+
+	verticalBlurConstants.DirectionFlags = (0b1001);
+
+	m_thicknessHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
+	m_thicknessVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
+
+	horizontalBlurConstants.ClearValue = 1.0f;
+	horizontalBlurConstants.DirectionFlags = (0b110);
+
+	verticalBlurConstants.ClearValue = 1.0f;
+	verticalBlurConstants.DirectionFlags = (0b101);
+
+	m_depthHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
+	m_depthVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
 }
+
+
+
+float Basic3DMode::GetGaussian1D(float sigma, float dist) const
+{
+	float sigmaSqr = sigma * sigma;
+	float distSqr = dist * dist;
+	float sigmaSqrTwo = 2.0f * sigmaSqr;
+
+	float exponent = -(distSqr / (sigmaSqrTwo));
+	float eCoeff = exp(exponent);
+
+	float scalarCoef = 1.0f / (sqrt(sigmaSqrTwo * float(M_PI)));
+
+	return scalarCoef * eCoeff;
+}
+
+
+void Basic3DMode::GetGaussianKernels(unsigned int kernelSize, float sigma, float* kernels) const
+{
+	float total = 0.0f;
+	unsigned int totalKernelSize = kernelSize + 1;
+	for (unsigned int termInd = 0; termInd < totalKernelSize; termInd++)
+	{
+		float gaussianSample = GetGaussian1D(sigma, float(termInd));
+		//total += (gaussianSample * gaussianSample);
+		kernels[termInd] = gaussianSample;
+		if(termInd > 0) gaussianSample *= 2.0f;
+		total += (gaussianSample);
+	}
+
+	float invTotal = 1.0f / (total);
+	float normalizedTotal = 0.0f;
+	for (unsigned int normalInd = 0; normalInd < totalKernelSize; normalInd++)
+	{
+		kernels[normalInd] *= invTotal;
+		normalizedTotal += kernels[normalInd];
+	}
+
+
+}
+
+
 
 void Basic3DMode::Render() const
 {
 	g_theRenderer->BeginCamera(m_worldCamera);
 	{
 		g_theRenderer->SetRenderTarget(m_backgroundRT);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::WHITE);
 		g_theRenderer->ClearDepth();
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
@@ -328,13 +448,6 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_worldCamera);
 
-	g_theRenderer->BindComputeMaterial(m_computeMaterial);
-	//g_theRenderer->BindRWStructuredBuffer(m_computeBuffer, 0);
-	g_theRenderer->BindRWTexture(m_blurredThickness, 0);
-	g_theRenderer->Dispatch(1,1,1);
-	
-
-
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
 		if (m_applyEffects[effectInd]) {
@@ -347,6 +460,67 @@ void Basic3DMode::Render() const
 
 	{
 		g_theRenderer->BeginCamera(m_worldCamera);
+
+
+		std::vector<Vertex_PCU> dummyVec(3);
+
+		g_theRenderer->BindMaterial(m_gaussianBlurMaterial);
+		g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARCLAMP);
+		int passCount = 10;
+		for (int passIndex = 0; passIndex < passCount; passIndex++) {
+			if (passIndex == 0) {
+				g_theRenderer->BindTexture(m_thickness);
+			}
+			else {
+				m_currentBlurredThickness = (m_currentBlurredThickness + 1 ) % 2;
+				unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
+
+				g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
+			}
+
+			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+			g_theRenderer->BindConstantBuffer(m_thicknessHPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+
+			m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
+			unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
+			g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
+			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+
+			g_theRenderer->BindConstantBuffer(m_thicknessVPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+		}
+
+
+		g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+
+		for (int passIndex = 0; passIndex < passCount; passIndex++) {
+			if (passIndex == 0) {
+				g_theRenderer->BindTexture(m_depthTexture);
+			}
+			else {
+				m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
+				unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
+
+				g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
+			}
+
+			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+			g_theRenderer->BindConstantBuffer(m_depthHPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+
+			m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
+			unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
+			g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
+			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+
+			g_theRenderer->BindConstantBuffer(m_depthVPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+		}
+
 
 		Light firstLight = {};
 		Rgba8::WHITE.GetAsFloats(firstLight.Color);
@@ -363,12 +537,12 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
 		g_theRenderer->BindMaterial(m_fluidColorPassMaterial);
 		g_theRenderer->SetDepthRenderTarget(nullptr);
-		g_theRenderer->BindTexture(m_depthTexture);
-		g_theRenderer->BindTexture(m_thickness, 1);
+		g_theRenderer->BindTexture(m_blurredDepthTexture[m_currentBlurredDepth]);
+		g_theRenderer->BindTexture(m_blurredThickness[m_currentBlurredThickness], 1);
 		g_theRenderer->BindTexture(m_backgroundRT, 2);
 		g_theRenderer->BindTexture(g_theRenderer->GetCurrentDepthTarget(), 3);
 		g_theRenderer->SetModelColor(Rgba8(0, 120, 255, 255));
-		g_theRenderer->DrawVertexArray(std::vector<Vertex_PCU>(3));
+		g_theRenderer->DrawVertexArray(dummyVec);
 		g_theRenderer->EndCamera(m_worldCamera);
 	}
 
@@ -381,12 +555,12 @@ void Basic3DMode::Render() const
 		std::vector<Vertex_PCU> verts;
 		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
 		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
-		g_theRenderer->BindTexture(m_depthTexture);
+		g_theRenderer->BindTexture(m_blurredDepthTexture[m_currentBlurredDepth]);
 		g_theRenderer->DrawVertexArray(verts);
 
 		verts.clear();
 		AddVertsForAABB2D(verts, secQuad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
-		g_theRenderer->BindTexture(m_thickness);
+		g_theRenderer->BindTexture(m_blurredThickness[m_currentBlurredThickness]);
 		g_theRenderer->BindMaterial(g_theRenderer->GetDefaultMaterial(false));
 		g_theRenderer->DrawVertexArray(verts);
 
@@ -421,17 +595,27 @@ void Basic3DMode::Shutdown()
 
 	delete m_particlesMeshInfo;
 	m_particlesMeshInfo = nullptr;
-	
+
 	delete m_computeBuffer;
 	m_computeBuffer = nullptr;
 
-	delete m_meshVBuffer[0];
-	delete m_meshVBuffer[1];
-	m_meshVBuffer[0] = nullptr;
-	m_meshVBuffer[1] = nullptr;
+	delete m_meshVBuffer;
+	m_meshVBuffer = nullptr;
 
 	delete m_meshletBuffer;
 	m_meshletBuffer = nullptr;
+
+	delete m_thicknessHPassCBuffer;
+	m_thicknessHPassCBuffer = nullptr;
+
+	delete m_thicknessVPassCBuffer;
+	m_thicknessVPassCBuffer = nullptr;
+
+	delete m_depthHPassCBuffer;
+	m_depthHPassCBuffer = nullptr;
+
+	delete m_depthVPassCBuffer;
+	m_depthVPassCBuffer = nullptr;
 }
 
 void Basic3DMode::UpdateDeveloperCheatCodes(float deltaSeconds)
@@ -664,7 +848,7 @@ void Basic3DMode::UpdateParticles(float deltaSeconds)
 		Rgba8(0, 0, 160, 120).GetAsFloats(particleMesh.Color);
 	}
 
-	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
+	StructuredBuffer* currentVBuffer = m_meshVBuffer;
 	currentVBuffer->CopyCPUToGPU(m_particlesMeshInfo, sizeof(FluidParticleMeshInfo) * m_particles.size());
 
 }
@@ -676,7 +860,7 @@ void Basic3DMode::RenderParticles() const
 	//	AddVertsForSphere(verts, 0.15f, 2, 4);
 	//}
 	unsigned int dispatchThreadAmount = static_cast<unsigned int>(ceilf(static_cast<float>(m_particles.size()) / 64.0f));
-	StructuredBuffer* currentVBuffer = m_meshVBuffer[m_currentVBuffer];
+	StructuredBuffer* currentVBuffer = m_meshVBuffer;
 
 	GameConstants gameConstants = {};
 	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();

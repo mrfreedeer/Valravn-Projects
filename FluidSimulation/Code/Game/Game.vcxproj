@@ -462,6 +462,7 @@
     <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml" />
     <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml" />
     <Xml Include="..\..\Run\Data\Materials\FluidColorPass.xml" />
+    <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml" />
     <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml" />
   </ItemGroup>
   <ItemGroup>
@@ -473,6 +474,8 @@
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\FluidColorPass.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\FluidThickness.hlsli" />
+    <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurLib.hlsli" />
+    <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurShader.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
@@ -534,6 +537,26 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Pixel</ShaderType>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_p.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">PixelMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">PixelMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">PixelMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">PixelMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_v.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VertexMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">VertexMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">VertexMain</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VertexMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

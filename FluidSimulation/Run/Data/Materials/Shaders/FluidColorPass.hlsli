@@ -145,7 +145,7 @@ float4 PixelMain(ps_input_t input) : SV_Target0
     
     float depth = depthTexture.Sample(diffuseSampler, input.uv);
     float bgDepth = backgroundDepth.Sample(diffuseSampler, input.uv);
-    if (bgDepth < depth )
+    if (bgDepth <= depth )
     {
         return backgroundTex.Sample(diffuseSampler, input.uv);
     }

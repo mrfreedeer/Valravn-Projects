@@ -1,0 +1,18 @@
+<Material name="GaussianBlurKernel">
+	<VertexShader headerSrc="Shaders/" shaderName="GaussianBlur_v" src="Data/Materials/Shaders/Stages/GaussianBlur_v.hlsl" entryPoint="VertexMain"/>
+	<PixelShader  headerSrc="Shaders/" shaderName="GaussianBlur_p" src="Data/Materials/Shaders/Stages/GaussianBlur_p.hlsl" entryPoint="PixelMain"/>
+	<BlendMode value="Opaque"/>
+	<!-- CCW - CounterClockwise
+    CW - ClockWise -->
+	<WindingOrder value="NONE"/>
+	<CullMode value="BackFace"/>
+	<FillMode value="Solid"/>
+	<Topology value="TriangleList"/>
+	<DepthStencil depthFunction="ALWAYS" writeDepth="false"/>
+	<Antialiasing value="8"/>
+	<Metadata src="material.mtl"/>
+	<RenderTargets count="1">
+		<!-- Default 0 and RT 1-->
+		<RenderTarget index="0" format="R32_FLOAT"/>
+	</RenderTargets>
+</Material>

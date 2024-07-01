@@ -100,6 +100,9 @@
     <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml">
       <Filter>Materials</Filter>
     </Xml>
+    <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml">
+      <Filter>Materials</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli">
@@ -109,6 +112,12 @@
       <Filter>Materials\Shaders</Filter>
     </None>
     <None Include="..\..\Run\Data\Materials\Shaders\FluidThickness.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurLib.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurShader.hlsli">
       <Filter>Materials\Shaders</Filter>
     </None>
   </ItemGroup>
@@ -130,6 +139,12 @@
     </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
       <Filter>Materials\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_p.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_v.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>
