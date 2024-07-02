@@ -1215,7 +1215,7 @@ void Renderer::InitializeCBufferArrays()
 
 	m_cameraCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, cameraBufferDesc);
 	m_modelCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, modelBufferDesc);
-	m_lightCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, modelBufferDesc);
+	m_lightCBOArray = std::vector<ConstantBuffer>(maxCbufferLimit, lightBufferDesc);
 
 }
 

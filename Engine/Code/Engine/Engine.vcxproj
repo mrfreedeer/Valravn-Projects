@@ -339,6 +339,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <FxCompile>
       <ShaderModel>6.5</ShaderModel>
       <ObjectFileOutput>$(ProjectDir)Renderer\Materials\Shaders\Binaries\%(Filename).cso</ObjectFileOutput>
+      <AdditionalOptions>-Qembed_debug %(AdditionalOptions)</AdditionalOptions>
     </FxCompile>
     <ProjectReference>
       <LinkLibraryDependencies>true</LinkLibraryDependencies>

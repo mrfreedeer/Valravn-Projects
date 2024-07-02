@@ -38,7 +38,7 @@ PSInput VertexMain(VSInput input)
     return result;
 }
 
-PSOutput PixelMain(PSInput input) : SV_TARGET
+PSOutput PixelMain(PSInput input)
 {
     PSOutput output = (PSOutput) 0;
     output.color = input.color;

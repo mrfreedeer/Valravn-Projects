@@ -11,7 +11,7 @@ public:
 public:
 	Rgba8();
 	Rgba8(float colorIntensity);
-	Rgba8(float* colorAsFloats);
+	Rgba8(float const* colorAsFloats);
 	Rgba8(unsigned char inR, unsigned char inG, unsigned char inB, unsigned char inA = 255);
 	static Rgba8 const InterpolateColors(Rgba8 const& colorA, Rgba8 const& colorB, float fraction);
 

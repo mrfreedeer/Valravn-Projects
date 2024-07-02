@@ -32,7 +32,7 @@ Rgba8::Rgba8(float colorIntensity)
 	a = DenormalizeByte(1.0f);
 }
 
-Rgba8::Rgba8(float* colorAsFloats)
+Rgba8::Rgba8(float const* colorAsFloats)
 {
 	r = DenormalizeByte(colorAsFloats[0]);
 	g = DenormalizeByte(colorAsFloats[1]);
