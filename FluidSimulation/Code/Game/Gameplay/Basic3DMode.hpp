@@ -16,6 +16,19 @@ enum class MaterialEffect {
 class Material;
 class StructuredBuffer;
 
+struct ImGuiConfig {
+	bool m_showDebug = true;
+	bool m_showOriginalDepth = false;
+	bool m_showBlurredDepth = true;
+	bool m_showOriginalThickness = false;
+	bool m_showBlurredThickness = true;
+	float m_sigma = 3.0f;
+	int m_blurPassCount = 10;
+	int m_kernelRadius = 7;
+	float m_clearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+	float m_waterColor[4] = {0.0f, 0.15f, 1.0f, 1.0f};
+};
+
 class Basic3DMode : public GameMode {
 public:
 	Basic3DMode(Game* game, Vec2 const& UISize);
@@ -48,7 +61,7 @@ private:
 	void LoadMaterials();
 	void InitializeBuffers();
 	void InitializeTextures();
-
+	void UpdateImGui();
 
 private:
 	Material* m_prePassMaterial = nullptr;
@@ -82,4 +95,5 @@ private:
 	std::vector<Vertex_PCU> m_verts = {};
 	float m_fps = 0.0f;
 	unsigned int m_vertsPerParticle = 0;
+	ImGuiConfig m_debugConfig = {};
 };

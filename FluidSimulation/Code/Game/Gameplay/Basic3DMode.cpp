@@ -8,6 +8,7 @@
 #include "Engine/Renderer/Texture.hpp"
 #include "Game/Gameplay/Basic3DMode.hpp"
 #include "Game/Framework/GameCommon.hpp"
+#include "ThirdParty/ImGUI/imgui.h"
 #include "Game/Gameplay/Prop.hpp"
 #include "Game/Gameplay/Game.hpp"
 
@@ -316,6 +317,25 @@ void Basic3DMode::InitializeTextures() {
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
 }
 
+void Basic3DMode::UpdateImGui()
+{
+	ImGui::Begin("Debug Config", &m_debugConfig.m_showDebug);
+
+	ImGui::Checkbox("Show original depth", &m_debugConfig.m_showOriginalDepth);
+	ImGui::Checkbox("Show blurred depth", &m_debugConfig.m_showBlurredDepth);
+
+	ImGui::Checkbox("Show original thickness", &m_debugConfig.m_showOriginalThickness);
+	ImGui::Checkbox("Show blurred thickness", &m_debugConfig.m_showBlurredThickness);
+
+	ImGui::SliderInt("Num blur passes", &m_debugConfig.m_blurPassCount, 1, 20);
+	ImGui::SliderFloat("Sigma", &m_debugConfig.m_sigma, 0.5f, 5.0f);
+	ImGui::SliderInt("Kernel Radius", &m_debugConfig.m_kernelRadius, 1, 15);
+	ImGui::ColorEdit4("Clear Colour", m_debugConfig.m_clearColor);
+	ImGui::ColorEdit4("Water Colour", m_debugConfig.m_waterColor);
+
+	ImGui::End();
+}
+
 void Basic3DMode::Update(float deltaSeconds)
 {
 	m_fps = 1.0f / deltaSeconds;
@@ -323,7 +343,7 @@ void Basic3DMode::Update(float deltaSeconds)
 
 	UpdateInput(deltaSeconds);
 	Vec2 mouseClientDelta = g_theInput->GetMouseClientDelta();
-
+	UpdateImGui();
 
 	std::string playerPosInfo = Stringf("Player position: (%.2f, %.2f, %.2f)", m_player->m_position.x, m_player->m_position.y, m_player->m_position.z);
 	DebugAddMessage(playerPosInfo, 0, Rgba8::WHITE, Rgba8::WHITE);
@@ -342,11 +362,10 @@ void Basic3DMode::Update(float deltaSeconds)
 	BlurConstants horizontalBlurConstants = {};
 	horizontalBlurConstants.ClearValue = 0.0f;
 	horizontalBlurConstants.DirectionFlags = (0b1010);
-	
-	int kernelRadius = 7;
-	GetGaussianKernels(kernelRadius, 3.0f, horizontalBlurConstants.GaussianKernels);
+
+	GetGaussianKernels(m_debugConfig.m_kernelRadius, m_debugConfig.m_sigma, horizontalBlurConstants.GaussianKernels);
 	horizontalBlurConstants.GaussianSigma = 1.0f;
-	horizontalBlurConstants.KernelRadius = kernelRadius;
+	horizontalBlurConstants.KernelRadius = (float)m_debugConfig.m_kernelRadius;
 
 	BlurConstants verticalBlurConstants = {};
 	memcpy(&verticalBlurConstants, &horizontalBlurConstants, sizeof(BlurConstants));
@@ -392,7 +411,7 @@ void Basic3DMode::GetGaussianKernels(unsigned int kernelSize, float sigma, float
 		float gaussianSample = GetGaussian1D(sigma, float(termInd));
 		//total += (gaussianSample * gaussianSample);
 		kernels[termInd] = gaussianSample;
-		if(termInd > 0) gaussianSample *= 2.0f;
+		if (termInd > 0) gaussianSample *= 2.0f;
 		total += (gaussianSample);
 	}
 
@@ -414,7 +433,7 @@ void Basic3DMode::Render() const
 	g_theRenderer->BeginCamera(m_worldCamera);
 	{
 		g_theRenderer->SetRenderTarget(m_backgroundRT);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::WHITE);
+		g_theRenderer->ClearRenderTarget(0, Rgba8(m_debugConfig.m_clearColor));
 		g_theRenderer->ClearDepth();
 		g_theRenderer->BindMaterial(nullptr);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
@@ -468,13 +487,12 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
 		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARCLAMP);
-		int passCount = 10;
-		for (int passIndex = 0; passIndex < passCount; passIndex++) {
+		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
 			if (passIndex == 0) {
 				g_theRenderer->BindTexture(m_thickness);
 			}
 			else {
-				m_currentBlurredThickness = (m_currentBlurredThickness + 1 ) % 2;
+				m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
 				unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
 
 				g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
@@ -497,7 +515,7 @@ void Basic3DMode::Render() const
 		g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
 		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
 
-		for (int passIndex = 0; passIndex < passCount; passIndex++) {
+		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
 			if (passIndex == 0) {
 				g_theRenderer->BindTexture(m_depthTexture);
 			}
@@ -541,7 +559,7 @@ void Basic3DMode::Render() const
 		g_theRenderer->BindTexture(m_blurredThickness[m_currentBlurredThickness], 1);
 		g_theRenderer->BindTexture(m_backgroundRT, 2);
 		g_theRenderer->BindTexture(g_theRenderer->GetCurrentDepthTarget(), 3);
-		g_theRenderer->SetModelColor(Rgba8(0, 120, 255, 255));
+		g_theRenderer->SetModelColor(Rgba8(m_debugConfig.m_waterColor));
 		g_theRenderer->DrawVertexArray(dummyVec);
 		g_theRenderer->EndCamera(m_worldCamera);
 	}
@@ -550,24 +568,54 @@ void Basic3DMode::Render() const
 	{
 		g_theRenderer->SetRenderTarget(g_theRenderer->GetDefaultRenderTarget());
 
-		AABB2 quad(Vec2::ZERO, m_UISize * 0.25f);
-		AABB2 secQuad(Vec2(m_UISize.x * 0.25f, 0.0f), Vec2(m_UISize.x * 0.5f, m_UISize.y * 0.25f));
-		std::vector<Vertex_PCU> verts;
-		AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
-		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
-		g_theRenderer->BindTexture(m_blurredDepthTexture[m_currentBlurredDepth]);
-		g_theRenderer->DrawVertexArray(verts);
+		Vec2 startQuad = Vec2::ZERO;
+		Vec2 quadSize = Vec2(m_UISize.x * .75f * 0.25f, m_UISize.y * .25f);
+		Vec2 endQuad = startQuad + quadSize;
+		AABB2 quad = AABB2(startQuad, endQuad);
 
-		verts.clear();
-		AddVertsForAABB2D(verts, secQuad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
-		g_theRenderer->BindTexture(m_blurredThickness[m_currentBlurredThickness]);
-		g_theRenderer->BindMaterial(g_theRenderer->GetDefaultMaterial(false));
-		g_theRenderer->DrawVertexArray(verts);
+		std::vector<Vertex_PCU> verts;
+		g_theRenderer->BindMaterialByName("LinearDepthVisualizer");
+		if (m_debugConfig.m_showOriginalDepth) {
+			AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+			g_theRenderer->BindTexture(m_depthTexture);
+			g_theRenderer->DrawVertexArray(verts);
+			startQuad.x += quadSize.x;
+			endQuad.x += quadSize.x;
+		}
+
+		if (m_debugConfig.m_showBlurredDepth) {
+			verts.clear();
+			quad = AABB2(startQuad, endQuad);
+			AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+			g_theRenderer->BindTexture(m_blurredDepthTexture[m_currentBlurredDepth]);
+			g_theRenderer->DrawVertexArray(verts);
+			startQuad.x += quadSize.x;
+			endQuad.x += quadSize.x;
+		}
+
+		g_theRenderer->BindMaterial(g_theRenderer->GetDefaultMaterial(true));
+		if (m_debugConfig.m_showOriginalThickness) {
+			verts.clear();
+			quad = AABB2(startQuad, endQuad);
+			AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+			g_theRenderer->BindTexture(m_thickness);
+			g_theRenderer->DrawVertexArray(verts);
+			startQuad.x += quadSize.x;
+			endQuad.x += quadSize.x;
+		}
+
+		if (m_debugConfig.m_showBlurredThickness) {
+			verts.clear();
+			quad = AABB2(startQuad, endQuad);
+			AddVertsForAABB2D(verts, quad, Rgba8::WHITE, Vec2(0.0f, 1.0f), Vec2(1.0f, 0.0f));
+			g_theRenderer->BindTexture(m_blurredThickness[m_currentBlurredThickness]);
+			g_theRenderer->DrawVertexArray(verts);
+			startQuad.x += quadSize.x;
+			endQuad.x += quadSize.x;
+		}
 
 	}
 	g_theRenderer->EndCamera(m_UICamera);
-
-
 
 }
 
@@ -877,7 +925,7 @@ void Basic3DMode::RenderParticles() const
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 
 	g_theRenderer->SetModelMatrix(Mat44());
-	g_theRenderer->SetModelColor(Rgba8::WHITE);
+	g_theRenderer->SetModelColor(Rgba8(m_debugConfig.m_waterColor));
 
 	g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
 	//g_theRenderer->DrawVertexArray(m_verts);

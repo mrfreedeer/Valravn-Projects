@@ -291,7 +291,7 @@ void FluidSolver::UpdateVelocity(float deltaSeconds)
 void FluidSolver::UpdateViscosityAndPosition(float deltaSeconds)
 {
 	std::vector<FluidParticle>& particles = *m_config.m_pointerToParticles;
-	AABB3 const& bounds = m_config.m_simulationBounds;
+	//AABB3 const& bounds = m_config.m_simulationBounds;
 	for (int particleIndex = 0; particleIndex < particles.size(); particleIndex++) {
 
 		FluidParticle& particle = particles[particleIndex];
