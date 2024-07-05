@@ -56,6 +56,11 @@ void ImmediateContext::SetVertexType(VertexType vertexType)
 	m_vertexType = vertexType;
 }
 
+void ImmediateContext::SetRootConstant(unsigned int constant, unsigned int slot)
+{
+	m_drawConstants[slot] = constant;
+}
+
 void ImmediateContext::Reset()
 {
 	m_vertexType = VertexType::PCU;
@@ -85,6 +90,8 @@ void ImmediateContext::Reset()
 	m_cbvHandleStart = 0;
 	m_externalIBO = nullptr;
 	m_externalVBO = nullptr;
+
+	memset(m_drawConstants, 0, sizeof(unsigned int) * 16);
 }
 
 void ImmediateContext::ResetExternalBuffers()

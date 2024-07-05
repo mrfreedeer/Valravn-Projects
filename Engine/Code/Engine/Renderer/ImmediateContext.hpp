@@ -59,7 +59,7 @@ public:
 	void SetRenderTarget(unsigned int index, Texture* renderTarget);
 	void SetDepthRenderTarget(Texture* depthRenderTarget);
 	void SetVertexType(VertexType vertexType);
-
+	void SetRootConstant(unsigned int constant, unsigned int slot);
 
 	void Reset();
 	void ResetExternalBuffers();
@@ -97,4 +97,5 @@ private:
 	std::map<unsigned int, ConstantBuffer*> m_boundCBuffers;
 	std::map<unsigned int, Buffer*> m_boundBuffers;
 	std::map<unsigned int, Buffer*> m_boundRWBuffers;
+	unsigned int m_drawConstants[16] = {};
 };

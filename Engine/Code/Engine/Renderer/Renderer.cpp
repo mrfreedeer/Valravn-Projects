@@ -335,25 +335,28 @@ void Renderer::CreateDefaultRootSignature()
 		 */
 
 
-	D3D12_DESCRIPTOR_RANGE1 descriptorRanges[4] = {};
-	ZeroMemory(descriptorRanges, sizeof(D3D12_DESCRIPTOR_RANGE1) * 4);
-	descriptorRanges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, CBV_DESCRIPTORS_AMOUNT, 0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, 0 };
-	descriptorRanges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
-	descriptorRanges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, UAV_DESCRIPTORS_AMOUNT,0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
-	descriptorRanges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 2, 0,0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+	constexpr unsigned int numDescriptorRanges = 4;
+	D3D12_DESCRIPTOR_RANGE1 descriptorRanges[numDescriptorRanges] = {};
+	ZeroMemory(descriptorRanges, sizeof(D3D12_DESCRIPTOR_RANGE1) * numDescriptorRanges);
+	D3D12_DESCRIPTOR_RANGE_FLAGS descriptorRangeFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+	descriptorRanges[0] = { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, CBV_DESCRIPTORS_AMOUNT, 0,0, descriptorRangeFlags, 0 };
+	descriptorRanges[1] = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, SRV_DESCRIPTORS_AMOUNT,0,0, descriptorRangeFlags, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+	descriptorRanges[2] = { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, UAV_DESCRIPTORS_AMOUNT,0,0, descriptorRangeFlags, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
+	descriptorRanges[3] = { D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 2, 0,0, descriptorRangeFlags, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND };
 
 
 	// Base parameters, initial at the root table. Could be a descriptor, or a pointer to descriptor 
 	// In this case, one descriptor table per slot in the first 3
 
-	CD3DX12_ROOT_PARAMETER1 rootParameters[4] = {};
+	CD3DX12_ROOT_PARAMETER1 rootParameters[5] = {};
 
 	rootParameters[0].InitAsDescriptorTable(1, &descriptorRanges[0], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[1].InitAsDescriptorTable(1, &descriptorRanges[1], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[2].InitAsDescriptorTable(1, &descriptorRanges[2], D3D12_SHADER_VISIBILITY_ALL);
 	rootParameters[3].InitAsDescriptorTable(1, &descriptorRanges[3], D3D12_SHADER_VISIBILITY_ALL);
+	rootParameters[4].InitAsConstants(16, 0, 1);
 
-	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignature(_countof(descriptorRanges), rootParameters);
+	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignature(_countof(rootParameters), rootParameters);
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC MSRootSignature(_countof(descriptorRanges), rootParameters);
 	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
 	rootSignature.Desc_1_2.Flags |= D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
@@ -1423,6 +1426,7 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		cmdList->SetComputeRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
 		cmdList->SetComputeRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_uavHandleStart));
 		cmdList->SetComputeRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+		cmdList->SetComputeRoot32BitConstants(4, 16, ctx.m_drawConstants, 0);
 	}
 	else {
 		cmdList->SetGraphicsRootSignature(m_defaultRootSignature);
@@ -1431,6 +1435,7 @@ void Renderer::DrawImmediateContext(ImmediateContext& ctx)
 		cmdList->SetGraphicsRootDescriptorTable(1, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_srvHandleStart));
 		cmdList->SetGraphicsRootDescriptorTable(2, srvUAVCBVHeap->GetGPUHandleAtOffset(ctx.m_uavHandleStart));
 		cmdList->SetGraphicsRootDescriptorTable(3, samplerHeap->GetGPUHandleForHeapStart());
+		cmdList->SetGraphicsRoot32BitConstants(4, 16, ctx.m_drawConstants, 0);
 	}
 
 	cmdList->RSSetViewports(1, &m_viewport);
@@ -2694,6 +2699,12 @@ void Renderer::BindLightConstants()
 	lightBuffer->CopyCPUToGPU(&lightConstants, sizeof(lightConstants));
 
 	BindConstantBuffer(lightBuffer, g_lightBufferSlot);
+}
+
+void Renderer::SetRootConstant(unsigned int constant, unsigned int slot /*= 0*/)
+{
+	ImmediateContext& ctx = GetCurrentDrawCtx();
+	ctx.SetRootConstant(constant, slot);
 }
 
 void Renderer::SetDebugName(ID3D12Object* object, char const* name)

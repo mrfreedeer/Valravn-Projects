@@ -172,6 +172,7 @@ public:
 	void BindRWStructuredBuffer(Buffer* const& buffer, unsigned int slot);
 	void BindRWTexture(Texture* rwTexture, unsigned int slot);
 	void ClearBoundStructuredBuffers();
+	void BindLightConstants();
 
 	// Setters
 	void SetRenderTarget(Texture* dst, unsigned int slot = 0);
@@ -190,7 +191,7 @@ public:
 	void SetAmbientIntensity(Rgba8 const& intensity);
 	bool SetLight(Light const& light, int index);
 	void SetLightRenderMatrix(Mat44 gameToRenderMatrix) { m_lightRenderTransform = gameToRenderMatrix; }
-	void BindLightConstants();
+	void SetRootConstant(unsigned int constant, unsigned int slot = 0);
 
 	// General
 	void SetDebugName(ID3D12Object* object, char const* name);
