@@ -459,11 +459,11 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
-    <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml" />
     <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml" />
     <Xml Include="..\..\Run\Data\Materials\FluidColorPass.xml" />
     <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml" />
     <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml" />
+    <Xml Include="..\..\Run\Data\Materials\UpdateNeighborsCS.xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
@@ -478,16 +478,6 @@
     <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurShader.hlsli" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ComputeMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">ComputeMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Compute</ShaderType>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">ComputeMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Compute</ShaderType>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ComputeMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-    </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_m.hlsl">
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MeshMain</EntryPointName>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">MeshMain</EntryPointName>
@@ -557,6 +547,16 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\UpdateNeighborsCS.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ComputeMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
     </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

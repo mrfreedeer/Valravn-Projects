@@ -97,10 +97,10 @@
     <Xml Include="..\..\Run\Data\Materials\ThicknessPrePass.xml">
       <Filter>Materials</Filter>
     </Xml>
-    <Xml Include="..\..\Run\Data\Materials\BlurKernel.xml">
+    <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml">
       <Filter>Materials</Filter>
     </Xml>
-    <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml">
+    <Xml Include="..\..\Run\Data\Materials\UpdateNeighborsCS.xml">
       <Filter>Materials</Filter>
     </Xml>
   </ItemGroup>
@@ -137,14 +137,14 @@
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidThickness_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
-    <FxCompile Include="..\..\Run\Data\Materials\Shaders\BlurKernel.hlsl">
-      <Filter>Materials\Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_p.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GaussianBlur_v.hlsl">
       <Filter>Materials\Shaders\Stages</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\UpdateNeighborsCS.hlsl">
+      <Filter>Materials\Shaders</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

@@ -62,7 +62,7 @@ private:
 	void InitializeBuffers();
 	void InitializeTextures();
 	void UpdateImGui();
-
+	void BitonicSortTest(int* arr, size_t arraySize, int direction = 0);
 private:
 	Material* m_prePassMaterial = nullptr;
 	Material* m_fluidColorPassMaterial = nullptr;

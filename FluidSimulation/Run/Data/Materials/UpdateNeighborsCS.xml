@@ -1,0 +1,3 @@
+<Material name="UpdateNeighborsCS">
+	<ComputeShader headerSrc="Shaders/" shaderName="BlurKernel_c" src="Data/Materials/Shaders/UpdateNeighborsCS.hlsl" entryPoint="ComputeMain"/>
+</Material>

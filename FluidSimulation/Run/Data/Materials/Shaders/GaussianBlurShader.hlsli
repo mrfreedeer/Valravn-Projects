@@ -11,7 +11,7 @@ cbuffer BlurConstants : register(b4)
     // b100 check value <= clearvalue  -> Depth
     // b1000 check value >= clearvalue -> Thickness
     unsigned int DirectionFlags;
-    float4x4 GaussianKernelsPacked;
+    row_major float4x4 GaussianKernelsPacked;
 }
     
 
@@ -67,7 +67,7 @@ float PixelMain(ps_input_t input) : SV_Target0
     const unsigned int checkGreaterThanMultiplier = (DirectionFlags & (1 << 3)) != 0;
     
     const float2 sampleDelta = epsilon * float2(float(horizontalMultiplier), float(verticalMultiplier));
-    static const float GaussianKernels[16] = (float[16]) transpose(GaussianKernelsPacked);
+    static const float GaussianKernels[16] = (float[16])(GaussianKernelsPacked);
     
     unsigned int kernelRadiusUINT = (unsigned int) (KernelRadius);
     

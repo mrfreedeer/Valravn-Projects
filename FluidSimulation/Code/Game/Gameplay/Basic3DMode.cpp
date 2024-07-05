@@ -163,12 +163,12 @@ void Basic3DMode::LoadMaterials()
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
 	std::filesystem::path fluidColorMatPath("Data/Materials/FluidColorPass");
 	std::filesystem::path thicknessMaterialPath("Data/Materials/ThicknessPrepass");
-	std::filesystem::path computeMatPath("Data/Materials/BlurKernel");
+	//std::filesystem::path computeMatPath("Data/Materials/BlurKernel");
 	std::filesystem::path gaussianBlurMatPath("Data/Materials/GaussianBlurPixelPass");
 	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 	m_fluidColorPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(fluidColorMatPath);
 	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
-	m_computeMaterial = g_theMaterialSystem->CreateOrGetMaterial(computeMatPath);
+	//m_computeMaterial = g_theMaterialSystem->CreateOrGetMaterial(computeMatPath);
 	m_gaussianBlurMaterial = g_theMaterialSystem->CreateOrGetMaterial(gaussianBlurMatPath);
 }
 
@@ -315,6 +315,10 @@ void Basic3DMode::InitializeTextures() {
 	m_blurredThickness[1] = g_theRenderer->CreateTexture(thicknessTexInfo);
 
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
+   int myArray[] = {2,5,7,8,6,1,4,2,15,17,10,7,6,4,8,9};
+
+   BitonicSortTest(myArray, 16);
+   BitonicSortTest(myArray, 16, 1);
 }
 
 void Basic3DMode::UpdateImGui()
@@ -334,6 +338,31 @@ void Basic3DMode::UpdateImGui()
 	ImGui::ColorEdit4("Water Colour", m_debugConfig.m_waterColor);
 
 	ImGui::End();
+}
+
+void Basic3DMode::BitonicSortTest(int* arr, size_t arraySize, int direction /*= 0*/)
+{
+	int numStages = log2(arraySize);
+	unsigned int a = 2;
+	a <<= 1;
+	for (unsigned int stageInd = 2; stageInd <= arraySize; stageInd <<= 1) { // Stageind *= 2
+		for (unsigned int stepInd = stageInd / 2; stepInd > 0; stepInd >>= 1) { // Stepind /= 2
+			for (unsigned int numIndex = 0; numIndex < arraySize; numIndex++) {
+				unsigned int otherNumInd = (numIndex ^ stepInd); // This
+				if (otherNumInd > numIndex) {
+					bool shouldSwap = ( (numIndex & stageInd) == direction) && (arr[numIndex] > arr[otherNumInd]);
+					shouldSwap = shouldSwap || ((numIndex & stageInd) != direction) && (arr[numIndex] < arr[otherNumInd]);
+
+					if (shouldSwap) {
+						int temp = arr[numIndex];
+						arr[numIndex] = arr[otherNumInd];
+						arr[otherNumInd] = temp;
+					}
+				} 
+			}
+		}
+	}
+
 }
 
 void Basic3DMode::Update(float deltaSeconds)
