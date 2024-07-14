@@ -36,6 +36,15 @@ Vec4::Vec4(Vec3 const& copyFrom, float newW):
 {
 }
 
+Vec4::Vec4(float* floatArray):
+	x(floatArray[0]),
+	y(floatArray[1]),
+	z(floatArray[2]),
+	w(floatArray[3])
+{
+
+}
+
 bool Vec4::operator==(Vec4 const& compareTo) const
 {
 	return (x == compareTo.x) && (y == compareTo.y) && (z == compareTo.z) && (w == compareTo.w);

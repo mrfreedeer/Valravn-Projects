@@ -33,6 +33,40 @@ void MaterialSystem::EndFrame()
 
 }
 
+void MaterialSystem::LoadMaterialsFromXML(std::filesystem::path materialPathNoExt)
+{
+
+	std::string materialXMLPath = materialPathNoExt.replace_extension(".xml").string();
+	std::string materialName = materialPathNoExt.filename().replace_extension("").string();
+	Material* material = g_theMaterialSystem->GetMaterialForPathOrName(materialXMLPath.c_str(), materialName);
+
+	if (material) {
+		return;
+	}
+
+	XMLDoc materialDoc;
+	XMLError loadStatus = materialDoc.LoadFile(materialXMLPath.c_str());
+	GUARANTEE_OR_DIE(loadStatus == tinyxml2::XML_SUCCESS, Stringf("COULD NOT LOAD MATERIAL XML FILE %s", materialXMLPath.c_str()));
+
+	XMLElement const* matDetails = materialDoc.FirstChildElement("Materials")->FirstChildElement("Material");
+
+	while (matDetails) {
+		// Material properties
+		std::string matName = ParseXmlAttribute(*matDetails, "name", "Unnamed Material");
+		XMLElement const* matProperty = matDetails->FirstChildElement();
+
+		Material* newMat = new Material();
+		newMat->LoadFromXML(matProperty);
+		newMat->m_config.m_name = matName;
+		newMat->m_config.m_src = materialXMLPath;
+		m_config.m_renderer->CreatePSOForMaterial(newMat);
+
+		m_loadedMaterials.push_back(newMat);
+
+		matDetails = matDetails->NextSiblingElement();
+	}
+}
+
 Material* MaterialSystem::CreateOrGetMaterial(std::filesystem::path& materialPathNoExt)
 {
 	std::string materialXMLPath = materialPathNoExt.replace_extension(".xml").string();

@@ -29,6 +29,7 @@ public:
 	void TransitionTo(D3D12_RESOURCE_STATES newState, ID3D12GraphicsCommandList* commList);
 	void TransitionTo(D3D12_RESOURCE_STATES newState, ComPtr<ID3D12GraphicsCommandList> commList);
 	bool AddResourceBarrierToList(D3D12_RESOURCE_STATES newState, std::vector< D3D12_RESOURCE_BARRIER>& rscBarriers);
+	bool AddUAVResourceBarrierToList(std::vector< D3D12_RESOURCE_BARRIER>& rscBarriers);
 
 	void Map(void*& dataMap);
 	void Unmap();

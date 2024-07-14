@@ -1818,7 +1818,14 @@ void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RES
 
 	for (auto& [slot, buffer] : ctx.m_boundRWBuffers) {
 		Resource* rsc = buffer->GetResource();
-		rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_UNORDERED_ACCESS, out_rscBarriers);
+
+		// If already in UNORDERED ACCESS, then sync UAV between calls
+		if (rsc->m_currentState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+			rsc->AddUAVResourceBarrierToList(out_rscBarriers);
+		}
+		else {
+			rsc->AddResourceBarrierToList(D3D12_RESOURCE_STATE_UNORDERED_ACCESS, out_rscBarriers);
+		}
 	}
 
 	if (ctx.IsDrawTypePipeline()) {
@@ -2154,6 +2161,11 @@ Material* Renderer::CreateOrGetMaterial(std::filesystem::path materialPathNoExt)
 	return g_theMaterialSystem->CreateOrGetMaterial(materialPathNoExt);
 }
 
+void Renderer::LoadMaterialsFromPath(std::filesystem::path materialPathNoExt)
+{
+	return g_theMaterialSystem->LoadMaterialsFromXML(materialPathNoExt);
+}
+
 Texture* Renderer::CreateOrGetTextureFromFile(char const* imageFilePath)
 {
 	Texture* existingTexture = GetTextureForFileName(imageFilePath);
@@ -2173,7 +2185,7 @@ void Renderer::Dispatch(unsigned int threadX, unsigned threadY, unsigned int thr
 
 	ctx.SetPipelineType(PipelineType::Compute);
 	ctx.m_dispatchThreads = IntVec3((unsigned int)threadX, (unsigned int)threadY, (unsigned int)threadZ); // Cast is fine, it's not possible to dispatch this many threads to worry about
-                                 
+
 	SetContextDescriptorStarts(ctx);
 	ctx.SetDrawCallUsage(true);
 	SetModelBufferForCtx(ctx);
@@ -2390,8 +2402,10 @@ void Renderer::BindMaterial(Material* mat)
 void Renderer::BindComputeMaterial(Material* mat)
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
-	currentDrawCtx.Reset();
-	currentDrawCtx.SetPipelineType(PipelineType::Compute);
+	if (currentDrawCtx.IsDrawTypePipeline()) {
+		currentDrawCtx.Reset();
+		currentDrawCtx.SetPipelineType(PipelineType::Compute);
+	}
 	currentDrawCtx.m_material = mat;
 }
 

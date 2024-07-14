@@ -28,6 +28,7 @@ public:
 	void BeginFrame();
 	void EndFrame();
 
+	void LoadMaterialsFromXML(std::filesystem::path materialPathNoExt);
 	Material* CreateOrGetMaterial(std::filesystem::path& materialPathNoExt);
 	Material* GetMaterialForName(std::string const& materialNameNoExt);
 	Material* GetMaterialForPath(std::filesystem::path const& materialPath);

@@ -18,6 +18,7 @@ public:
 	explicit Vec4(Vec2 const& copyFrom);
 	explicit Vec4(Vec3 const& copyFrom);
 	explicit Vec4(Vec3 const& copyFrom, float newW);
+	Vec4(float* floatArray);
 
 	bool operator==(Vec4 const& compareTo) const;
 	Vec4 const operator+(Vec4 const& vecToSum) const;

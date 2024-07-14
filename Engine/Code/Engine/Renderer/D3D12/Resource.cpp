@@ -33,6 +33,13 @@ bool Resource::AddResourceBarrierToList(D3D12_RESOURCE_STATES newState, std::vec
 	return true;
 }
 
+bool Resource::AddUAVResourceBarrierToList(std::vector< D3D12_RESOURCE_BARRIER>& rscBarriers)
+{
+	CD3DX12_RESOURCE_BARRIER resourceBarrier = CD3DX12_RESOURCE_BARRIER::UAV(m_resource);
+	rscBarriers.push_back(resourceBarrier);
+	return true;
+}
+
 void Resource::Map(void*& dataMap)
 {
 	ThrowIfFailed( m_resource->Map(0, nullptr, &dataMap), "FAILED TO MAP RESOURCE");

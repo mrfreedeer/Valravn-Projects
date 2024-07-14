@@ -126,6 +126,7 @@ public:
 	void ClearRenderTarget(unsigned int slot, Rgba8 const& color);
 	void ClearDepth(float clearDepth = 1.0f);
 	Material* CreateOrGetMaterial(std::filesystem::path materialPathNoExt);
+	void LoadMaterialsFromPath(std::filesystem::path materialPathNoExt);
 	Texture* CreateOrGetTextureFromFile(char const* imageFilePath);
 	Texture* CreateTexture(TextureCreateInfo& creationInfo);
 
