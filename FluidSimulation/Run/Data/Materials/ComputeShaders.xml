@@ -1,0 +1,20 @@
+<Materials>
+	<Material name="BitonicSortCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="BitonicSort_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="BitonicSort"/>
+	</Material>
+	<Material name="HashCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="Hash_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="HashParticles"/>
+	</Material>
+	<Material name="OffsetsCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="Offsets_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="GenerateOffsets"/>
+	</Material>
+	<Material name="ApplyForcesCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="ApplyForces_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="ApplyForces"/>
+	</Material>
+	<Material name="CalculateLambdaCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="CalculateLambda_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="CalculateLambda"/>
+	</Material>
+	<Material name="UpdateParticlesMovementCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="UpdateMovement_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="UpdateParticlesMovement"/>
+	</Material>
+</Materials>

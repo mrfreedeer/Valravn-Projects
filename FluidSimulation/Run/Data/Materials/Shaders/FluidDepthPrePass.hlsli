@@ -1,81 +1,4 @@
-#define MAX_LIGHTS 8
-struct ms_input_t
-{
-    float3 localPosition : POSITION;
-    float4 color : COLOR;
-};
-
-struct ps_input_t
-{
-    float4 position : SV_Position;
-    float3 eyeSpacePosition : POSITION0;
-    float4 color : COLOR0;
-    float2 uv : TEXCOORD0;
-};
-
-struct ps_output_t
-{
-    float worldDepth : SV_Depth;
-};
-
-struct Meshlet
-{
-    uint VertexCount;
-    uint VertexOffset;
-    uint PrimCount;
-    uint PrimOffset;
-    float4 Color;
-};
-
-struct Light
-{
-    bool Enabled;
-    float3 Position;
-	//------------- 16 bytes
-    float3 Direction;
-    int LightType; // 0 Point Light, 1 SpotLight
-	//------------- 16 bytes
-    float4 Color;
-	//------------- 16 bytes // These are some decent default values
-    float SpotAngle;
-    float ConstantAttenuation;
-    float LinearAttenuation;
-    float QuadraticAttenuation;
-	//------------- 16 bytes
-    float4x4 ViewMatrix;
-    float4x4 ProjectionMatrix;
-};
-
-cbuffer CameraConstants : register(b0)
-{
-    float4x4 ProjectionMatrix;
-    float4x4 ViewMatrix;
-};
-
-cbuffer ModelConstants : register(b1)
-{
-    float4x4 ModelMatrix;
-    float4 ModelColor;
-    float4 ModelPadding;
-}
-
-cbuffer LightConstants : register(b2)
-{
-    float3 DirectionalLight;
-    float PaddingDirectionalLight;
-    float4 DirectionalLightIntensity;
-    float4 AmbientIntensity;
-    Light Lights[MAX_LIGHTS];
-}
-
-
-cbuffer GameConstants : register(b3)
-{
-    float3 EyePosition;
-    float SpriteRadius;
-    float4 CameraUp;
-    float4 CameraLeft;
-}
+#include "Constants.hlsli"
 
 Texture2D diffuseTexture : register(t0);
 StructuredBuffer<ms_input_t> vertices : register(t1);
@@ -98,7 +21,7 @@ void MeshMain(
     SetMeshOutputCounts(vertCount, primCount);
     
     uint accessIndex = meshlet.VertexOffset + gtid;
-    float3 position = vertices[accessIndex].localPosition;
+    float3 position = float3(0.0f, 0.0f, 0.0f);
     
     float3 jBasis = CameraLeft.xyz;
     float3 kBasis = CameraUp.xyz;

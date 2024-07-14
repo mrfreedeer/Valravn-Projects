@@ -103,6 +103,9 @@
     <Xml Include="..\..\Run\Data\Materials\UpdateNeighborsCS.xml">
       <Filter>Materials</Filter>
     </Xml>
+    <Xml Include="..\..\Run\Data\Materials\ComputeShaders.xml">
+      <Filter>Materials</Filter>
+    </Xml>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli">
@@ -118,6 +121,12 @@
       <Filter>Materials\Shaders</Filter>
     </None>
     <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurShader.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\Constants.hlsli">
+      <Filter>Materials\Shaders</Filter>
+    </None>
+    <None Include="..\..\Run\Data\Materials\Shaders\GPUFluidDepthPrePass.hlsli">
       <Filter>Materials\Shaders</Filter>
     </None>
   </ItemGroup>
@@ -145,6 +154,12 @@
     </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\UpdateNeighborsCS.hlsl">
       <Filter>Materials\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\ComputeShaders.hlsl">
+      <Filter>Materials\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GPUFluidDepthPrePass_m.hlsl">
+      <Filter>Materials\Shaders\Stages</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

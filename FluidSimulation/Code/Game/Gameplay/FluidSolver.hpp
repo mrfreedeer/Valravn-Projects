@@ -23,6 +23,21 @@ struct FluidParticleMeshInfo {
 	float Color[4] = {};
 };
 
+struct GPUFluidParticle
+{
+	GPUFluidParticle(Vec3 inputPos) : Position(inputPos){}
+	Vec3 Position = Vec3::ZERO;
+	float Density = 0.0f;
+	Vec3 PredictedPosition = Vec3::ZERO;
+	float Lambda = 0.0f;
+	Vec3 PrevPosition = Vec3::ZERO;
+	unsigned int Padding;
+	Vec3 Velocity = Vec3::ZERO;
+	unsigned int Padding2;
+	Vec3 Gradient = Vec3::ZERO;
+	unsigned int Padding3;
+};
+
 struct FluidSolverConfig {
 	AABB3 m_simulationBounds = AABB3::ZERO_TO_ONE;
 	std::vector<FluidParticle>* m_pointerToParticles = nullptr;

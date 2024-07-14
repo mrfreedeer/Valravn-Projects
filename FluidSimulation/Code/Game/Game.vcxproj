@@ -459,6 +459,7 @@
   </ItemGroup>
   <ItemGroup>
     <Xml Include="..\..\Run\Data\GameConfig.xml" />
+    <Xml Include="..\..\Run\Data\Materials\ComputeShaders.xml" />
     <Xml Include="..\..\Run\Data\Materials\DepthPrePass.xml" />
     <Xml Include="..\..\Run\Data\Materials\FluidColorPass.xml" />
     <Xml Include="..\..\Run\Data\Materials\GaussianBlurPixelPass.xml" />
@@ -471,13 +472,25 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\Run\Data\Materials\Shaders\Constants.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\FluidDepthPrePass.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\FluidColorPass.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\FluidThickness.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurLib.hlsli" />
     <None Include="..\..\Run\Data\Materials\Shaders\GaussianBlurShader.hlsli" />
+    <None Include="..\..\Run\Data\Materials\Shaders\GPUFluidDepthPrePass.hlsli" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\ComputeShaders.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">BitonicSort</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">BitonicSort</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">BitonicSort</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Compute</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">BitonicSort</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+    </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\FluidDepthPrePass_m.hlsl">
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MeshMain</EntryPointName>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">MeshMain</EntryPointName>
@@ -547,6 +560,16 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\..\Run\Data\Materials\Shaders\Stages\GPUFluidDepthPrePass_m.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MeshMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Mesh</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">MeshMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">Mesh</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">MeshMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">Mesh</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MeshMain</EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Mesh</ShaderType>
     </FxCompile>
     <FxCompile Include="..\..\Run\Data\Materials\Shaders\UpdateNeighborsCS.hlsl">
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ComputeMain</EntryPointName>

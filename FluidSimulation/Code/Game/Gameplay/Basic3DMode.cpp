@@ -35,8 +35,17 @@ struct GameConstants
 {
 	Vec3 EyePosition;
 	float SpriteRadius;
-	Vec4 CameraUp;
-	Vec4 CameraLeft;
+	Vec3 CameraUp;
+	float KernelRadius;
+	Vec3 CameraLeft;
+	unsigned int ParticleCount;
+	Vec3 Forces; // Gravity included
+	float DeltaTime; // In Seconds
+	Vec3 BoundsMins;
+	float RestDensity;
+	Vec3 BoundsMaxs;
+	unsigned int Padding;
+	Vec4 ParticleColor;
 };
 
 struct BlurConstants
@@ -146,10 +155,66 @@ void Basic3DMode::Startup()
 	m_fluidSolver.InitializeParticles();
 
 	InitializeBuffers();
+	InitializeGPUPhysicsBuffers();
 	InitializeTextures();
 
 	m_worldCamera.SetColorTarget(m_backgroundRT);
 	m_UICamera.SetColorTarget(m_backgroundRT);
+}
+
+void Basic3DMode::Update(float deltaSeconds)
+{
+	m_fps = 1.0f / deltaSeconds;
+	GameMode::Update(deltaSeconds);
+
+	UpdateInput(deltaSeconds);
+	Vec2 mouseClientDelta = g_theInput->GetMouseClientDelta();
+	UpdateImGui();
+
+	std::string playerPosInfo = Stringf("Player position: (%.2f, %.2f, %.2f)", m_player->m_position.x, m_player->m_position.y, m_player->m_position.z);
+	DebugAddMessage(playerPosInfo, 0, Rgba8::WHITE, Rgba8::WHITE);
+	std::string gameInfoStr = Stringf("Delta: (%.2f, %.2f)", mouseClientDelta.x, mouseClientDelta.y);
+	DebugAddMessage(gameInfoStr, 0.0f, Rgba8::WHITE, Rgba8::WHITE);
+
+	DebugAddWorldWireBox(m_particlesBounds, 0.0f, Rgba8(255, 0, 0, 20), Rgba8::RED, DebugRenderMode::USEDEPTH);
+
+	UpdateDeveloperCheatCodes(deltaSeconds);
+	UpdateEntities(deltaSeconds);
+	//UpdateParticles(deltaSeconds);
+
+	DisplayClocksInfo();
+
+	BlurConstants horizontalBlurConstants = {};
+	horizontalBlurConstants.ClearValue = 0.0f;
+	horizontalBlurConstants.DirectionFlags = (0b1010);
+
+	GetGaussianKernels(m_debugConfig.m_kernelRadius, m_debugConfig.m_sigma, horizontalBlurConstants.GaussianKernels);
+	horizontalBlurConstants.GaussianSigma = 1.0f;
+	horizontalBlurConstants.KernelRadius = (float)m_debugConfig.m_kernelRadius;
+
+	BlurConstants verticalBlurConstants = {};
+	memcpy(&verticalBlurConstants, &horizontalBlurConstants, sizeof(BlurConstants));
+
+	verticalBlurConstants.DirectionFlags = (0b1001);
+
+	m_thicknessHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
+	m_thicknessVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
+
+	horizontalBlurConstants.ClearValue = 1.0f;
+	horizontalBlurConstants.DirectionFlags = (0b110);
+
+	verticalBlurConstants.ClearValue = 1.0f;
+	verticalBlurConstants.DirectionFlags = (0b101);
+
+	m_depthHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
+	m_depthVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
+
+	// GPU PASS
+	UpdateGPUParticles(deltaSeconds);
+
+	m_frame++;
+	// CPU PASS
+	// UpdateCPUParticles(deltaSeconds);
 }
 
 void Basic3DMode::LoadMaterials()
@@ -163,13 +228,25 @@ void Basic3DMode::LoadMaterials()
 	std::filesystem::path materialPath("Data/Materials/DepthPrePass");
 	std::filesystem::path fluidColorMatPath("Data/Materials/FluidColorPass");
 	std::filesystem::path thicknessMaterialPath("Data/Materials/ThicknessPrepass");
-	//std::filesystem::path computeMatPath("Data/Materials/BlurKernel");
+	std::filesystem::path computeMatPath("Data/Materials/ComputeShaders");
 	std::filesystem::path gaussianBlurMatPath("Data/Materials/GaussianBlurPixelPass");
-	m_prePassMaterial = g_theMaterialSystem->CreateOrGetMaterial(materialPath);
 	m_fluidColorPassMaterial = g_theMaterialSystem->CreateOrGetMaterial(fluidColorMatPath);
 	m_thicknessMaterial = g_theMaterialSystem->CreateOrGetMaterial(thicknessMaterialPath);
-	//m_computeMaterial = g_theMaterialSystem->CreateOrGetMaterial(computeMatPath);
 	m_gaussianBlurMaterial = g_theMaterialSystem->CreateOrGetMaterial(gaussianBlurMatPath);
+
+	g_theMaterialSystem->LoadMaterialsFromXML(computeMatPath);
+	g_theMaterialSystem->LoadMaterialsFromXML(materialPath);
+
+	m_bitonicSortCS = g_theMaterialSystem->GetMaterialForName("BitonicSortCS");;
+	m_hashParticlesCS = g_theMaterialSystem->GetMaterialForName("HashCS");;
+	m_offsetGenerationCS = g_theMaterialSystem->GetMaterialForName("OffsetsCS");
+	m_applyForcesCS = g_theMaterialSystem->GetMaterialForName("ApplyForcesCS");
+	m_lambdaCS = g_theMaterialSystem->GetMaterialForName("CalculateLambdaCS");
+	m_updateMovementCS = g_theMaterialSystem->GetMaterialForName("UpdateParticlesMovementCS");
+
+	m_prePassMaterial = g_theMaterialSystem->GetMaterialForName("FluidDepthPrepass");
+	m_prePassGPUMaterial = g_theMaterialSystem->GetMaterialForName("GPUFluidDepthPrepass");
+
 }
 
 void Basic3DMode::InitializeBuffers() {
@@ -200,15 +277,6 @@ void Basic3DMode::InitializeBuffers() {
 	}
 	m_vertsPerParticle = unsigned int(m_verts.size() / m_particles.size());
 	m_particlesMeshInfo = new FluidParticleMeshInfo[m_particles.size()];
-
-	BufferDesc computeBufferDesc = {};
-	computeBufferDesc.data = m_particlesMeshInfo;
-	computeBufferDesc.memoryUsage = MemoryUsage::Default;
-	computeBufferDesc.owner = g_theRenderer;
-	computeBufferDesc.size = sizeof(unsigned int) * 64;
-	computeBufferDesc.stride = sizeof(unsigned int);
-	computeBufferDesc.debugName = "Compute Buffer 0";
-	m_computeBuffer = new StructuredBuffer(computeBufferDesc);
 
 	BufferDesc bufferDesc = {};
 	bufferDesc.data = m_particlesMeshInfo;
@@ -260,6 +328,51 @@ void Basic3DMode::InitializeBuffers() {
 	blurCBufferDesc.debugName = "Depth V_Blur Constants";
 	m_depthVPassCBuffer = new ConstantBuffer(blurCBufferDesc);
 	m_depthVPassCBuffer->Initialize();
+}
+
+void Basic3DMode::InitializeGPUPhysicsBuffers()
+{
+	Vec3 aabb3Center = m_particlesBounds.GetCenter() - m_particlesBounds.GetDimensions() / 4;
+	unsigned int particleTotal = 1024;
+	unsigned int particlesPerside = (unsigned int)ceilf(std::cbrtf(float(particleTotal)));
+
+	std::vector<GPUFluidParticle> particles;
+	// A few will be wasted, but it's just much easier to do this, and it's only done once
+	for (unsigned int x = 0; x < particlesPerside; x++) {
+		for (unsigned int y = 0; y < particlesPerside; y++) {
+			for (unsigned int z = 0; z < particlesPerside; z++) {
+				particles.push_back(GPUFluidParticle(Vec3((float)x, (float)y, (float)z) * m_debugConfig.m_renderingRadius * 2.0f + aabb3Center));
+			}
+		}
+	}
+
+	BufferDesc particlesBufferDesc = {};
+	particlesBufferDesc.data = particles.data();
+	particlesBufferDesc.memoryUsage = MemoryUsage::Default;
+	particlesBufferDesc.owner = g_theRenderer;
+	particlesBufferDesc.size = sizeof(GPUFluidParticle) * particleTotal;
+	particlesBufferDesc.stride = sizeof(GPUFluidParticle);
+	particlesBufferDesc.debugName = "GPUFluidParticles";
+
+	m_particlesBuffer = new StructuredBuffer(particlesBufferDesc);
+
+	BufferDesc hashArrDesc = {};
+	hashArrDesc.memoryUsage = MemoryUsage::Default;
+	hashArrDesc.owner = g_theRenderer;
+	hashArrDesc.size = sizeof(unsigned int) * 3 * particleTotal;
+	hashArrDesc.stride = sizeof(unsigned int);
+	hashArrDesc.debugName = "Hash Array";
+
+	m_hashInfoBuffer = new StructuredBuffer(hashArrDesc);
+
+	BufferDesc offsetsBufferDesc = {};
+	offsetsBufferDesc.memoryUsage = MemoryUsage::Default;
+	offsetsBufferDesc.owner = g_theRenderer;
+	offsetsBufferDesc.size = sizeof(unsigned int) * particleTotal;
+	offsetsBufferDesc.stride = sizeof(unsigned int);
+	offsetsBufferDesc.debugName = "Offsets Array";
+
+	m_offsetsBuffer = new StructuredBuffer(offsetsBufferDesc);
 }
 
 void Basic3DMode::InitializeTextures() {
@@ -315,10 +428,8 @@ void Basic3DMode::InitializeTextures() {
 	m_blurredThickness[1] = g_theRenderer->CreateTexture(thicknessTexInfo);
 
 	m_backgroundRT = g_theRenderer->CreateTexture(backgroundRTInfo);
-   int myArray[] = {2,5,7,8,6,1,4,2,15,17,10,7,6,4,8,9};
 
-   BitonicSortTest(myArray, 16);
-   BitonicSortTest(myArray, 16, 1);
+
 }
 
 void Basic3DMode::UpdateImGui()
@@ -331,6 +442,8 @@ void Basic3DMode::UpdateImGui()
 	ImGui::Checkbox("Show original thickness", &m_debugConfig.m_showOriginalThickness);
 	ImGui::Checkbox("Show blurred thickness", &m_debugConfig.m_showBlurredThickness);
 
+	ImGui::Checkbox("Skip blurring", &m_debugConfig.m_skipBlurPass);
+
 	ImGui::SliderInt("Num blur passes", &m_debugConfig.m_blurPassCount, 1, 20);
 	ImGui::SliderFloat("Sigma", &m_debugConfig.m_sigma, 0.5f, 5.0f);
 	ImGui::SliderInt("Kernel Radius", &m_debugConfig.m_kernelRadius, 1, 15);
@@ -340,17 +453,14 @@ void Basic3DMode::UpdateImGui()
 	ImGui::End();
 }
 
-void Basic3DMode::BitonicSortTest(int* arr, size_t arraySize, int direction /*= 0*/)
+void Basic3DMode::BitonicSortTest(int* arr, size_t arraySize, unsigned int direction /*= 0*/)
 {
-	int numStages = log2(arraySize);
-	unsigned int a = 2;
-	a <<= 1;
 	for (unsigned int stageInd = 2; stageInd <= arraySize; stageInd <<= 1) { // Stageind *= 2
 		for (unsigned int stepInd = stageInd / 2; stepInd > 0; stepInd >>= 1) { // Stepind /= 2
 			for (unsigned int numIndex = 0; numIndex < arraySize; numIndex++) {
 				unsigned int otherNumInd = (numIndex ^ stepInd); // This
 				if (otherNumInd > numIndex) {
-					bool shouldSwap = ( (numIndex & stageInd) == direction) && (arr[numIndex] > arr[otherNumInd]);
+					bool shouldSwap = ((numIndex & stageInd) == direction) && (arr[numIndex] > arr[otherNumInd]);
 					shouldSwap = shouldSwap || ((numIndex & stageInd) != direction) && (arr[numIndex] < arr[otherNumInd]);
 
 					if (shouldSwap) {
@@ -358,144 +468,47 @@ void Basic3DMode::BitonicSortTest(int* arr, size_t arraySize, int direction /*= 
 						arr[numIndex] = arr[otherNumInd];
 						arr[otherNumInd] = temp;
 					}
-				} 
+				}
 			}
 		}
 	}
 
 }
 
-void Basic3DMode::Update(float deltaSeconds)
+// 0 Ascending
+// 1 Descending
+void Basic3DMode::SortGPUParticles(size_t arraySize, unsigned int direction /*= 0*/) const
 {
-	m_fps = 1.0f / deltaSeconds;
-	GameMode::Update(deltaSeconds);
 
-	UpdateInput(deltaSeconds);
-	Vec2 mouseClientDelta = g_theInput->GetMouseClientDelta();
-	UpdateImGui();
+	g_theRenderer->BindComputeMaterial(m_bitonicSortCS);
 
-	std::string playerPosInfo = Stringf("Player position: (%.2f, %.2f, %.2f)", m_player->m_position.x, m_player->m_position.y, m_player->m_position.z);
-	DebugAddMessage(playerPosInfo, 0, Rgba8::WHITE, Rgba8::WHITE);
-	std::string gameInfoStr = Stringf("Delta: (%.2f, %.2f)", mouseClientDelta.x, mouseClientDelta.y);
-	DebugAddMessage(gameInfoStr, 0.0f, Rgba8::WHITE, Rgba8::WHITE);
+	/*
+	  0: Direction
+	  1: Stage Index
+	  2: Step Index
+  */
+	g_theRenderer->SetRootConstant(direction);
 
-	DebugAddWorldWireBox(m_particlesBounds, 0.0f, Rgba8(255, 0, 0, 20), Rgba8::RED, DebugRenderMode::USEDEPTH);
+	for (unsigned int stageInd = 2; stageInd <= arraySize; stageInd <<= 1) { // Stageind *= 2
+		g_theRenderer->SetRootConstant(stageInd, 1);
+		for (unsigned int stepInd = stageInd / 2; stepInd > 0; stepInd >>= 1) { // Stepind /= 2
+			g_theRenderer->SetRootConstant(stepInd, 2);
 
-	UpdateDeveloperCheatCodes(deltaSeconds);
-	UpdateEntities(deltaSeconds);
+			g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 0);
+			g_theRenderer->Dispatch(1, 1, 1);
+		}
+	}
+
+}
+
+void Basic3DMode::UpdateCPUParticles(float deltaSeconds)
+{
 	UpdateParticles(deltaSeconds);
-
-	DisplayClocksInfo();
-
-
-	BlurConstants horizontalBlurConstants = {};
-	horizontalBlurConstants.ClearValue = 0.0f;
-	horizontalBlurConstants.DirectionFlags = (0b1010);
-
-	GetGaussianKernels(m_debugConfig.m_kernelRadius, m_debugConfig.m_sigma, horizontalBlurConstants.GaussianKernels);
-	horizontalBlurConstants.GaussianSigma = 1.0f;
-	horizontalBlurConstants.KernelRadius = (float)m_debugConfig.m_kernelRadius;
-
-	BlurConstants verticalBlurConstants = {};
-	memcpy(&verticalBlurConstants, &horizontalBlurConstants, sizeof(BlurConstants));
-
-	verticalBlurConstants.DirectionFlags = (0b1001);
-
-	m_thicknessHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
-	m_thicknessVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
-
-	horizontalBlurConstants.ClearValue = 1.0f;
-	horizontalBlurConstants.DirectionFlags = (0b110);
-
-	verticalBlurConstants.ClearValue = 1.0f;
-	verticalBlurConstants.DirectionFlags = (0b101);
-
-	m_depthHPassCBuffer->CopyCPUToGPU(&horizontalBlurConstants, sizeof(BlurConstants));
-	m_depthVPassCBuffer->CopyCPUToGPU(&verticalBlurConstants, sizeof(BlurConstants));
 }
-
-
-
-float Basic3DMode::GetGaussian1D(float sigma, float dist) const
-{
-	float sigmaSqr = sigma * sigma;
-	float distSqr = dist * dist;
-	float sigmaSqrTwo = 2.0f * sigmaSqr;
-
-	float exponent = -(distSqr / (sigmaSqrTwo));
-	float eCoeff = exp(exponent);
-
-	float scalarCoef = 1.0f / (sqrt(sigmaSqrTwo * float(M_PI)));
-
-	return scalarCoef * eCoeff;
-}
-
-
-void Basic3DMode::GetGaussianKernels(unsigned int kernelSize, float sigma, float* kernels) const
-{
-	float total = 0.0f;
-	unsigned int totalKernelSize = kernelSize + 1;
-	for (unsigned int termInd = 0; termInd < totalKernelSize; termInd++)
-	{
-		float gaussianSample = GetGaussian1D(sigma, float(termInd));
-		//total += (gaussianSample * gaussianSample);
-		kernels[termInd] = gaussianSample;
-		if (termInd > 0) gaussianSample *= 2.0f;
-		total += (gaussianSample);
-	}
-
-	float invTotal = 1.0f / (total);
-	float normalizedTotal = 0.0f;
-	for (unsigned int normalInd = 0; normalInd < totalKernelSize; normalInd++)
-	{
-		kernels[normalInd] *= invTotal;
-		normalizedTotal += kernels[normalInd];
-	}
-
-
-}
-
-
 
 void Basic3DMode::Render() const
 {
-	g_theRenderer->BeginCamera(m_worldCamera);
-	{
-		g_theRenderer->SetRenderTarget(m_backgroundRT);
-		g_theRenderer->ClearRenderTarget(0, Rgba8(m_debugConfig.m_clearColor));
-		g_theRenderer->ClearDepth();
-		g_theRenderer->BindMaterial(nullptr);
-		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
-		g_theRenderer->BindTexture(nullptr);
-		RenderEntities();
-
-		Light firstLight = {};
-		Rgba8::WHITE.GetAsFloats(firstLight.Color);
-		firstLight.Enabled = true;
-		firstLight.LightType = 1;
-		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
-		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
-		firstLight.QuadraticAttenuation = 0.0f;
-		firstLight.LinearAttenuation = 0.05f;
-		firstLight.ConstantAttenuation = 0.025f;
-
-		DebugAddWorldPoint(firstLight.Position, 0.1f, 0.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
-
-		g_theRenderer->SetLight(firstLight, 0);
-		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
-		g_theRenderer->ClearDepth(1.0f);
-		g_theRenderer->BindLightConstants();
-		g_theRenderer->BindMaterial(m_prePassMaterial);
-		RenderParticles();
-
-		g_theRenderer->BindMaterial(m_thicknessMaterial);
-		g_theRenderer->SetRenderTarget(m_thickness);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
-		RenderParticles();
-
-	}
-	g_theRenderer->EndCamera(m_worldCamera);
-
+	RenderGPUParticles();
 
 	for (int effectInd = 0; effectInd < (int)MaterialEffect::NUM_EFFECTS; effectInd++) {
 		if (m_applyEffects[effectInd]) {
@@ -506,69 +519,14 @@ void Basic3DMode::Render() const
 
 	GameMode::Render();
 
+	std::vector<Vertex_PCU> dummyVec(3);
+
+	if (!m_debugConfig.m_skipBlurPass) {
+		RenderBlurPass();
+	}
+
 	{
 		g_theRenderer->BeginCamera(m_worldCamera);
-
-
-		std::vector<Vertex_PCU> dummyVec(3);
-
-		g_theRenderer->BindMaterial(m_gaussianBlurMaterial);
-		g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
-		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARCLAMP);
-		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
-			if (passIndex == 0) {
-				g_theRenderer->BindTexture(m_thickness);
-			}
-			else {
-				m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
-				unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
-
-				g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
-			}
-
-			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
-			g_theRenderer->BindConstantBuffer(m_thicknessHPassCBuffer, 4);
-			g_theRenderer->DrawVertexArray(dummyVec);
-
-			m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
-			unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
-			g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
-			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
-
-			g_theRenderer->BindConstantBuffer(m_thicknessVPassCBuffer, 4);
-			g_theRenderer->DrawVertexArray(dummyVec);
-		}
-
-
-		g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
-		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
-
-		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
-			if (passIndex == 0) {
-				g_theRenderer->BindTexture(m_depthTexture);
-			}
-			else {
-				m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
-				unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
-
-				g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
-			}
-
-			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
-			g_theRenderer->BindConstantBuffer(m_depthHPassCBuffer, 4);
-			g_theRenderer->DrawVertexArray(dummyVec);
-
-			m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
-			unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
-			g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
-			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
-
-			g_theRenderer->BindConstantBuffer(m_depthVPassCBuffer, 4);
-			g_theRenderer->DrawVertexArray(dummyVec);
-		}
-
-
 		Light firstLight = {};
 		Rgba8::WHITE.GetAsFloats(firstLight.Color);
 		firstLight.Enabled = true;
@@ -646,6 +604,146 @@ void Basic3DMode::Render() const
 	}
 	g_theRenderer->EndCamera(m_UICamera);
 
+	// CPU PASS
+	// RenderCPUParticles();
+}
+
+float Basic3DMode::GetGaussian1D(float sigma, float dist) const
+{
+	float sigmaSqr = sigma * sigma;
+	float distSqr = dist * dist;
+	float sigmaSqrTwo = 2.0f * sigmaSqr;
+
+	float exponent = -(distSqr / (sigmaSqrTwo));
+	float eCoeff = exp(exponent);
+
+	float scalarCoef = 1.0f / (sqrt(sigmaSqrTwo * float(M_PI)));
+
+	return scalarCoef * eCoeff;
+}
+
+
+void Basic3DMode::GetGaussianKernels(unsigned int kernelSize, float sigma, float* kernels) const
+{
+	float total = 0.0f;
+	unsigned int totalKernelSize = kernelSize + 1;
+	for (unsigned int termInd = 0; termInd < totalKernelSize; termInd++)
+	{
+		float gaussianSample = GetGaussian1D(sigma, float(termInd));
+		//total += (gaussianSample * gaussianSample);
+		kernels[termInd] = gaussianSample;
+		if (termInd > 0) gaussianSample *= 2.0f;
+		total += (gaussianSample);
+	}
+
+	float invTotal = 1.0f / (total);
+	float normalizedTotal = 0.0f;
+	for (unsigned int normalInd = 0; normalInd < totalKernelSize; normalInd++)
+	{
+		kernels[normalInd] *= invTotal;
+		normalizedTotal += kernels[normalInd];
+	}
+
+
+}
+
+
+
+void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
+{
+	static Vec3 const gravity = Vec3(0.0f, 0.0f, -9.8f);
+	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();
+	GameConstants gameConstants = {};
+	gameConstants.BoundsMins = m_particlesBounds.m_mins;
+	gameConstants.BoundsMaxs = m_particlesBounds.m_maxs;
+	gameConstants.CameraUp = cameraOrientation.GetZUp(), 0.0f;
+	gameConstants.CameraLeft = cameraOrientation.GetYLeft(), 0.0f;
+	gameConstants.DeltaTime = deltaSeconds;
+	gameConstants.EyePosition = m_worldCamera.GetViewPosition();
+	gameConstants.Forces = gravity;
+	gameConstants.KernelRadius = 0.196f;
+	gameConstants.ParticleColor = Vec4(m_debugConfig.m_waterColor);
+	gameConstants.ParticleCount = 1024;
+	gameConstants.RestDensity = 1000.0f;
+	gameConstants.SpriteRadius = m_debugConfig.m_renderingRadius;
+
+	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
+
+	if (m_frame >= 0) {
+		return;
+	}
+
+	// Apply Forces
+	g_theRenderer->BindComputeMaterial(m_applyForcesCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+
+	g_theRenderer->Dispatch(1, 1, 1);
+
+	// UpdateNeighbors
+	g_theRenderer->BindComputeMaterial(m_hashParticlesCS);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	g_theRenderer->Dispatch(1, 1, 1);
+
+	SortGPUParticles(1024, 0);
+	g_theRenderer->BindComputeMaterial(m_lambdaCS);
+
+	for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
+		g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+		g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+		g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+		g_theRenderer->Dispatch(1, 1, 1);
+	}
+
+	g_theRenderer->BindComputeMaterial(m_updateMovementCS);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	g_theRenderer->Dispatch(1, 1, 1);
+}
+
+void Basic3DMode::RenderCPUParticles() const
+{
+	g_theRenderer->BeginCamera(m_worldCamera);
+	{
+		g_theRenderer->SetRenderTarget(m_backgroundRT);
+		g_theRenderer->ClearRenderTarget(0, Rgba8(m_debugConfig.m_clearColor));
+		g_theRenderer->ClearDepth();
+		g_theRenderer->BindMaterial(nullptr);
+		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
+		g_theRenderer->BindTexture(nullptr);
+		RenderEntities();
+
+		Light firstLight = {};
+		Rgba8::WHITE.GetAsFloats(firstLight.Color);
+		firstLight.Enabled = true;
+		firstLight.LightType = 1;
+		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
+		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
+		firstLight.QuadraticAttenuation = 0.0f;
+		firstLight.LinearAttenuation = 0.05f;
+		firstLight.ConstantAttenuation = 0.025f;
+
+		DebugAddWorldPoint(firstLight.Position, 0.1f, 0.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
+
+		g_theRenderer->SetLight(firstLight, 0);
+		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
+		g_theRenderer->ClearDepth(1.0f);
+		g_theRenderer->BindLightConstants();
+		g_theRenderer->BindMaterial(m_prePassMaterial);
+		RenderParticles();
+
+		g_theRenderer->BindMaterial(m_thicknessMaterial);
+		g_theRenderer->SetRenderTarget(m_thickness);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+		RenderParticles();
+
+	}
+	g_theRenderer->EndCamera(m_worldCamera);
 }
 
 void Basic3DMode::Shutdown()
@@ -673,8 +771,14 @@ void Basic3DMode::Shutdown()
 	delete m_particlesMeshInfo;
 	m_particlesMeshInfo = nullptr;
 
-	delete m_computeBuffer;
-	m_computeBuffer = nullptr;
+	delete m_particlesBuffer;
+	m_particlesBuffer = nullptr;
+
+	delete m_offsetsBuffer;
+	m_offsetsBuffer = nullptr;
+
+	delete m_hashInfoBuffer;
+	m_hashInfoBuffer = nullptr;
 
 	delete m_meshVBuffer;
 	m_meshVBuffer = nullptr;
@@ -693,6 +797,21 @@ void Basic3DMode::Shutdown()
 
 	delete m_depthVPassCBuffer;
 	m_depthVPassCBuffer = nullptr;
+
+	if (m_particlesBuffer) {
+		delete m_particlesBuffer;
+		m_particlesBuffer = nullptr;
+	}
+
+	if (m_offsetsBuffer) {
+		delete m_offsetsBuffer;
+		m_offsetsBuffer = nullptr;
+	}
+
+	if (m_hashInfoBuffer) {
+		delete m_hashInfoBuffer;
+		m_hashInfoBuffer = nullptr;
+	}
 }
 
 void Basic3DMode::UpdateDeveloperCheatCodes(float deltaSeconds)
@@ -909,6 +1028,59 @@ void Basic3DMode::DisplayClocksInfo() const
 	DebugAddScreenText(gameClockInfo, gameClockInfoPos, 0.0f, Vec2(1.0f, 0.0f), m_textCellHeight, Rgba8::WHITE, Rgba8::WHITE);
 }
 
+void Basic3DMode::RenderGPUParticles() const
+{
+	g_theRenderer->BeginCamera(m_worldCamera);
+	{
+		g_theRenderer->SetRenderTarget(m_backgroundRT);
+		g_theRenderer->ClearRenderTarget(0, Rgba8(m_debugConfig.m_clearColor));
+		g_theRenderer->ClearDepth();
+		g_theRenderer->BindMaterial(nullptr);
+		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARWRAP);
+		g_theRenderer->BindTexture(nullptr);
+		RenderEntities();
+
+		Light firstLight = {};
+		Rgba8::WHITE.GetAsFloats(firstLight.Color);
+		firstLight.Enabled = true;
+		firstLight.LightType = 1;
+		firstLight.Position = Vec3(1.0f, 1.0f, 1.0f);
+		firstLight.Direction = Vec3(0.0f, 0.0f, -1.0f);
+		firstLight.QuadraticAttenuation = 0.0f;
+		firstLight.LinearAttenuation = 0.05f;
+		firstLight.ConstantAttenuation = 0.025f;
+
+		DebugAddWorldPoint(firstLight.Position, 0.1f, 0.0f, Rgba8::BLUE, Rgba8::BLUE, DebugRenderMode::USEDEPTH);
+
+		g_theRenderer->SetLight(firstLight, 0);
+		g_theRenderer->SetDepthRenderTarget(m_depthTexture);
+		g_theRenderer->ClearDepth(1.0f);
+		g_theRenderer->BindLightConstants();
+		g_theRenderer->BindMaterial(m_prePassGPUMaterial);
+
+
+		unsigned int dispatchThreadAmount = static_cast<unsigned int>(ceilf(1024.f / 64.0f));
+		// DepthPrepass
+		g_theRenderer->BindTexture(nullptr);
+		g_theRenderer->BindStructuredBuffer(m_particlesBuffer, 1);
+		g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+
+		g_theRenderer->SetModelMatrix(Mat44());
+		g_theRenderer->SetModelColor(Rgba8::WHITE);
+
+		g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
+
+		// ThicknessPass
+		g_theRenderer->BindMaterial(m_thicknessMaterial);
+		g_theRenderer->SetRenderTarget(m_thickness);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+
+		g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
+
+	}
+	g_theRenderer->EndCamera(m_worldCamera);
+}
+
 void Basic3DMode::UpdateParticles(float deltaSeconds)
 {
 	m_fluidSolver.Update(deltaSeconds);
@@ -941,8 +1113,8 @@ void Basic3DMode::RenderParticles() const
 
 	GameConstants gameConstants = {};
 	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();
-	gameConstants.CameraUp = Vec4(cameraOrientation.GetZUp(), 0.0f);
-	gameConstants.CameraLeft = Vec4(cameraOrientation.GetYLeft(), 0.0f);
+	gameConstants.CameraUp = cameraOrientation.GetZUp(), 0.0f;
+	gameConstants.CameraLeft = cameraOrientation.GetYLeft(), 0.0f;
 	gameConstants.EyePosition = m_worldCamera.GetViewPosition();
 	gameConstants.SpriteRadius = m_fluidSolver.GetRenderingRadius();
 
@@ -959,4 +1131,71 @@ void Basic3DMode::RenderParticles() const
 	g_theRenderer->DispatchMesh(dispatchThreadAmount, 1, 1);
 	//g_theRenderer->DrawVertexArray(m_verts);
 
+}
+
+void Basic3DMode::RenderBlurPass() const
+{
+	std::vector<Vertex_PCU> dummyVec(3);
+	{
+		g_theRenderer->BeginCamera(m_worldCamera);
+
+		g_theRenderer->BindMaterial(m_gaussianBlurMaterial);
+		g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+		g_theRenderer->SetSamplerMode(SamplerMode::BILINEARCLAMP);
+		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
+			if (passIndex == 0) {
+				g_theRenderer->BindTexture(m_thickness);
+			}
+			else {
+				m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
+				unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
+
+				g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
+			}
+
+			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+			g_theRenderer->BindConstantBuffer(m_thicknessHPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+
+			m_currentBlurredThickness = (m_currentBlurredThickness + 1) % 2;
+			unsigned int prevBlurTex = (m_currentBlurredThickness + 1) % 2;
+			g_theRenderer->BindTexture(m_blurredThickness[prevBlurTex]);
+			g_theRenderer->SetRenderTarget(m_blurredThickness[m_currentBlurredThickness]);
+
+			g_theRenderer->BindConstantBuffer(m_thicknessVPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+		}
+
+
+		g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+		g_theRenderer->ClearRenderTarget(0, Rgba8::BLACK);
+
+		for (int passIndex = 0; passIndex < m_debugConfig.m_blurPassCount; passIndex++) {
+			if (passIndex == 0) {
+				g_theRenderer->BindTexture(m_depthTexture);
+			}
+			else {
+				m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
+				unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
+
+				g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
+			}
+
+			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+			g_theRenderer->BindConstantBuffer(m_depthHPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+
+			m_currentBlurredDepth = (m_currentBlurredDepth + 1) % 2;
+			unsigned int prevBlurTex = (m_currentBlurredDepth + 1) % 2;
+			g_theRenderer->BindTexture(m_blurredDepthTexture[prevBlurTex]);
+			g_theRenderer->SetRenderTarget(m_blurredDepthTexture[m_currentBlurredDepth]);
+
+			g_theRenderer->BindConstantBuffer(m_depthVPassCBuffer, 4);
+			g_theRenderer->DrawVertexArray(dummyVec);
+		}
+
+		g_theRenderer->EndCamera(m_worldCamera);
+
+	}
 }

@@ -10,6 +10,7 @@ GameMode::~GameMode()
 
 void GameMode::Startup()
 {
+	g_theRenderer->BindMaterial(g_theRenderer->GetDefaultMaterial());
 	g_theRenderer->SetBlendMode(BlendMode::ALPHA);
 
 	m_isCursorHidden = false;

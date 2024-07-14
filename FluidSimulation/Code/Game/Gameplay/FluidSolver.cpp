@@ -16,7 +16,6 @@ void FluidSolver::InitializeParticles() const
 	unsigned int const& particlesPerside = m_config.m_particlePerSide;
 	auto* particles = m_config.m_pointerToParticles;
 
-
 	distancePerParticle = bounds.GetDimensions() / float(particlesPerside);
 
 
@@ -28,7 +27,6 @@ void FluidSolver::InitializeParticles() const
 		for (unsigned int y = 0; y < particlesPerside; y++) {
 			for (unsigned int z = 0; z < particlesPerside; z++) {
 				particles->push_back(FluidParticle(Vec3((float)x, (float)y, (float)z) * m_config.m_renderingRadius * 2.0f + aabb3Center, Vec3::ZERO));
-
 			}
 		}
 	}
