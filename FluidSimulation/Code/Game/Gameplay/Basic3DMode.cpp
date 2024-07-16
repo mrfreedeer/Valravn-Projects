@@ -336,18 +336,18 @@ void Basic3DMode::InitializeGPUPhysicsBuffers()
 	unsigned int particleTotal = 1024;
 	unsigned int particlesPerside = (unsigned int)ceilf(std::cbrtf(float(particleTotal)));
 
-	std::vector<GPUFluidParticle> particles;
 	// A few will be wasted, but it's just much easier to do this, and it's only done once
 	for (unsigned int x = 0; x < particlesPerside; x++) {
 		for (unsigned int y = 0; y < particlesPerside; y++) {
 			for (unsigned int z = 0; z < particlesPerside; z++) {
-				particles.push_back(GPUFluidParticle(Vec3((float)x, (float)y, (float)z) * m_debugConfig.m_renderingRadius * 2.0f + aabb3Center));
+				m_GPUparticles.push_back(GPUFluidParticle(Vec3((float)x, (float)y, (float)z) * m_debugConfig.m_renderingRadius * 2.0f + aabb3Center));
 			}
 		}
 	}
+	m_GPUparticles.resize(particleTotal);
 
 	BufferDesc particlesBufferDesc = {};
-	particlesBufferDesc.data = particles.data();
+	particlesBufferDesc.data = m_GPUparticles.data();
 	particlesBufferDesc.memoryUsage = MemoryUsage::Default;
 	particlesBufferDesc.owner = g_theRenderer;
 	particlesBufferDesc.size = sizeof(GPUFluidParticle) * particleTotal;
@@ -669,9 +669,13 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
 
-	if (m_frame >= 0) {
+	// Debugging correct calculations
+	m_particlesBuffer->CopyCPUToGPU(m_GPUparticles.data(), m_GPUparticles.size() * sizeof(GPUFluidParticle));
+
+	// Debugging inf/nans
+	/*if (m_frame >= 0) {
 		return;
-	}
+	}*/
 
 	// Apply Forces
 	g_theRenderer->BindComputeMaterial(m_applyForcesCS);
@@ -684,6 +688,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 
 	// UpdateNeighbors
 	g_theRenderer->BindComputeMaterial(m_hashParticlesCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
@@ -693,6 +698,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	g_theRenderer->BindComputeMaterial(m_lambdaCS);
 
 	for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
+		g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 		g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 		g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 		g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
@@ -700,6 +706,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	}
 
 	g_theRenderer->BindComputeMaterial(m_updateMovementCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);

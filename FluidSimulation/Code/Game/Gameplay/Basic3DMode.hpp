@@ -22,7 +22,7 @@ struct ImGuiConfig {
 	bool m_showBlurredDepth = true;
 	bool m_showOriginalThickness = false;
 	bool m_showBlurredThickness = true;
-	bool m_skipBlurPass = true;
+	bool m_skipBlurPass = false;
 	float m_sigma = 3.0f;
 	float m_renderingRadius = 0.075f;
 	int m_blurPassCount = 10;
@@ -118,6 +118,7 @@ private:
 	AABB3 m_particlesBounds = g_gameConfigBlackboard.GetValue("BOX_BOUNDS", AABB3::ZERO_TO_ONE);
 	FluidSolver m_fluidSolver = {};
 	std::vector<FluidParticle> m_particles = {};
+	std::vector<GPUFluidParticle> m_GPUparticles = {};
 	FluidParticleMeshInfo* m_particlesMeshInfo =nullptr;
 	std::vector<Vertex_PCU> m_verts = {};
 	float m_fps = 0.0f;

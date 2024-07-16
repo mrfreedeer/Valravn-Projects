@@ -25,6 +25,7 @@ struct FluidParticleMeshInfo {
 
 struct GPUFluidParticle
 {
+	GPUFluidParticle() = default;
 	GPUFluidParticle(Vec3 inputPos) : Position(inputPos){}
 	Vec3 Position = Vec3::ZERO;
 	float Density = 0.0f;
