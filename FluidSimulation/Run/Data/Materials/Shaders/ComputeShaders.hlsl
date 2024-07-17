@@ -99,7 +99,7 @@ float3 SpikyKernelGradient(in float3 displacement, float distance)
 {
     static const float kernelRadiusPwr6 = (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius);
 
-    static const float kernelCoefficient = -45.0f / ( PI * kernelRadiusPwr6);
+    static const float kernelCoefficient = -45.0f / (PI * kernelRadiusPwr6);
 
     if (distance > KernelRadius)
         return float3(0.0f, 0.0f, 0.0f);
@@ -130,7 +130,8 @@ float3 UpdatePositionDelta(Particle particle)
         const int moddedHash = neighborHash % ParticleCount;
         const uint hashStartInd = Offsets[moddedHash];
         
-        HashInfo hashInfo = HashArray[hashStartInd];
+        uint hashAccessInd = hashStartInd;
+        HashInfo hashInfo = HashArray[hashAccessInd];
         
         bool foundStart = false;
         while (hashInfo.ModdedHash == moddedHash)
@@ -149,16 +150,14 @@ float3 UpdatePositionDelta(Particle particle)
             }
             else
             {
-                if (!foundStart)
-                {
-                    continue;
-                }
-                else
+                if (foundStart)
                 {
                     break;
                 }
 
             }
+            hashAccessInd++;
+            hashInfo = HashArray[hashAccessInd];
         }
 
     }
@@ -187,7 +186,8 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
         const int moddedHash = neighborHash % ParticleCount;
         const uint hashStartInd = Offsets[moddedHash];
         
-        HashInfo hashInfo = HashArray[hashStartInd];
+        uint hashAccessInd = hashStartInd;
+        HashInfo hashInfo = HashArray[hashAccessInd];
         
         bool foundStart = false;
         while (hashInfo.ModdedHash == moddedHash)
@@ -206,16 +206,16 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
             }
             else
             {
-                if (!foundStart)
-                {
-                    continue;
-                }
-                else
+                if (foundStart)
                 {
                     break;
                 }
 
             }
+            
+            hashAccessInd++;
+            hashInfo = HashArray[hashAccessInd];
+
         }
 
     }
@@ -334,7 +334,8 @@ void UpdateParticlesMovement(uint3 threadId : SV_DispatchThreadID)
         const int moddedHash = neighborHash % ParticleCount;
         const uint hashStartInd = Offsets[moddedHash];
         
-        HashInfo hashInfo = HashArray[hashStartInd];
+        uint hashAccessInd = hashStartInd;
+        HashInfo hashInfo = HashArray[hashAccessInd];
         
         bool foundStart = false;
         while (hashInfo.ModdedHash == moddedHash)
@@ -351,16 +352,14 @@ void UpdateParticlesMovement(uint3 threadId : SV_DispatchThreadID)
             }
             else
             {
-                if (!foundStart)
-                {
-                    continue;
-                }
-                else
+                if (foundStart)
                 {
                     break;
                 }
 
             }
+            hashAccessInd++;
+            hashInfo = HashArray[hashAccessInd];
         }
 
     }

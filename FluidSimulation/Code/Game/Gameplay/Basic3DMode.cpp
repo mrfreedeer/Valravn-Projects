@@ -670,7 +670,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
 
 	// Debugging correct calculations
-	m_particlesBuffer->CopyCPUToGPU(m_GPUparticles.data(), m_GPUparticles.size() * sizeof(GPUFluidParticle));
+	//m_particlesBuffer->CopyCPUToGPU(m_GPUparticles.data(), m_GPUparticles.size() * sizeof(GPUFluidParticle));
 
 	// Debugging inf/nans
 	/*if (m_frame >= 0) {
@@ -697,6 +697,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	SortGPUParticles(1024, 0);
 	g_theRenderer->BindComputeMaterial(m_lambdaCS);
 
+	//for (int iteration = 0; iteration < 1; iteration++) {
 	for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
 		g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 		g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
