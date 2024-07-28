@@ -59,6 +59,9 @@
     <Filter Include="Renderer\Materials\Shaders\Common">
       <UniqueIdentifier>{1b74a793-4323-4db8-a65f-23bfa004a36e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ThirdParty\WinPixEventRuntime">
+      <UniqueIdentifier>{c225c49a-8c06-423f-8098-6deacf5bf946}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Math\Vec2.cpp">
@@ -713,6 +716,9 @@
     </ClInclude>
     <ClInclude Include="Renderer\D3D12\Fence.hpp">
       <Filter>Renderer\D3D12</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ThirdParty\WinPixEventRuntime\Include\pix3.h">
+      <Filter>ThirdParty\WinPixEventRuntime</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

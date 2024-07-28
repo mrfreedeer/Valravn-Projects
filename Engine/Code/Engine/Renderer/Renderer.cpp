@@ -20,6 +20,7 @@
 #include "Engine/Math/Vec4.hpp"
 #include "Engine/Renderer/DebugRendererSystem.hpp"
 #include "Engine/Renderer/ImmediateContext.hpp"
+#include <ThirdParty/WinPixEventRuntime/Include/pix3.h>
 #include <dxgidebug.h>
 #include <dxcapi.h>
 #include <d3dx12.h> // Notice the X. These are the helper structures not the DX12 header
@@ -27,8 +28,6 @@
 #include <ThirdParty/ImGUI/imgui.h>
 #include <ThirdParty/ImGUI/imgui_impl_win32.h>
 #include <ThirdParty/ImGUI/imgui_impl_dx12.h>
-#include <DirectXMath.h>
-using namespace DirectX;
 
 #pragma message("ENGINE_DIR == " ENGINE_DIR)
 #pragma comment( lib, "dxgi.lib" )        // directx graphics interface
@@ -1247,9 +1246,12 @@ void Renderer::CreateDefaultBufferObjects()
 
 void Renderer::FinishPendingPrePassResourceTasks()
 {
-	UploadImmediateVertexes();
-
+	static const UINT32 markerColor = PIX_COLOR((BYTE)(0), (BYTE)(0), (BYTE)(255));
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
+
+	UploadImmediateVertexes();
+	PIXBeginEvent(currentCmdList, markerColor, "Prepass Resource Upload/Copy");
+
 	if (m_pendingRscCopy.size() > 0) {
 
 		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
@@ -1275,11 +1277,16 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
+	PIXEndEvent(currentCmdList);
 }
 
 void Renderer::FinishPendingPreFxPassResourceTasks()
 {
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+
+	static const UINT32 markerColor = PIX_COLOR((BYTE)(0), (BYTE)(0), (BYTE)(255));
+	PIXBeginEvent(currentCmdList, markerColor, "Prepass Resource Upload/Copy");
+
 	if (m_pendingRscCopy.size() > 0) {
 
 		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
@@ -1305,6 +1312,8 @@ void Renderer::FinishPendingPreFxPassResourceTasks()
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
+
+	PIXEndEvent(currentCmdList);
 }
 
 void Renderer::UploadImmediateVertexes()
@@ -1789,7 +1798,13 @@ void Renderer::ExecuteMainRenderPass()
 void Renderer::ExecuteEffectsRenderPass()
 {
 	//FinishPendingPreFxPassResourceTasks();
+	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	static const UINT32 markerColor = PIX_COLOR((BYTE)(255), (BYTE)(0), (BYTE)(255));
+
+	PIXBeginEvent(cmdList, markerColor, "Effects Pass");
 	DrawAllEffects();
+	PIXEndEvent(cmdList);
+
 }
 
 void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers)

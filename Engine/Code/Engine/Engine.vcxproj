@@ -290,9 +290,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12</AdditionalLibraryDirectories>
-      <AdditionalDependencies>
-      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12;$(ProjectDir)../ThirdParty/WinPixEventRuntime/bin</AdditionalLibraryDirectories>
+      <AdditionalDependencies>WinPixEventRuntime.lib</AdditionalDependencies>
     </Lib>
     <FxCompile>
       <AdditionalOptions>-Qembed_debug %(AdditionalOptions)</AdditionalOptions>
@@ -305,8 +304,9 @@
     </ProjectReference>
     <PreBuildEvent>
       <Command>copy /Y "$(ProjectDir)Renderer\D3D12\dxcompiler.dll" "$(SolutionDir)Run\dxcompiler.dll"
-copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Command>
-      <Message>Copying DXCompiler to Run folder</Message>
+copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"
+copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dll" "$(SolutionDir)Run\WinPixEventRuntime.dll"</Command>
+      <Message>Copying DXCompiler, WinPix to Run folder</Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugInline|x64'">
@@ -329,9 +329,8 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12</AdditionalLibraryDirectories>
-      <AdditionalDependencies>
-      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12;$(ProjectDir)../ThirdParty/WinPixEventRuntime/bin</AdditionalLibraryDirectories>
+      <AdditionalDependencies>WinPixEventRuntime.lib</AdditionalDependencies>
     </Lib>
     <FxCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -346,8 +345,9 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     </ProjectReference>
     <PreBuildEvent>
       <Command>copy /Y "$(ProjectDir)Renderer\D3D12\dxcompiler.dll" "$(SolutionDir)Run\dxcompiler.dll"
-copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Command>
-      <Message>Copying DXCompiler to Run folder</Message>
+copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"
+copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dll" "$(SolutionDir)Run\WinPixEventRuntime.dll"</Command>
+      <Message>Copying DXCompiler, WinPix to Run folder</Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -372,9 +372,8 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12</AdditionalLibraryDirectories>
-      <AdditionalDependencies>
-      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12;$(ProjectDir)../ThirdParty/WinPixEventRuntime/bin</AdditionalLibraryDirectories>
+      <AdditionalDependencies>WinPixEventRuntime.lib</AdditionalDependencies>
     </Lib>
     <FxCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -388,8 +387,9 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     </ProjectReference>
     <PreBuildEvent>
       <Command>copy /Y "$(ProjectDir)Renderer\D3D12\dxcompiler.dll" "$(SolutionDir)Run\dxcompiler.dll"
-copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Command>
-      <Message>Copying DXCompiler to Run folder</Message>
+copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"
+copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dll" "$(SolutionDir)Run\WinPixEventRuntime.dll"</Command>
+      <Message>Copying DXCompiler, WinPix to Run folder</Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='FastBreak|x64'">
@@ -415,9 +415,8 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12</AdditionalLibraryDirectories>
-      <AdditionalDependencies>
-      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/Engine/Renderer/D3D12;$(ProjectDir)../ThirdParty/WinPixEventRuntime/bin</AdditionalLibraryDirectories>
+      <AdditionalDependencies>WinPixEventRuntime.lib</AdditionalDependencies>
     </Lib>
     <FxCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)Renderer\Materials\Shaders\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -431,8 +430,9 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     </ProjectReference>
     <PreBuildEvent>
       <Command>copy /Y "$(ProjectDir)Renderer\D3D12\dxcompiler.dll" "$(SolutionDir)Run\dxcompiler.dll"
-copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Command>
-      <Message>Copying DXCompiler to Run folder</Message>
+copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"
+copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dll" "$(SolutionDir)Run\WinPixEventRuntime.dll"</Command>
+      <Message>Copying DXCompiler, WinPix to Run folder</Message>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -555,6 +555,7 @@ copy /Y "$(ProjectDir)Renderer\D3D12\dxil.dll" "$(SolutionDir)Run\dxil.dll"</Com
     <ClInclude Include="..\ThirdParty\Squirrel\SmoothNoise.hpp" />
     <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
     <ClInclude Include="..\ThirdParty\TinyXML2\tinyxml2.h" />
+    <ClInclude Include="..\ThirdParty\WinPixEventRuntime\Include\pix3.h" />
     <ClInclude Include="Audio\AudioSystem.hpp" />
     <ClInclude Include="Core\Buffer.hpp" />
     <ClInclude Include="Core\BufferUtils.hpp" />
