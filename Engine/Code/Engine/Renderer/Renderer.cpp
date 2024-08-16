@@ -1246,12 +1246,10 @@ void Renderer::CreateDefaultBufferObjects()
 
 void Renderer::FinishPendingPrePassResourceTasks()
 {
-	static const UINT32 markerColor = PIX_COLOR((BYTE)(0), (BYTE)(0), (BYTE)(255));
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
 
 	UploadImmediateVertexes();
-	PIXBeginEvent(currentCmdList, markerColor, "Prepass Resource Upload/Copy");
-
+	PushMarker(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
 	if (m_pendingRscCopy.size() > 0) {
 
 		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
@@ -1277,15 +1275,14 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
-	PIXEndEvent(currentCmdList);
+	PopMarker();
 }
 
 void Renderer::FinishPendingPreFxPassResourceTasks()
 {
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
-	static const UINT32 markerColor = PIX_COLOR((BYTE)(0), (BYTE)(0), (BYTE)(255));
-	PIXBeginEvent(currentCmdList, markerColor, "Prepass Resource Upload/Copy");
+	PushMarker(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
 
 	if (m_pendingRscCopy.size() > 0) {
 
@@ -1313,7 +1310,7 @@ void Renderer::FinishPendingPreFxPassResourceTasks()
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
 
-	PIXEndEvent(currentCmdList);
+	PopMarker();
 }
 
 void Renderer::UploadImmediateVertexes()
@@ -1798,13 +1795,9 @@ void Renderer::ExecuteMainRenderPass()
 void Renderer::ExecuteEffectsRenderPass()
 {
 	//FinishPendingPreFxPassResourceTasks();
-	ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
-	static const UINT32 markerColor = PIX_COLOR((BYTE)(255), (BYTE)(0), (BYTE)(255));
-
-	PIXBeginEvent(cmdList, markerColor, "Effects Pass");
+	PushMarker("Effects Pass", Rgba8::YELLOW);
 	DrawAllEffects();
-	PIXEndEvent(cmdList);
-
+	PopMarker();
 }
 
 void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers)
@@ -2662,6 +2655,22 @@ void Renderer::SetSamplerMode(SamplerMode samplerMode)
 	m_device->CreateSampler(&samplerDesc, samplerHeap->GetHandleAtOffset(0));
 	DescriptorHeap* gpuSamplerHeap = GetGPUDescriptorHeap(DescriptorHeapType::SAMPLER);
 	m_device->CopyDescriptorsSimple(1, gpuSamplerHeap->GetCPUHandleForHeapStart(), samplerHeap->GetHandleAtOffset(0), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+}
+
+void Renderer::PushMarker(char const* markerText, Rgba8 const& markerColor /*= Rgba8::WHITE*/)
+{
+	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	PushMarker(currentCmdList, markerText, markerColor);
+}
+
+void Renderer::PushMarker(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor /*= Rgba8::WHITE*/)
+{
+	m_debugMarkers.emplace_back(cmdList, markerText, markerColor);
+}
+
+void Renderer::PopMarker()
+{
+	m_debugMarkers.pop_back();
 }
 
 void Renderer::SetDirectionalLight(Vec3 const& direction)

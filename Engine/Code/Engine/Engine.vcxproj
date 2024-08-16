@@ -521,6 +521,7 @@ copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dl
     <ClCompile Include="Renderer\MaterialSystem.cpp" />
     <ClCompile Include="Renderer\Mesh.cpp" />
     <ClCompile Include="Renderer\OrbitCamera.cpp" />
+    <ClCompile Include="Renderer\PixEventReporter.cpp" />
     <ClCompile Include="Renderer\Renderer.cpp" />
     <ClCompile Include="Renderer\ResourceView.cpp" />
     <ClCompile Include="Renderer\Material.cpp" />
@@ -645,6 +646,7 @@ copy /Y "$(ProjectDir)..\ThirdParty\WinPixEventRuntime\bin\WinPixEventRuntime.dl
     <ClInclude Include="Renderer\MaterialSystem.hpp" />
     <ClInclude Include="Renderer\Mesh.hpp" />
     <ClInclude Include="Renderer\OrbitCamera.hpp" />
+    <ClInclude Include="Renderer\PixEventReporter.hpp" />
     <ClInclude Include="Renderer\Renderer.hpp" />
     <ClInclude Include="Renderer\ResourceView.hpp" />
     <ClInclude Include="Renderer\Material.hpp" />

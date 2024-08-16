@@ -6,6 +6,7 @@
 #include "Engine/Renderer/ResourceView.hpp"
 #include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Renderer/MaterialSystem.hpp"
+#include "Engine/Renderer/PixEventReporter.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Game/EngineBuildPreferences.hpp"
 #include <filesystem>
@@ -17,6 +18,7 @@
 #include <dxgi1_6.h>
 #include <dxcapi.h>
 #include <d3d12shader.h>
+#include <deque>
 //#include <d3dcompiler.h>
 
 
@@ -199,6 +201,9 @@ public:
 	template<typename T_Object>
 	void SetDebugName(ComPtr<T_Object> object, char const* name);
 	void SetSamplerMode(SamplerMode samplerMode);
+	void PushMarker(char const* markerText, Rgba8 const& markerColor = Rgba8::WHITE);
+	void PushMarker(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor = Rgba8::WHITE);
+	void PopMarker();
 
 	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	Texture* GetCurrentRenderTarget() const;
@@ -354,7 +359,7 @@ private:
 	std::vector<ConstantBuffer> m_cameraCBOArray = {};
 	std::vector<ConstantBuffer> m_lightCBOArray = {};
 	std::vector<ConstantBuffer> m_modelCBOArray = {};
-
+	std::deque<PixEventReporter> m_debugMarkers = {};
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources
