@@ -678,6 +678,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	}*/
 
 	// Apply Forces
+	g_theRenderer->PushMarker("GPU Particle Update");
 	g_theRenderer->BindComputeMaterial(m_applyForcesCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
@@ -687,6 +688,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	g_theRenderer->Dispatch(1, 1, 1);
 
 	// UpdateNeighbors
+	g_theRenderer->PushMarker("Sort Particles");
 	g_theRenderer->BindComputeMaterial(m_hashParticlesCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
@@ -695,6 +697,9 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	g_theRenderer->Dispatch(1, 1, 1);
 
 	SortGPUParticles(1024, 0);
+	g_theRenderer->PopMarker();
+
+	g_theRenderer->PushMarker("Lambda Pass");
 	g_theRenderer->BindComputeMaterial(m_lambdaCS);
 
 	//for (int iteration = 0; iteration < 1; iteration++) {
@@ -706,12 +711,18 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 		g_theRenderer->Dispatch(1, 1, 1);
 	}
 
+	g_theRenderer->PopMarker();
+
+	g_theRenderer->PushMarker("Update Positions");
 	g_theRenderer->BindComputeMaterial(m_updateMovementCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
 	g_theRenderer->Dispatch(1, 1, 1);
+	g_theRenderer->PopMarker();
+
+	g_theRenderer->PopMarker();
 }
 
 void Basic3DMode::RenderCPUParticles() const

@@ -1,6 +1,8 @@
 #pragma once
 #include "Engine/Renderer/GraphicsCommon.hpp"
 #include "Engine/Math/IntVec3.hpp"
+#include "Engine/Core/Rgba8.hpp"
+
 #include <map>
 /*
 	Flags
@@ -9,13 +11,13 @@
 	1			Uses default depth as texture
 	2			Has been used for draw call
 	3			Uses diffuse shaders
+	4			Push marker
 */
 
 constexpr unsigned int INDEXED_BIT_SHIFT = 0;
 constexpr unsigned int DEPTH_TEXTURE_BIT_SHIFT = 1;
 constexpr unsigned int DRAW_CALLED_BIT_SHIFT = 2;
 constexpr unsigned int DIFFUSE_BIT_SHIFT = 3;
-
 
 constexpr unsigned int INDEXED_BIT_MASK = (1 << 0);
 constexpr unsigned int DEPTH_TEXTURE_BIT_MASK = (1 << DEPTH_TEXTURE_BIT_SHIFT);
@@ -28,6 +30,7 @@ class Buffer;
 class Material;
 class IndexBuffer;
 class VertexBuffer;
+struct Rgba8;
 
 class ImmediateContext {
 	friend class Renderer;
@@ -47,6 +50,7 @@ public:
 	bool IsDRTCleared() const { return m_isDRTCleared; }
 	VertexType GetVertexType() const { return m_vertexType; }
 	Texture* GetDepthRenderTarget() { return m_depthTarget; }
+	
 
 	// Setters
 	void SetIndexDrawFlag(bool isIndexedDraw);
@@ -62,7 +66,9 @@ public:
 	void SetRootConstant(unsigned int constant, unsigned int slot);
 
 	void Reset();
+	void ResetCopy();
 	void ResetExternalBuffers();
+	
 private:
 	ImmediateContext() = default;
 
@@ -89,6 +95,9 @@ private:
 	unsigned int m_cbvHandleStart = 0;
 	unsigned int m_uavHandleStart = 0;
 	unsigned int m_depthSRVSlot = 0;
+	unsigned int m_markerPopCount = 0;
+	unsigned int m_markerPushCount = 0;
+
 	IntVec3 m_dispatchThreads = IntVec3::ZERO;
 	ModelConstants m_modelConstants = {};
 

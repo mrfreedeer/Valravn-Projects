@@ -202,10 +202,8 @@ public:
 	void SetDebugName(ComPtr<T_Object> object, char const* name);
 	void SetSamplerMode(SamplerMode samplerMode);
 	void PushMarker(char const* markerText, Rgba8 const& markerColor = Rgba8::WHITE);
-	void PushMarker(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor = Rgba8::WHITE);
 	void PopMarker();
 
-	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	Texture* GetCurrentRenderTarget() const;
 	Texture* GetCurrentDepthTarget() const;
 	void ApplyEffect(Material* effect, Camera const* camera = nullptr, Texture* customDepth = nullptr);
@@ -267,6 +265,14 @@ private:
 	void SetBlendModeSpecs(BlendMode const* blendMode, D3D12_BLEND_DESC& blendDesc);
 
 	// Internal Resource Management
+	void PushMarkerDirectly(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor = Rgba8::WHITE);
+	void PopMarkerDirectly(ID3D12GraphicsCommandList6* cmdList);
+	void HandleAndGetNextEvent(PixEvent*& pixEvent);
+	void HandlePendingMarkerEvents();
+	void HandlePixEvent(PixEvent const& pixEvent);
+	void HandlePixBeginEvent(PixEvent const& pixEvent);
+	void HandlePixEndEvent(PixEvent const& pixEvent);
+	void AddToUpdateQueue(Buffer* bufferToUpdate);
 	void InitializeCBufferArrays();
 	void CreateDefaultBufferObjects();
 	/// <summary>
@@ -275,7 +281,7 @@ private:
 	void FinishPendingPrePassResourceTasks();
 	void FinishPendingPreFxPassResourceTasks();
 	void UploadImmediateVertexes();
-	
+
 	void DrawAllEffects();
 	void DrawEffect(FxContext& fxCtx);
 
@@ -359,7 +365,8 @@ private:
 	std::vector<ConstantBuffer> m_cameraCBOArray = {};
 	std::vector<ConstantBuffer> m_lightCBOArray = {};
 	std::vector<ConstantBuffer> m_modelCBOArray = {};
-	std::deque<PixEventReporter> m_debugMarkers = {};
+	std::deque<PixEvent> m_debugPushMarkers = {};
+	std::deque<PixEvent> m_debugPopMarkers = {};
 
 	/*=================== Raw Pointers =================== */ 
 	//	Internal resources
@@ -379,7 +386,6 @@ private:
 	ID3D12RootSignature* m_defaultRootSignature = nullptr;
 	ID3D12CommandQueue* m_graphicsCommandQueue = nullptr;
 
-	
 	Camera const* m_currentCamera = nullptr;
 
 	VertexBuffer* m_immediateVBO = nullptr;

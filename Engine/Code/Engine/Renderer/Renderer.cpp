@@ -1191,6 +1191,75 @@ void Renderer::SetBlendModeSpecs(BlendMode const* blendModes, D3D12_BLEND_DESC& 
 	}
 }
 
+void Renderer::PushMarkerDirectly(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor /*= Rgba8::WHITE*/)
+{
+	UINT64 pixColor = PIX_COLOR(markerColor.r, markerColor.g, markerColor.b);
+	PIXBeginEvent(cmdList, pixColor, markerText);
+}
+
+void Renderer::PopMarkerDirectly(ID3D12GraphicsCommandList6* cmdList)
+{
+	PIXEndEvent(cmdList);
+}
+
+void Renderer::HandleAndGetNextEvent(PixEvent*& pixEvent)
+{
+	std::deque<PixEvent>* eventQueue = nullptr;
+	if (pixEvent->m_eventType == PixEventType::END) {
+		eventQueue = &m_debugPopMarkers;
+		HandlePixEndEvent(*pixEvent);
+	}
+	else {
+		eventQueue = &m_debugPushMarkers;
+		HandlePixBeginEvent(*pixEvent);
+	}
+
+	eventQueue->pop_front();
+	pixEvent = nullptr;
+	if (eventQueue->size() > 0) pixEvent = &eventQueue->front();
+}
+
+void Renderer::HandlePendingMarkerEvents()
+{
+	if (!m_debugPopMarkers.empty()) {
+		for (PixEvent& pixEvent : m_debugPopMarkers) {
+			HandlePixEndEvent(pixEvent);
+		}
+		m_debugPopMarkers.clear();
+	}
+
+	GUARANTEE_OR_DIE(m_debugPushMarkers.empty(), "THERE SHOULD BE NO REMAINING PUSH MARKERS");
+
+}
+
+void Renderer::HandlePixEvent(PixEvent const& pixEvent)
+{
+	switch (pixEvent.m_eventType)
+	{
+	case PixEventType::BEGIN:
+		HandlePixBeginEvent(pixEvent);
+		break;
+	case PixEventType::END:
+		HandlePixEndEvent(pixEvent);
+		break;
+	default:
+		ERROR_AND_DIE("UNRECOGNIZED EVENT TYPE");
+		break;
+	}
+}
+
+void Renderer::HandlePixBeginEvent(PixEvent const& pixEvent)
+{
+	Rgba8 const& color = pixEvent.m_color;
+	UINT64 pixColor = PIX_COLOR(color.r, color.g, color.b);
+	PIXBeginEvent(pixEvent.m_cmdList, pixColor, pixEvent.m_markerText);
+}
+
+void Renderer::HandlePixEndEvent(PixEvent const& pixEvent)
+{
+	PIXEndEvent(pixEvent.m_cmdList);
+}
+
 void Renderer::InitializeCBufferArrays()
 {
 	// Max amount of cbuffers existing if we used all descriptors
@@ -1249,7 +1318,7 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::RESOURCES);
 
 	UploadImmediateVertexes();
-	PushMarker(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
+	PushMarkerDirectly(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
 	if (m_pendingRscCopy.size() > 0) {
 
 		std::vector<D3D12_RESOURCE_BARRIER> copyRscBarriers;
@@ -1275,14 +1344,14 @@ void Renderer::FinishPendingPrePassResourceTasks()
 	if (m_pendingRscBarriers.size() > 0) {
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
-	PopMarker();
+	PopMarkerDirectly(currentCmdList);
 }
 
 void Renderer::FinishPendingPreFxPassResourceTasks()
 {
 	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
 
-	PushMarker(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
+	PushMarkerDirectly(currentCmdList, "Prepass Resource Upload/Copy", Rgba8::BLUE);
 
 	if (m_pendingRscCopy.size() > 0) {
 
@@ -1310,7 +1379,7 @@ void Renderer::FinishPendingPreFxPassResourceTasks()
 		currentCmdList->ResourceBarrier((UINT)m_pendingRscBarriers.size(), m_pendingRscBarriers.data());
 	}
 
-	PopMarker();
+	PopMarkerDirectly(currentCmdList);
 }
 
 void Renderer::UploadImmediateVertexes()
@@ -1363,10 +1432,23 @@ void Renderer::DrawEffect(FxContext& fxCtx)
 
 void Renderer::DrawAllImmediateContexts()
 {
+	PixEvent* currentPushEvent = (m_debugPushMarkers.empty()) ? nullptr : &m_debugPushMarkers.front();
+	PixEvent* currentPopEvent = (m_debugPopMarkers.empty()) ? nullptr : &m_debugPopMarkers.front();
 	for (unsigned int ctxIndex = 0; ctxIndex < m_currentDrawCtx; ctxIndex++) {
 		ImmediateContext& ctx = m_immediateContexts[ctxIndex];
+		// Multiple markers can be pushed/popped before/after a context
+		while (currentPopEvent && (currentPopEvent->m_ctxIndex == ctxIndex)) {
+			HandleAndGetNextEvent(currentPopEvent);
+		}
+		while (currentPushEvent && (currentPushEvent->m_ctxIndex == ctxIndex)) {
+			HandleAndGetNextEvent(currentPushEvent);
+		}
 		DrawImmediateContext(ctx);
+		
 	}
+
+	// More markers could be pending
+	HandlePendingMarkerEvents();
 }
 
 void Renderer::DrawImmediateContext(ImmediateContext& ctx)
@@ -1780,6 +1862,7 @@ void Renderer::ExecuteMainRenderPass()
 {
 	// Uploads pending resources and inserts resource barriers before drawing
 	FinishPendingPrePassResourceTasks();
+
 	DrawAllImmediateContexts();
 
 	//ID3D12GraphicsCommandList6* cmdList = GetCurrentCommandList(CommandListType::DEFAULT);
@@ -1795,9 +1878,10 @@ void Renderer::ExecuteMainRenderPass()
 void Renderer::ExecuteEffectsRenderPass()
 {
 	//FinishPendingPreFxPassResourceTasks();
-	PushMarker("Effects Pass", Rgba8::YELLOW);
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	PushMarkerDirectly(defaultCmdList, "Effects Pass", Rgba8::YELLOW);
 	DrawAllEffects();
-	PopMarker();
+	PopMarkerDirectly(defaultCmdList);
 }
 
 void Renderer::FillResourceBarriers(ImmediateContext& ctx, std::vector<D3D12_RESOURCE_BARRIER>& out_rscBarriers)
@@ -1930,10 +2014,16 @@ void Renderer::EndFrame()
 
 	m_currentBackBuffer = m_swapChain->GetCurrentBackBufferIndex();
 	m_currentFrame++;
+
+	if (m_debugPushMarkers.size() > 0) {
+		ERROR_RECOVERABLE("NOT ALL DEBUG MARKERS WERE POPPED");
+		m_debugPushMarkers.clear();
+	}
 }
 
 void Renderer::Shutdown()
 {
+	m_debugPushMarkers.clear();
 	m_fence->Signal();
 	m_fence->Wait();
 
@@ -2411,7 +2501,7 @@ void Renderer::BindComputeMaterial(Material* mat)
 {
 	ImmediateContext& currentDrawCtx = GetCurrentDrawCtx();
 	if (currentDrawCtx.IsDrawTypePipeline()) {
-		currentDrawCtx.Reset();
+		currentDrawCtx.ResetCopy();
 		currentDrawCtx.SetPipelineType(PipelineType::Compute);
 	}
 	currentDrawCtx.m_material = mat;
@@ -2659,18 +2749,14 @@ void Renderer::SetSamplerMode(SamplerMode samplerMode)
 
 void Renderer::PushMarker(char const* markerText, Rgba8 const& markerColor /*= Rgba8::WHITE*/)
 {
-	ID3D12GraphicsCommandList6* currentCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
-	PushMarker(currentCmdList, markerText, markerColor);
-}
-
-void Renderer::PushMarker(ID3D12GraphicsCommandList6* cmdList, char const* markerText, Rgba8 const& markerColor /*= Rgba8::WHITE*/)
-{
-	m_debugMarkers.emplace_back(cmdList, markerText, markerColor);
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	m_debugPushMarkers.emplace_back(defaultCmdList, m_currentDrawCtx, PixEventType::BEGIN, markerText, markerColor);
 }
 
 void Renderer::PopMarker()
 {
-	m_debugMarkers.pop_back();
+	ID3D12GraphicsCommandList6* defaultCmdList = GetCurrentCommandList(CommandListType::DEFAULT);
+	m_debugPopMarkers.emplace_back(defaultCmdList, m_currentDrawCtx, PixEventType::END, nullptr, Rgba8::WHITE);
 }
 
 void Renderer::SetDirectionalLight(Vec3 const& direction)
@@ -2898,6 +2984,7 @@ void Renderer::ResetGPUState()
 	m_currentModelBufferSlot = 0;
 	m_currentLightBufferSlot = 0;
 
+	m_debugPushMarkers.clear();
 	m_currentDrawCtx = 0;
 	m_srvHandleStart = SRV_HANDLE_START;
 	m_cbvHandleStart = CBV_HANDLE_START;

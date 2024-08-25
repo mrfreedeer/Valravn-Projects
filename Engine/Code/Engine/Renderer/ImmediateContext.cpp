@@ -61,11 +61,18 @@ void ImmediateContext::SetRootConstant(unsigned int constant, unsigned int slot)
 	m_drawConstants[slot] = constant;
 }
 
+
 void ImmediateContext::Reset()
+{
+	ResetCopy();
+	ResetExternalBuffers();
+}
+
+void ImmediateContext::ResetCopy()
 {
 	m_vertexType = VertexType::PCU;
 	m_pipelineType = PipelineType::Graphics;
-	m_drawFlags = 0;
+	m_drawFlags = 0; // Keep the markers push or pop status
 	m_clearRtFlags = 0;
 	m_isDRTCleared = false;
 	m_cameraCBO = nullptr;
