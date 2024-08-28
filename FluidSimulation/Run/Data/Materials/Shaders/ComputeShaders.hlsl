@@ -61,7 +61,7 @@ void ApplyForces(uint3 threadId : SV_DispatchThreadID)
 
 int3 GetCoordsForPosition(float3 position)
 {
-    static const float recipKernelRadius = 1.0f / KernelRadius;
+    const float recipKernelRadius = 1.0f / KernelRadius;
     position *= recipKernelRadius;
     int3 coords = int3(floor(position));
     return coords;
@@ -69,18 +69,18 @@ int3 GetCoordsForPosition(float3 position)
 
 int HashCoords(int3 coords)
 {
-    static const int p1 = 73856093 * coords.x;
-    static const int p2 = 19349663 * coords.y;
-    static const int p3 = 83492791 * coords.z;
+   const int p1 = 73856093 * coords.x;
+   const int p2 = 19349663 * coords.y;
+   const int p3 = 83492791 * coords.z;
 
     return p1 + p2 + p3;
 }
 
 float Poly6Kernel(float distance)
 {
-    static const float kernelRadiusSqr = KernelRadius * KernelRadius;
-    static const float kernelRadiusPwr9 = (kernelRadiusSqr * kernelRadiusSqr) * (kernelRadiusSqr * kernelRadiusSqr) * KernelRadius;
-    static const float kernelCoeff = 315.0f / (64.0f * (PI) * kernelRadiusPwr9);
+    const float kernelRadiusSqr = KernelRadius * KernelRadius;
+    const float kernelRadiusPwr9 = (kernelRadiusSqr * kernelRadiusSqr) * (kernelRadiusSqr * kernelRadiusSqr) * KernelRadius;
+    const float kernelCoeff = 315.0f / (64.0f * (PI) * kernelRadiusPwr9);
     
     bool skipCal = (distance > KernelRadius) || (distance < 0.0f);
     if (skipCal)
@@ -97,9 +97,9 @@ float Poly6Kernel(float distance)
 
 float3 SpikyKernelGradient(in float3 displacement, float distance)
 {
-    static const float kernelRadiusPwr6 = (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius);
+    const float kernelRadiusPwr6 = (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius) * (KernelRadius * KernelRadius);
 
-    static const float kernelCoefficient = -45.0f / (PI * kernelRadiusPwr6);
+    const float kernelCoefficient = -45.0f / (PI * kernelRadiusPwr6);
 
     if (distance > KernelRadius)
         return float3(0.0f, 0.0f, 0.0f);
@@ -239,9 +239,9 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
 
 bool ShouldSwap(uint firstIndex, uint secIndex)
 {
-    static const uint direction = SortUConstants._11;
-    static const uint stageInd = SortUConstants._12;
-    static const uint stepInd = SortUConstants._13;
+    const uint direction = SortUConstants._11;
+    const uint stageInd = SortUConstants._12;
+    const uint stepInd = SortUConstants._13;
     
     uint firstHash = HashArray[firstIndex].ModdedHash;
     uint secHash = HashArray[secIndex].ModdedHash;

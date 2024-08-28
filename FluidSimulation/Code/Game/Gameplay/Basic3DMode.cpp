@@ -360,7 +360,7 @@ void Basic3DMode::InitializeGPUPhysicsBuffers()
 	hashArrDesc.memoryUsage = MemoryUsage::Default;
 	hashArrDesc.owner = g_theRenderer;
 	hashArrDesc.size = sizeof(unsigned int) * 3 * particleTotal;
-	hashArrDesc.stride = sizeof(unsigned int);
+	hashArrDesc.stride = sizeof(unsigned int) * 3;
 	hashArrDesc.debugName = "Hash Array";
 
 	m_hashInfoBuffer = new StructuredBuffer(hashArrDesc);
@@ -491,10 +491,10 @@ void Basic3DMode::SortGPUParticles(size_t arraySize, unsigned int direction /*= 
 
 	for (unsigned int stageInd = 2; stageInd <= arraySize; stageInd <<= 1) { // Stageind *= 2
 		g_theRenderer->SetRootConstant(stageInd, 1);
-		for (unsigned int stepInd = stageInd / 2; stepInd > 0; stepInd >>= 1) { // Stepind /= 2
+		for (unsigned int stepInd = (stageInd >> 1); stepInd > 0; stepInd >>= 1) { // Stepind /= 2
 			g_theRenderer->SetRootConstant(stepInd, 2);
 
-			g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 0);
+			g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 			g_theRenderer->Dispatch(1, 1, 1);
 		}
 	}
@@ -678,7 +678,7 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	}*/
 
 	// Apply Forces
-	g_theRenderer->PushMarker("GPU Particle Update");
+	g_theRenderer->PushMarker("GPU Particle Update", Rgba8::GREEN);
 	g_theRenderer->BindComputeMaterial(m_applyForcesCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
@@ -688,39 +688,57 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	g_theRenderer->Dispatch(1, 1, 1);
 
 	// UpdateNeighbors
-	g_theRenderer->PushMarker("Sort Particles");
+	g_theRenderer->PushMarker("Update Neighbors", Rgba8::YELLOW);
+
+	g_theRenderer->PushMarker("Hash Particles");
 	g_theRenderer->BindComputeMaterial(m_hashParticlesCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
 	g_theRenderer->Dispatch(1, 1, 1);
+	g_theRenderer->PopMarker();
 
+	g_theRenderer->PushMarker("Sort Particles", Rgba8::MAGENTA);
 	SortGPUParticles(1024, 0);
 	g_theRenderer->PopMarker();
 
-	g_theRenderer->PushMarker("Lambda Pass");
-	g_theRenderer->BindComputeMaterial(m_lambdaCS);
-
-	//for (int iteration = 0; iteration < 1; iteration++) {
-	for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
-		g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
-		g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
-		g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
-		g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
-		g_theRenderer->Dispatch(1, 1, 1);
-	}
-
-	g_theRenderer->PopMarker();
-
-	g_theRenderer->PushMarker("Update Positions");
-	g_theRenderer->BindComputeMaterial(m_updateMovementCS);
+	g_theRenderer->PushMarker("Offset Generation", Rgba8::CYAN);
+	g_theRenderer->BindComputeMaterial(m_offsetGenerationCS);
 	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
 	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
 	g_theRenderer->Dispatch(1, 1, 1);
 	g_theRenderer->PopMarker();
+
+	g_theRenderer->PopMarker(); // Update Neighbors Close
+
+
+
+
+	//g_theRenderer->PushMarker("Lambda Pass", Rgba8::GRAY);
+	//g_theRenderer->BindComputeMaterial(m_lambdaCS);
+
+	////for (int iteration = 0; iteration < 1; iteration++) {
+	//for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
+	//	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	//	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	//	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	//	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	//	g_theRenderer->Dispatch(1, 1, 1);
+	//}
+
+	g_theRenderer->PopMarker();
+
+	//g_theRenderer->PushMarker("Update Positions", Rgba8::LIGHTRED);
+	//g_theRenderer->BindComputeMaterial(m_updateMovementCS);
+	//g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	//g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	//g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	//g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	//g_theRenderer->Dispatch(1, 1, 1);
+	//g_theRenderer->PopMarker();
 
 	g_theRenderer->PopMarker();
 }
