@@ -107,3 +107,46 @@ void ImmediateContext::ResetExternalBuffers()
 	m_externalVBO = nullptr;
 }
 
+ImmediateContext::ImmediateContext(ImmediateContext const& copyFrom)
+{
+	m_drawFlags = copyFrom.m_drawFlags; // 0 defaults for all pipeline defaults
+	m_clearRtFlags = copyFrom.m_clearRtFlags;
+	m_isDRTCleared = copyFrom.m_isDRTCleared;
+
+	m_vertexType = copyFrom.m_vertexType;
+	m_pipelineType = copyFrom.m_pipelineType;
+	m_material = copyFrom.m_material;
+	m_depthTarget = copyFrom.m_depthTarget;
+	m_cameraCBO = copyFrom.m_cameraCBO;
+	m_modelCBO = copyFrom.m_modelCBO;
+	m_externalVBO = copyFrom.m_externalVBO;
+	m_externalIBO = copyFrom.m_externalIBO;
+
+	m_vertexStart = copyFrom.m_vertexStart;
+	m_vertexCount = copyFrom.m_vertexCount;
+	m_indexStart = copyFrom.m_indexStart;
+	m_indexCount = copyFrom.m_indexCount;
+	m_srvHandleStart = copyFrom.m_srvHandleStart;
+	m_cbvHandleStart = copyFrom.m_cbvHandleStart;
+	m_uavHandleStart = copyFrom.m_uavHandleStart;
+	m_depthSRVSlot = copyFrom.m_depthSRVSlot;
+	m_markerPopCount = copyFrom.m_markerPopCount;
+	m_markerPushCount = copyFrom.m_markerPushCount;
+
+	m_dispatchThreads = copyFrom.m_dispatchThreads;
+	m_modelConstants = copyFrom.m_modelConstants;
+
+	m_boundTextures.insert(copyFrom.m_boundTextures.begin(), copyFrom.m_boundTextures.end());
+	m_boundRWTextures.insert(copyFrom.m_boundRWTextures.begin(), copyFrom.m_boundRWTextures.end());
+	m_boundCBuffers.insert(copyFrom.m_boundCBuffers.begin(), copyFrom.m_boundCBuffers.end());
+	m_boundBuffers.insert(copyFrom.m_boundBuffers.begin(), copyFrom.m_boundBuffers.end());
+	m_boundRWBuffers.insert(copyFrom.m_boundRWBuffers.begin(), copyFrom.m_boundRWBuffers.end());
+
+	for (unsigned int rtIndex = 0; rtIndex < 8; rtIndex++) {
+		m_renderTargets[rtIndex] = copyFrom.m_renderTargets[rtIndex];
+	}
+	for (unsigned int constantInd = 0; constantInd < 16; constantInd++) {
+		m_drawConstants[constantInd] = copyFrom.m_drawConstants[constantInd];
+	}
+}
+

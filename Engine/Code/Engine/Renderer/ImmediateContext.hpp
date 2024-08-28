@@ -71,6 +71,7 @@ public:
 	
 private:
 	ImmediateContext() = default;
+	ImmediateContext(ImmediateContext const& copyFrom);
 
 private:
 	unsigned int m_drawFlags = 0; // 0 defaults for all pipeline defaults
