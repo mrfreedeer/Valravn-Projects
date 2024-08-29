@@ -304,11 +304,14 @@ void GenerateOffsets(uint3 threadId : SV_DispatchThreadID)
     uint prevIndex = (threadId.x == 0) ? ParticleCount - 1 : threadId.x - 1;
     uint prevModHash = HashArray[prevIndex].ModdedHash;
     uint currentModHash = HashArray[threadId.x].ModdedHash;
+    bool sameHash = (currentModHash == prevModHash);
     
-    if (currentModHash != prevModHash)
+    if (sameHash)
     {
-        Offsets[currentModHash] = threadId.x;
+        return;
     }
+    
+    Offsets[currentModHash] = threadId.x;
     
 }
 

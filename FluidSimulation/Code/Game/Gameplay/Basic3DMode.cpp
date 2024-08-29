@@ -714,31 +714,28 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 
 	g_theRenderer->PopMarker(); // Update Neighbors Close
 
+	g_theRenderer->PushMarker("Lambda Pass", Rgba8::GRAY);
+	g_theRenderer->BindComputeMaterial(m_lambdaCS);
 
-
-
-	//g_theRenderer->PushMarker("Lambda Pass", Rgba8::GRAY);
-	//g_theRenderer->BindComputeMaterial(m_lambdaCS);
-
-	////for (int iteration = 0; iteration < 1; iteration++) {
-	//for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
-	//	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
-	//	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
-	//	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
-	//	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
-	//	g_theRenderer->Dispatch(1, 1, 1);
-	//}
+	//for (int iteration = 0; iteration < 1; iteration++) {
+	for (int iteration = 0; iteration < m_debugConfig.m_iterations; iteration++) {
+		g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+		g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+		g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+		g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+		g_theRenderer->Dispatch(1, 1, 1);
+	}
 
 	g_theRenderer->PopMarker();
 
-	//g_theRenderer->PushMarker("Update Positions", Rgba8::LIGHTRED);
-	//g_theRenderer->BindComputeMaterial(m_updateMovementCS);
-	//g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
-	//g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
-	//g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
-	//g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
-	//g_theRenderer->Dispatch(1, 1, 1);
-	//g_theRenderer->PopMarker();
+	/*g_theRenderer->PushMarker("Update Positions", Rgba8::LIGHTRED);
+	g_theRenderer->BindComputeMaterial(m_updateMovementCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	g_theRenderer->Dispatch(1, 1, 1);
+	g_theRenderer->PopMarker();*/
 
 	g_theRenderer->PopMarker();
 }
