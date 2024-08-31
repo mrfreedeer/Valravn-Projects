@@ -101,7 +101,7 @@ float3 SpikyKernelGradient(in float3 displacement, float distance)
 
     const float kernelCoefficient = -45.0f / (PI * kernelRadiusPwr6);
 
-    if (distance > KernelRadius)
+    if ((distance == 0.0f) || (distance > KernelRadius))
         return float3(0.0f, 0.0f, 0.0f);
 
     float distanceSqr = KernelRadius - distance;
@@ -184,9 +184,8 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
         
         const int neighborHash = HashCoords(neighborCell);
         const int moddedHash = neighborHash % ParticleCount;
-        const uint hashStartInd = Offsets[moddedHash];
+        uint hashAccessInd = Offsets[moddedHash];
         
-        uint hashAccessInd = hashStartInd;
         HashInfo hashInfo = HashArray[hashAccessInd];
         
         bool foundStart = false;
@@ -200,7 +199,8 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
                 float3 displacement = (currentParticle.PredictedPosition - otherParticle.PredictedPosition);
                 float d = length(displacement);
                 density += Poly6Kernel(d);
-                float3 gradient = SpikyKernelGradient(displacement, d) * RecipRestDensity;
+                float3 gradient = -SpikyKernelGradient(displacement, d);
+                gradient *= RecipRestDensity;
                 gradientSum += gradient;
                 gradientLengthSqrSum += dot(gradient, gradient);
             }
@@ -224,6 +224,7 @@ void CalculateLambda(uint3 threadId : SV_DispatchThreadID)
     
     gradientLengthSqrSum += dot(gradientSum, gradientSum);
     
+    currentParticle.Density = density;
     currentParticle.Lambda = -densityConstraint / (gradientLengthSqrSum + EPSILON);
     currentParticle.Gradient = gradientSum;
     Particles[threadId.x] = currentParticle;

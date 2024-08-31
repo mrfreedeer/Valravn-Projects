@@ -221,7 +221,7 @@ DensityReturnStruct FluidSolver::SPHDensity(FluidParticle const& particle)
 	}
 
 
-	return DensityReturnStruct{ density, gradientSum, gradientLengthSum };
+	return DensityReturnStruct{ density, gradientSum, gradientLengthSum }; 
 }
 
 Vec3 FluidSolver::GetViscosity(FluidParticle const& particle)
