@@ -46,6 +46,7 @@ struct GameConstants
 	Vec3 BoundsMaxs;
 	unsigned int Padding;
 	Vec4 ParticleColor;
+	Mat44 AnisotropicRotation;
 };
 
 struct BlurConstants
@@ -243,6 +244,8 @@ void Basic3DMode::LoadMaterials()
 	m_applyForcesCS = g_theMaterialSystem->GetMaterialForName("ApplyForcesCS");
 	m_lambdaCS = g_theMaterialSystem->GetMaterialForName("CalculateLambdaCS");
 	m_updateMovementCS = g_theMaterialSystem->GetMaterialForName("UpdateParticlesMovementCS");
+	m_weightedMeansCS = g_theMaterialSystem->GetMaterialForName("WeightedMeansCS");
+	m_anisotropicCS = g_theMaterialSystem->GetMaterialForName("AnisotropicCS");
 
 	m_prePassMaterial = g_theMaterialSystem->GetMaterialForName("FluidDepthPrepass");
 	m_prePassGPUMaterial = g_theMaterialSystem->GetMaterialForName("GPUFluidDepthPrepass");
@@ -328,6 +331,8 @@ void Basic3DMode::InitializeBuffers() {
 	blurCBufferDesc.debugName = "Depth V_Blur Constants";
 	m_depthVPassCBuffer = new ConstantBuffer(blurCBufferDesc);
 	m_depthVPassCBuffer->Initialize();
+
+
 }
 
 void Basic3DMode::InitializeGPUPhysicsBuffers()
@@ -373,6 +378,16 @@ void Basic3DMode::InitializeGPUPhysicsBuffers()
 	offsetsBufferDesc.debugName = "Offsets Array";
 
 	m_offsetsBuffer = new StructuredBuffer(offsetsBufferDesc);
+
+	BufferDesc anisotropicBufferDesc = {};
+	anisotropicBufferDesc.memoryUsage = MemoryUsage::Default;
+	anisotropicBufferDesc.owner = g_theRenderer;
+	anisotropicBufferDesc.size = sizeof(float) * 16 * particleTotal;
+	anisotropicBufferDesc.stride = sizeof(float) * 16;
+	anisotropicBufferDesc.debugName = "Anisotropic Mats";
+
+	m_anistropicMats = new StructuredBuffer(anisotropicBufferDesc);
+
 }
 
 void Basic3DMode::InitializeTextures() {
@@ -652,7 +667,11 @@ void Basic3DMode::GetGaussianKernels(unsigned int kernelSize, float sigma, float
 void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 {
 	static Vec3 const gravity = Vec3(0.0f, 0.0f, -9.8f);
+	static EulerAngles anisotropicRot(45.0f, 45.0f, 45.0f);
+	static Mat44 anisotropicRotMat = anisotropicRot.GetMatrix_XFwd_YLeft_ZUp();
+
 	EulerAngles cameraOrientation = m_worldCamera.GetViewOrientation();
+
 	GameConstants gameConstants = {};
 	gameConstants.BoundsMins = m_particlesBounds.m_mins;
 	gameConstants.BoundsMaxs = m_particlesBounds.m_maxs;
@@ -666,6 +685,8 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	gameConstants.ParticleCount = 1024;
 	gameConstants.RestDensity = 1000.0f;
 	gameConstants.SpriteRadius = m_debugConfig.m_renderingRadius;
+	gameConstants.AnisotropicRotation = anisotropicRotMat;
+
 
 	m_gameConstants->CopyCPUToGPU(&gameConstants, sizeof(GameConstants));
 
@@ -735,6 +756,25 @@ void Basic3DMode::UpdateGPUParticles(float deltaSeconds)
 	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
 	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
 	g_theRenderer->Dispatch(1, 1, 1);
+	g_theRenderer->PopMarker();
+
+	g_theRenderer->PushMarker("Anisotropic Calculation", Rgba8(157,250,354));
+
+	g_theRenderer->BindComputeMaterial(m_weightedMeansCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	g_theRenderer->BindRWStructuredBuffer(m_anistropicMats, 3);
+	g_theRenderer->Dispatch(1, 1, 1);
+
+	g_theRenderer->BindComputeMaterial(m_anisotropicCS);
+	g_theRenderer->BindConstantBuffer(m_gameConstants, 3);
+	g_theRenderer->BindRWStructuredBuffer(m_particlesBuffer, 0);
+	g_theRenderer->BindRWStructuredBuffer(m_hashInfoBuffer, 1);
+	g_theRenderer->BindRWStructuredBuffer(m_offsetsBuffer, 2);
+	g_theRenderer->BindRWStructuredBuffer(m_anistropicMats, 3);
+	g_theRenderer->Dispatch(1,1,1);
 	g_theRenderer->PopMarker();
 
 	g_theRenderer->PopMarker();
@@ -845,6 +885,11 @@ void Basic3DMode::Shutdown()
 	if (m_hashInfoBuffer) {
 		delete m_hashInfoBuffer;
 		m_hashInfoBuffer = nullptr;
+	}
+
+	if (m_anistropicMats) {
+		delete m_anistropicMats;
+		m_anistropicMats = nullptr;
 	}
 }
 

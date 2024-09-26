@@ -90,6 +90,8 @@ private:
 	Material* m_hashParticlesCS = nullptr;
 	Material* m_offsetGenerationCS = nullptr;
 	Material* m_updateMovementCS = nullptr;
+	Material* m_anisotropicCS = nullptr;
+	Material* m_weightedMeansCS = nullptr;
 
 	Material* m_gaussianBlurMaterial = nullptr;
 	Material* m_effectsMaterials[(int)MaterialEffect::NUM_EFFECTS];
@@ -100,6 +102,7 @@ private:
 	
 	StructuredBuffer* m_particlesBuffer = nullptr;
 	StructuredBuffer* m_offsetsBuffer = nullptr;
+	StructuredBuffer* m_anistropicMats = nullptr;
 
 	ConstantBuffer* m_thicknessHPassCBuffer = nullptr;
 	ConstantBuffer* m_thicknessVPassCBuffer = nullptr;
