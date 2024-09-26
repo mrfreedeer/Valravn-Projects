@@ -1,5 +1,5 @@
 <Material name="FluidThicknessPrepass">
-	<MeshShader headerSrc="Shaders/" shaderName="FluidDepthPrePass_m" src="Data/Materials/Shaders/Stages/FluidDepthPrePass_m.hlsl" entryPoint="MeshMain"/>
+	<MeshShader headerSrc="Shaders/" shaderName="GPUFluidDepthPrePass_m" src="Data/Materials/Shaders/Stages/GPUFluidDepthPrePass_m.hlsl" entryPoint="MeshMain"/>
 	<PixelShader  headerSrc="Shaders/" shaderName="FluidThickness_p" src="Data/Materials/Shaders/Stages/FluidThickness_p.hlsl" entryPoint="PixelMain"/>
 	<BlendMode value="Additive"/>
 	<!-- CCW - CounterClockwise
@@ -13,6 +13,6 @@
 	<Metadata src="material.mtl"/>
 	<RenderTargets count="1">
 		<!-- Default 0 and RT 1-->
-		<RenderTarget index="0" format="R32_FLOAT" blendMode="ADDITIVE"/>
+		<RenderTarget index="0" format="R32_FLOAT" blendMode="ALPHA"/>
 	</RenderTargets>
 </Material>
