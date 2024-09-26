@@ -17,4 +17,10 @@
 	<Material name="UpdateParticlesMovementCS">
 		<ComputeShader headerSrc="Shaders/" shaderName="UpdateMovement_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="UpdateParticlesMovement"/>
 	</Material>
+	<Material name="WeightedMeansCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="WeightedMeans_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="CalculateWeightedMeans"/>
+	</Material>
+	<Material name="AnisotropicCS">
+		<ComputeShader headerSrc="Shaders/" shaderName="Anisotropic_c" src="Data/Materials/Shaders/ComputeShaders.hlsl" entryPoint="CalculateAnisotropicMatrixes"/>
+	</Material>
 </Materials>

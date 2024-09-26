@@ -5,6 +5,7 @@
 RWStructuredBuffer<Particle> Particles : register(u0);
 RWStructuredBuffer<HashInfo> HashArray : register(u1);
 RWStructuredBuffer<uint> Offsets : register(u2);
+RWStructuredBuffer<float4x4> AnisotropicMatrixes : register(u3);
 
 
 float3 KeepParticleInBounds(in float3 position)
@@ -69,9 +70,9 @@ int3 GetCoordsForPosition(float3 position)
 
 int HashCoords(int3 coords)
 {
-   const int p1 = 73856093 * coords.x;
-   const int p2 = 19349663 * coords.y;
-   const int p3 = 83492791 * coords.z;
+    const int p1 = 73856093 * coords.x;
+    const int p2 = 19349663 * coords.y;
+    const int p3 = 83492791 * coords.z;
 
     return p1 + p2 + p3;
 }
@@ -382,4 +383,155 @@ void UpdateParticlesMovement(uint3 threadId : SV_DispatchThreadID)
     
     Particles[threadId.x] = currentParticle;
     
+}
+
+float GetIsotropicWeight(float3 disp, float kernelRadius)
+{
+    const float kernelSqr = kernelRadius * kernelRadius;
+    float distSqr = dot(disp, disp);
+    if (distSqr >= kernelSqr)
+        return 0;
+    
+    float dist = length(disp);
+    
+    float weightCoeff = (dist / kernelRadius);
+    
+    float weight = 1.0f - weightCoeff;
+    weight *= weight * weight;
+    
+    return weight;
+}
+
+[numthreads(1024, 1, 1)]
+void CalculateWeightedMeans(uint3 threadId : SV_DispatchThreadID)
+{
+    Particle currentParticle = Particles[threadId.x];
+      
+    int3 cell = GetCoordsForPosition(currentParticle.Position);
+    float totalWeights = 0.0f; // Wij
+    float3 weightedSum = float3(0.0f, 0.0f, 0.0f);
+    
+    for (int neighborInd = 0; neighborInd < 27; neighborInd++)
+    {
+        const int3 offset = NeighborOffsets[neighborInd];
+        const int3 neighborCell = cell + offset;
+        
+        const int neighborHash = HashCoords(neighborCell);
+        const int moddedHash = neighborHash % ParticleCount;
+        const uint hashStartInd = Offsets[moddedHash];
+        
+        uint hashAccessInd = hashStartInd;
+        HashInfo hashInfo = HashArray[hashAccessInd];
+        
+        bool foundStart = false;
+        while (hashInfo.ModdedHash == moddedHash)
+        {
+            if (hashInfo.Hash == neighborHash)
+            {
+                Particle otherParticle = Particles[hashInfo.AccessIndex];
+                float3 displacement = currentParticle.Position - otherParticle.Position;
+                // Mean with current iteration
+                float localWeight = GetIsotropicWeight(displacement, KernelRadius);
+                totalWeights += localWeight;
+                weightedSum += otherParticle.Position * localWeight;
+            }
+            else
+            {
+                if (foundStart)
+                {
+                    break;
+                }
+
+            }
+            hashAccessInd++;
+            hashInfo = HashArray[hashAccessInd];
+        }
+
+    }
+    
+    float3 result = weightedSum / totalWeights;
+    AnisotropicMatrixes[threadId.x]._11_22_33 = result;
+ 
+}
+
+[numthreads(1024,1,1)]
+void CalculateAnisotropicMatrixes(uint3 threadId : SV_DispatchThreadID)
+{
+    Particle currentParticle = Particles[threadId.x];
+    float3 weightedMean = AnisotropicMatrixes[threadId.x]._11_22_33;
+      
+    int3 cell = GetCoordsForPosition(currentParticle.Position);
+    float3x3 covarianceMat = float3x3(0.0f.xxx, 0.0f.xxx, 0.0f.xxx);
+    float totalWeight = 0.0f;
+    
+    for (int neighborInd = 0; neighborInd < 27; neighborInd++)
+    {
+        const int3 offset = NeighborOffsets[neighborInd];
+        const int3 neighborCell = cell + offset;
+        
+        const int neighborHash = HashCoords(neighborCell);
+        const int moddedHash = neighborHash % ParticleCount;
+        const uint hashStartInd = Offsets[moddedHash];
+        
+        uint hashAccessInd = hashStartInd;
+        HashInfo hashInfo = HashArray[hashAccessInd];
+        
+        bool foundStart = false;
+        while (hashInfo.ModdedHash == moddedHash)
+        {
+            if (hashInfo.Hash == neighborHash)
+            {
+                Particle otherParticle = Particles[hashInfo.AccessIndex];
+                float3 displacement = currentParticle.Position - otherParticle.Position;
+                // Mean with current iteration
+                float localMean = GetIsotropicWeight(displacement, KernelRadius);
+                totalWeight += localMean;
+                
+                float3 vectorDisp = otherParticle.Position - weightedMean;
+                
+                float3x1 vecDifferences = float3x1(vectorDisp.x, vectorDisp.y, vectorDisp.z);
+                float1x3 transposeVecDiff = transpose(vecDifferences);
+                covarianceMat += mul(vecDifferences, transposeVecDiff);
+                
+            }
+            else
+            {
+                if (foundStart)
+                {
+                    break;
+                }
+
+            }
+            hashAccessInd++;
+            hashInfo = HashArray[hashAccessInd];
+        }
+
+    }
+    
+    float recipWeightedMean = 1.0f / totalWeight;
+    covarianceMat *= recipWeightedMean;
+
+    float var1 = covarianceMat._11;
+    float var2 = covarianceMat._22;
+    float var3 = covarianceMat._33;
+    
+    float firstVar = min(var1, min(var2, var3));
+    float secVar = min(min(max(var1, var2), max(var2, var3)), max(var1, var3));
+    float thirdVar = max(var1, max(var2, var3));
+    
+    float4x4 diagMatrix = float4x4(1.0f.xxxx, 1.0f.xxxx, 1.0f.xxxx, 1.0f.xxxx);
+    float4x4 inverseDiagMatrix = float4x4(1.0f.xxxx, 1.0f.xxxx, 1.0f.xxxx, 1.0f.xxxx);
+    diagMatrix._11 = firstVar;
+    diagMatrix._22 = secVar;
+    diagMatrix._33 = thirdVar;
+    diagMatrix._44 = 1.0f;
+    
+    inverseDiagMatrix._11 = 1.0f / firstVar;
+    inverseDiagMatrix._22 = 1.0f / secVar;
+    inverseDiagMatrix._33 = 1.0f / thirdVar;
+    inverseDiagMatrix._44 = 1.0f / 1.0f;
+    
+    float4x4 modifiedCovar = mul(AnisotropicRotation, inverseDiagMatrix);
+    modifiedCovar = mul(modifiedCovar, transpose(AnisotropicRotation));
+    AnisotropicMatrixes[threadId.x] = modifiedCovar;
 }

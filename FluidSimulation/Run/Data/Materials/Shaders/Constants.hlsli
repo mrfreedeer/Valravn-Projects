@@ -86,6 +86,7 @@ cbuffer GameConstants : register(b3)
     float3 BoundsMaxs;
     uint Padding;
     float4 ParticleColor;
+    float4x4 AnisotropicRotation;
 }
 
 cbuffer ComputeConstants : register(b0, space1)
